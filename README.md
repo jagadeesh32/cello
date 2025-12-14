@@ -1,8 +1,8 @@
 # Cello 🐍
 
 [![CI](https://github.com/jagadeeshkatla/cello/actions/workflows/ci.yml/badge.svg)](https://github.com/jagadeeshkatla/cello/actions/workflows/ci.yml)
-[![PyPI](https://img.shields.io/pypi/v/cello.svg)](https://pypi.org/project/cello/)
-[![Python](https://img.shields.io/pypi/pyversions/cello.svg)](https://pypi.org/project/cello/)
+[![PyPI](https://img.shields.io/pypi/v/cello-framework.svg)](https://pypi.org/project/cello-framework/)
+[![Python](https://img.shields.io/pypi/pyversions/cello-framework.svg)](https://pypi.org/project/cello-framework/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 **Ultra-fast Rust-powered Python async web framework**
@@ -25,7 +25,7 @@ Cello is a high-performance web framework that combines Python's developer exper
 ## 📦 Installation
 
 ```bash
-pip install cello
+pip install cello-framework
 ```
 
 **From source:**
