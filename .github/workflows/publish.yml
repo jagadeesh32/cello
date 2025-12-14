@@ -5,6 +5,9 @@
 name: Publish to PyPI
 
 on:
+  push:
+    branches:
+      - release
   release:
     types: [published]
   workflow_dispatch:
@@ -120,10 +123,7 @@ jobs:
     name: Publish to PyPI
     needs: [build-sdist, build-linux, build-macos, build-windows]
     runs-on: ubuntu-latest
-    if: github.event_name == 'release'
-    environment:
-      name: pypi
-      url: https://pypi.org/project/cello/
+    if: github.event_name == 'release' || (github.event_name == 'push' && github.ref == 'refs/heads/release')
     permissions:
       id-token: write
 
@@ -140,6 +140,8 @@ jobs:
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
+          user: __token__
+          password: ${{ secrets.PYPI_API_TOKEN }}
           packages-dir: dist/
 
   # ============================================================================
