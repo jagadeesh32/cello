@@ -6,7 +6,7 @@ Thank you for your interest in contributing to Cello! 🐍
 
 ### Prerequisites
 
-- Python 3.8+
+- Python 3.12+
 - Rust 1.70+
 - maturin (`pip install maturin`)
 
