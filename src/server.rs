@@ -64,6 +64,7 @@ impl Server {
 
         println!("🚀 Cello v2 server running at http://{}", addr);
         println!("   Middleware: {} registered", self.middleware.len());
+        println!("   Press CTRL+C to stop the server");
 
         let router = Arc::new(self.router);
         let handlers = Arc::new(self.handlers);
@@ -71,30 +72,44 @@ impl Server {
         let websocket_handlers = Arc::new(self.websocket_handlers);
 
         loop {
-            let (stream, _) = listener
-                .accept()
-                .await
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(format!("Accept error: {}", e)))?;
-
-            let io = TokioIo::new(stream);
-            let router = router.clone();
-            let handlers = handlers.clone();
-            let middleware = middleware.clone();
-            let _websocket_handlers = websocket_handlers.clone();
-
-            tokio::task::spawn(async move {
-                let service = service_fn(move |req| {
-                    let router = router.clone();
-                    let handlers = handlers.clone();
-                    let middleware = middleware.clone();
-                    async move { handle_request(req, router, handlers, middleware).await }
-                });
-
-                if let Err(err) = http1::Builder::new().serve_connection(io, service).await {
-                    eprintln!("Error serving connection: {:?}", err);
+            tokio::select! {
+                _ = tokio::signal::ctrl_c() => {
+                    println!("\n🛑 Shutting down gracefully...");
+                    // Give active tasks a moment to finish if needed (not implemented here)
+                    break;
                 }
-            });
+                accept_result = listener.accept() => {
+                    match accept_result {
+                        Ok((stream, _)) => {
+                            let io = TokioIo::new(stream);
+                            let router = router.clone();
+                            let handlers = handlers.clone();
+                            let middleware = middleware.clone();
+                            let _websocket_handlers = websocket_handlers.clone();
+
+                            tokio::task::spawn(async move {
+                                let service = service_fn(move |req| {
+                                    let router = router.clone();
+                                    let handlers = handlers.clone();
+                                    let middleware = middleware.clone();
+                                    async move { handle_request(req, router, handlers, middleware).await }
+                                });
+
+                                if let Err(err) = http1::Builder::new().serve_connection(io, service).await {
+                                    eprintln!("Error serving connection: {:?}", err);
+                                }
+                            });
+                        }
+                        Err(e) => {
+                            eprintln!("Accept error: {}", e);
+                            // Decide if we want to break or continue on accept error
+                        }
+                    }
+                }
+            }
         }
+        
+        Ok(())
     }
 }
 
