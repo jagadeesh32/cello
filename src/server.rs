@@ -187,8 +187,8 @@ async fn handle_request(
                 }
             }
 
-            // Invoke handler (this will acquire GIL)
-            let result = handlers.invoke(handler_id, request.clone());
+            // Invoke handler (async-aware - supports both sync and async handlers)
+            let result = handlers.invoke_async(handler_id, request.clone()).await;
 
             let mut response = match result {
                 Ok(json_value) => Response::from_json_value(json_value, 200),

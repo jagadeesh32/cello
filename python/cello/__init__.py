@@ -1,10 +1,11 @@
 """
-Cello - Ultra-fast Rust-powered Python web framework.
+Cello - Ultra-fast Rust-powered Python async web framework.
 
 A high-performance async web framework with Rust core and Python developer experience.
 All I/O, routing, and JSON serialization happen in Rust for maximum performance.
 
 Features:
+- Native async/await support (both sync and async handlers)
 - SIMD-accelerated JSON parsing
 - Middleware system with CORS, logging, compression
 - Blueprint-based routing with inheritance
@@ -20,16 +21,24 @@ Example:
     app.enable_cors()
     app.enable_logging()
 
+    # Sync handler (simple operations)
     @app.get("/")
     def home(request):
         return {"message": "Hello, Cello!"}
+
+    # Async handler (for I/O operations like database calls)
+    @app.get("/users")
+    async def get_users(request):
+        users = await database.fetch_all()
+        return {"users": users}
 
     # Blueprint for route grouping
     api = Blueprint("/api")
 
     @api.get("/users/{id}")
-    def get_user(request):
-        return {"id": request.params["id"]}
+    async def get_user(request):
+        user = await database.fetch_user(request.params["id"])
+        return user
 
     app.register_blueprint(api)
 
@@ -64,7 +73,7 @@ __all__ = [
     "FormData",
     "UploadedFile",
 ]
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 
 class Blueprint:
