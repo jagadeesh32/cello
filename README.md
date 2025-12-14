@@ -63,7 +63,42 @@ def create_user(request):
     return {"id": 1, "name": data["name"]}
 
 if __name__ == "__main__":
-    app.run(host="127.0.0.1", port=8000)
+    app.run()
+```
+
+## 🛠️ CLI & Configuration
+
+Cello comes with built-in CLI argument parsing. You can configure the server using command-line arguments without changing your code.
+
+### Development Mode (Hot Reload + Debug Logs)
+```bash
+python main.py --env development --reload
+```
+
+### Production Mode (Fast + No Debug Logs)
+```bash
+python main.py --env production --no-logs --workers 8 --port 8080
+```
+
+### Available Options
+| Argument | Default | Description |
+|----------|---------|-------------|
+| `--host` | 127.0.0.1 | Host to bind to |
+| `--port` | 8000 | Port to bind to |
+| `--env` | development | Environment (`development` or `production`) |
+| `--reload` | False | Enable hot reloading (restarts on file change) |
+| `--workers` | CPU Count | Number of worker threads |
+| `--debug` | Auto | Enable debug logs (default True in dev) |
+| `--no-logs` | False | Disable all request logging |
+
+```python
+# You can also set defaults in code
+app.run(
+    host="0.0.0.0", 
+    port=5000, 
+    env="production", 
+    workers=4
+)
 ```
 
 ## 📖 Documentation
