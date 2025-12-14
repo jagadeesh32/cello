@@ -246,9 +246,9 @@ impl Default for LoggingMiddleware {
 
 impl Middleware for LoggingMiddleware {
     fn before(&self, request: &mut Request) -> MiddlewareResult {
+        // We print the "incoming" request log immediately
         println!(
-            "[REQUEST] {} {} {}",
-            chrono_lite_now(),
+            "--> {} {}",
             request.method,
             request.path
         );
@@ -257,11 +257,11 @@ impl Middleware for LoggingMiddleware {
 
     fn after(&self, request: &Request, response: &mut Response) -> MiddlewareResult {
         println!(
-            "[RESPONSE] {} {} {} -> {}",
-            chrono_lite_now(),
+            "<-- {} {} {} {}",
             request.method,
             request.path,
-            response.status
+            response.status,
+            status_text(response.status)
         );
         Ok(MiddlewareAction::Continue)
     }
@@ -272,6 +272,19 @@ impl Middleware for LoggingMiddleware {
 
     fn name(&self) -> &str {
         "logging"
+    }
+}
+
+fn status_text(status: u16) -> &'static str {
+    match status {
+        200 => "OK",
+        201 => "Created",
+        400 => "Bad Request",
+        401 => "Unauthorized",
+        403 => "Forbidden",
+        404 => "Not Found",
+        500 => "Internal Server Error",
+        _ => "",
     }
 }
 

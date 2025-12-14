@@ -295,12 +295,131 @@ class App:
         """
         self._app.enable_compression(min_size)
 
-    def run(self, host: str = "127.0.0.1", port: int = 8000):
+    def run(self, host: str = "127.0.0.1", port: int = 8000, 
+            debug: bool = None, env: str = None, 
+            workers: int = None, reload: bool = False,
+            loogs: bool = None):
         """
         Start the HTTP server.
 
         Args:
             host: Host address to bind to (default: "127.0.0.1")
             port: Port to bind to (default: 8000)
+            debug: Enable debug mode (default: True in dev, False in prod)
+            env: Environment "development" or "production" (default: "development")
+            workers: Number of worker threads (default: CPU count)
+            reload: Enable hot reload (default: False)
+            logs: Enable logging (default: True in dev)
         """
-        self._app.run(host, port)
+        import sys
+        import os
+        import argparse
+        import subprocess
+        import time
+
+        # Parse CLI arguments (only if running as main script)
+        if "unittest" not in sys.modules:
+            parser = argparse.ArgumentParser(description="Cello Web Server", add_help=False)
+            parser.add_argument("--host", default=host)
+            parser.add_argument("--port", type=int, default=port)
+            parser.add_argument("--env", default=env or "development")
+            parser.add_argument("--debug", action="store_true")
+            parser.add_argument("--reload", action="store_true")
+            parser.add_argument("--workers", type=int, default=workers)
+            parser.add_argument("--no-logs", action="store_true")
+            
+            # Use parse_known_args to avoid conflicts
+            args, _ = parser.parse_known_args()
+            
+            # Update configuration from CLI
+            host = args.host
+            port = args.port
+            if env is None: env = args.env
+            if workers is None: workers = args.workers
+            if reload is False and args.reload: reload = True
+            
+            # Debug logic: CLI flag enables it, or defaults to dev env
+            if debug is None:
+                debug = args.debug or (env == "development")
+
+            # Logs logic: CLI --no-logs disables it
+            if loogs is None:
+                loogs = not args.no_logs and debug
+
+        # Set defaults if still None
+        if env is None: env = "development"
+        if debug is None: debug = (env == "development")
+        if loogs is None: loogs = debug
+
+        # Reloading Logic (Development only)
+        if reload and os.environ.get("CELLO_RUN_MAIN") != "true":
+            print(f"🔄 Hot reload enabled ({env})")
+            print(f"   Watching {os.getcwd()}")
+            
+            # Simple polling reloader
+            while True:
+                p = subprocess.Popen(
+                    [sys.executable] + sys.argv,
+                    env={**os.environ, "CELLO_RUN_MAIN": "true"}
+                )
+                try:
+                    # Wait for process or file change
+                    self._watch_files(p)
+                except KeyboardInterrupt:
+                    p.terminate()
+                    sys.exit(0)
+                
+                print("🔄 Reloading...")
+                p.terminate()
+                p.wait()
+                time.sleep(0.5)
+
+        # Configure App
+        if loogs:
+            self.enable_logging()
+
+        # Run Server
+        try:
+             self._app.run(host, port, workers)
+        except KeyboardInterrupt:
+            pass # Handled by Rust ctrl_c
+
+    def _watch_files(self, process):
+        import os
+        import time
+        
+        mtimes = {}
+        
+        def get_mtimes():
+            changes = False
+            for root, dirs, files in os.walk(os.getcwd()):
+                if "__pycache__" in dirs:
+                    dirs.remove("__pycache__")
+                if ".git" in dirs:
+                    dirs.remove(".git")
+                if "target" in dirs:
+                    dirs.remove("target")
+                if ".venv" in dirs:
+                    dirs.remove(".venv")
+                    
+                for file in files:
+                    if file.endswith(".py"):
+                        path = os.path.join(root, file)
+                        try:
+                            mtime = os.stat(path).st_mtime
+                            if path not in mtimes:
+                                mtimes[path] = mtime
+                            elif mtimes[path] != mtime:
+                                mtimes[path] = mtime
+                                return True
+                        except OSError:
+                            pass
+            return False
+
+        # Initial scan
+        get_mtimes()
+        
+        while process.poll() is None:
+            if get_mtimes():
+                return
+            time.sleep(1)

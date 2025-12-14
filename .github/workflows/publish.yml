@@ -124,6 +124,9 @@ jobs:
     needs: [build-sdist, build-linux, build-macos, build-windows]
     runs-on: ubuntu-latest
     if: github.event_name == 'release' || (github.event_name == 'push' && github.ref == 'refs/heads/release')
+    environment:
+      name: pypi
+      url: https://pypi.org/project/cello-framework/
     permissions:
       id-token: write
 
@@ -140,8 +143,6 @@ jobs:
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          user: __token__
-          password: ${{ secrets.PYPI_API_TOKEN }}
           packages-dir: dist/
 
   # ============================================================================

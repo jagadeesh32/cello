@@ -136,16 +136,27 @@ impl Cello {
     }
 
     /// Start the HTTP server.
-    #[pyo3(signature = (host=None, port=None))]
-    pub fn run(&self, py: Python<'_>, host: Option<&str>, port: Option<u16>) -> PyResult<()> {
+    /// Start the HTTP server.
+    #[pyo3(signature = (host=None, port=None, workers=None))]
+    pub fn run(&self, py: Python<'_>, host: Option<&str>, port: Option<u16>, workers: Option<usize>) -> PyResult<()> {
         let host = host.unwrap_or("127.0.0.1");
         let port = port.unwrap_or(8000);
 
         println!("🐍 Cello v2 server starting at http://{}:{}", host, port);
+        if let Some(w) = workers {
+            println!("   Workers: {}", w);
+        }
 
         // Release the GIL and run the server
         py.allow_threads(|| {
-            let rt = tokio::runtime::Runtime::new()
+            let mut builder = tokio::runtime::Builder::new_multi_thread();
+            builder.enable_all();
+
+            if let Some(w) = workers {
+                builder.worker_threads(w);
+            }
+
+            let rt = builder.build()
                 .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
 
             rt.block_on(async {
