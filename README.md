@@ -157,6 +157,36 @@ return Response.redirect("/new-url")
 return Response.no_content()
 ```
 
+### Async Handlers
+
+Cello supports both sync and async handlers - use whichever fits your needs:
+
+```python
+# Sync handler - for simple, CPU-bound operations
+@app.get("/sync")
+def sync_handler(request):
+    return {"message": "Hello from sync!"}
+
+# Async handler - for I/O operations (database, HTTP, files)
+@app.get("/async")
+async def async_handler(request):
+    data = await database.fetch_users()
+    return {"users": data}
+
+# Mix freely in the same app
+@app.post("/users")
+async def create_user(request):
+    user = request.json()
+    await database.insert_user(user)
+    return {"id": user["id"], "created": True}
+```
+
+**When to use `async def`:**
+- Database queries (asyncpg, motor, databases)
+- HTTP requests (httpx, aiohttp)
+- File I/O (aiofiles)
+- Any operation that benefits from non-blocking I/O
+
 ### Middleware
 
 ```python
