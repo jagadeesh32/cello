@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "cello-framework"
-version = "0.3.0"
+version = "0.4.0"
 description = "Ultra-fast Rust-powered Python async web framework"
 readme = "README.md"
 license = { text = "MIT" }
@@ -18,15 +18,16 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Programming Language :: Rust",
     "Framework :: AsyncIO",
     "Topic :: Internet :: WWW/HTTP :: HTTP Servers",
 ]
 
 [project.urls]
-Homepage = "https://github.com/jagadeeshkatla/cello"
-Repository = "https://github.com/jagadeeshkatla/cello"
-Documentation = "https://github.com/jagadeeshkatla/cello#readme"
+Homepage = "https://github.com/jagadeesh32/cello"
+Repository = "https://github.com/jagadeesh32/cello"
+Documentation = "https://github.com/jagadeesh32/cello#readme"
 
 [project.optional-dependencies]
 dev = [

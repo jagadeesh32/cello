@@ -1,26 +1,44 @@
-# Cello 🐍
+<p align="center">
+  <img src="docs/assets/cello-logo.png" alt="Cello" width="200" height="200">
+</p>
 
-[![CI](https://github.com/jagadeeshkatla/cello/actions/workflows/ci.yml/badge.svg)](https://github.com/jagadeeshkatla/cello/actions/workflows/ci.yml)
-[![PyPI](https://img.shields.io/pypi/v/cello-framework.svg)](https://pypi.org/project/cello-framework/)
-[![Python](https://img.shields.io/pypi/pyversions/cello-framework.svg)](https://pypi.org/project/cello-framework/)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+<h1 align="center">Cello</h1>
 
-**Ultra-fast Rust-powered Python async web framework**
+<p align="center">
+  <strong>Ultra-fast Rust-powered Python web framework</strong>
+</p>
 
-Cello is a high-performance web framework that combines Python's developer experience with Rust's raw speed. All HTTP handling, routing, and JSON serialization happen in Rust—Python handles only your business logic.
+<p align="center">
+  <a href="https://github.com/jagadeesh32/cello/actions/workflows/ci.yml"><img src="https://github.com/jagadeesh32/cello/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://pypi.org/project/cello-framework/"><img src="https://img.shields.io/pypi/v/cello-framework.svg" alt="PyPI"></a>
+  <a href="https://pypi.org/project/cello-framework/"><img src="https://img.shields.io/pypi/pyversions/cello-framework.svg" alt="Python"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License"></a>
+</p>
 
-## ✨ Features
+<p align="center">
+  <a href="#-quick-start">Quick Start</a> •
+  <a href="#-features">Features</a> •
+  <a href="#-examples">Examples</a> •
+  <a href="docs/README.md">Documentation</a>
+</p>
 
-| Feature | Description |
-|---------|-------------|
-| 🚀 **Blazing Fast** | Tokio + Hyper HTTP engine in pure Rust |
-| 📦 **SIMD JSON** | SIMD-accelerated JSON with simd-json |
-| 🛡️ **Middleware** | Built-in CORS, logging, gzip compression |
-| 🗺️ **Blueprints** | Flask-like route grouping |
-| 🌐 **WebSocket** | Real-time bidirectional communication |
-| 📡 **SSE** | Server-Sent Events streaming |
-| 📁 **File Uploads** | Multipart form data handling |
-| 🐍 **Pythonic** | Decorator-based routing like Flask |
+---
+
+## Why Cello?
+
+Cello is the **fastest Python web framework** — combining Python's developer experience with Rust's raw performance. All HTTP handling, routing, JSON serialization, and middleware execute in native Rust. Python handles only your business logic.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Request → Rust HTTP Engine → Python Handler → Rust Response   │
+│                  │                    │                         │
+│                  ├─ SIMD JSON         ├─ Return dict            │
+│                  ├─ Radix routing     └─ Return Response        │
+│                  └─ Middleware (Rust)                           │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
 
 ## 📦 Installation
 
@@ -30,11 +48,15 @@ pip install cello-framework
 
 **From source:**
 ```bash
-pip install maturin
-git clone https://github.com/jagadeeshkatla/cello.git
+git clone https://github.com/jagadeesh32/cello.git
 cd cello
+pip install maturin
 maturin develop
 ```
+
+**Requirements:** Python 3.12+
+
+---
 
 ## 🚀 Quick Start
 
@@ -43,101 +65,130 @@ from cello import App, Response
 
 app = App()
 
-# Enable middleware
-app.enable_cors()
-app.enable_logging()
-app.enable_compression()
-
 @app.get("/")
 def home(request):
-    return {"message": "Hello, Cello!"}
+    return {"message": "Hello, Cello! 🎸"}
 
 @app.get("/users/{id}")
 def get_user(request):
-    user_id = request.params["id"]
-    return {"id": user_id, "name": "John"}
+    return {"id": request.params["id"], "name": "John Doe"}
 
 @app.post("/users")
 def create_user(request):
     data = request.json()
-    return {"id": 1, "name": data["name"]}
+    return Response.json({"id": 1, **data}, status=201)
 
 if __name__ == "__main__":
     app.run()
 ```
 
-## 🛠️ CLI & Configuration
-
-Cello comes with built-in CLI argument parsing. You can configure the server using command-line arguments without changing your code.
-
-### Development Mode (Hot Reload + Debug Logs)
 ```bash
-python main.py --env development --reload
+python app.py
+# 🚀 Cello running at http://127.0.0.1:8000
 ```
 
-### Production Mode (Fast + No Debug Logs)
-```bash
-python main.py --env production --no-logs --workers 8 --port 8080
-```
+---
 
-### Available Options
-| Argument | Default | Description |
-|----------|---------|-------------|
-| `--host` | 127.0.0.1 | Host to bind to |
-| `--port` | 8000 | Port to bind to |
-| `--env` | development | Environment (`development` or `production`) |
-| `--reload` | False | Enable hot reloading (restarts on file change) |
-| `--workers` | CPU Count | Number of worker threads |
-| `--debug` | Auto | Enable debug logs (default True in dev) |
-| `--no-logs` | False | Disable all request logging |
+## ✨ Features
 
-```python
-# You can also set defaults in code
-app.run(
-    host="0.0.0.0", 
-    port=5000, 
-    env="production", 
-    workers=4
-)
-```
+### Core Features
 
-## 📖 Documentation
+| Feature | Description |
+|---------|-------------|
+| 🚀 **Blazing Fast** | Tokio + Hyper async HTTP engine in pure Rust |
+| 📦 **SIMD JSON** | SIMD-accelerated JSON parsing with `simd-json` |
+| �️ **Radix Routing** | Ultra-fast route matching with `matchit` |
+| 🔄 **Async/Sync** | Support for both `async def` and regular `def` handlers |
+| �🛡️ **Middleware** | Built-in CORS, logging, compression, rate limiting |
+| � **Blueprints** | Flask-like route grouping and modular apps |
+| 🌐 **WebSocket** | Real-time bidirectional communication |
+| 📡 **SSE** | Server-Sent Events for streaming |
+| 📁 **Multipart** | File uploads and form data handling |
 
-### Blueprints
+### Enterprise Features
 
-Group routes with shared prefixes:
+| Feature | Description |
+|---------|-------------|
+| 🔐 **Authentication** | JWT, Basic Auth, API Key with constant-time validation |
+| 🛡️ **CSRF Protection** | Double-submit cookie and signed token patterns |
+| ⏱️ **Rate Limiting** | Token bucket and sliding window algorithms |
+| 🍪 **Sessions** | Secure cookie-based session management |
+| � **Security Headers** | CSP, HSTS, X-Frame-Options, Referrer-Policy |
+| 🏭 **Cluster Mode** | Multi-worker process deployment |
+| � **TLS/SSL** | Native HTTPS with rustls |
+| ⚡ **HTTP/2 & HTTP/3** | Modern protocol support including QUIC |
+| ⏰ **Timeouts** | Request/response timeout protection |
+
+---
+
+## � Examples
+
+### Blueprints (Route Grouping)
 
 ```python
 from cello import App, Blueprint
 
-api = Blueprint("/api/v1")
+# Create versioned API blueprint
+api_v1 = Blueprint("/api/v1")
 
-@api.get("/users")
+@api_v1.get("/users")
 def list_users(request):
-    return {"users": []}
+    return {"users": [{"id": 1, "name": "Alice"}, {"id": 2, "name": "Bob"}]}
 
-@api.get("/users/{id}")
+@api_v1.get("/users/{id}")
 def get_user(request):
     return {"id": request.params["id"]}
 
+@api_v1.post("/users")
+def create_user(request):
+    return Response.json(request.json(), status=201)
+
+# Mount blueprint
 app = App()
-app.register_blueprint(api)
+app.register_blueprint(api_v1)
 app.run()
+```
+
+### Async Handlers
+
+```python
+@app.get("/sync")
+def sync_handler(request):
+    """Sync handler for simple operations"""
+    return {"message": "Hello from sync!"}
+
+@app.get("/async")
+async def async_handler(request):
+    """Async handler for I/O operations"""
+    users = await database.fetch_users()
+    return {"users": users}
+
+@app.post("/data")
+async def process_data(request):
+    data = request.json()
+    result = await external_api.process(data)
+    return {"result": result}
 ```
 
 ### Request Object
 
 ```python
+@app.post("/example")
 def handler(request):
+    # Request properties
     request.method              # "GET", "POST", etc.
     request.path                # "/users/123"
     request.params["id"]        # Path parameters
-    request.query["search"]     # Query parameters
-    request.get_header("auth")  # Headers
+    request.query["search"]     # Query parameters (?search=value)
+    request.get_header("Authorization")
+    
+    # Body parsing
     request.body()              # Raw bytes
     request.text()              # String body
-    request.json()              # Parsed JSON
+    request.json()              # Parsed JSON dict
     request.form()              # Form data dict
+    
+    return {"received": True}
 ```
 
 ### Response Types
@@ -145,135 +196,252 @@ def handler(request):
 ```python
 from cello import Response
 
-# JSON (default)
+# JSON (default - just return a dict)
 return {"data": "value"}
 
-# Custom responses
-return Response.json({"ok": True}, status=201)
-return Response.text("Hello!")
-return Response.html("<h1>Hello</h1>")
-return Response.file("/path/to/file.pdf")
-return Response.redirect("/new-url")
+# Explicit JSON with status
+return Response.json({"created": True}, status=201)
+
+# Text response
+return Response.text("Hello, World!")
+
+# HTML response
+return Response.html("<h1>Welcome</h1>")
+
+# File download
+return Response.file("/path/to/document.pdf")
+
+# Redirect
+return Response.redirect("/new-location")
+
+# No content (204)
 return Response.no_content()
+
+# Binary data
+return Response.binary(image_bytes, content_type="image/png")
+
+# Custom headers
+response = Response.json({"ok": True})
+response.set_header("X-Custom", "value")
+return response
 ```
-
-### Async Handlers
-
-Cello supports both sync and async handlers - use whichever fits your needs:
-
-```python
-# Sync handler - for simple, CPU-bound operations
-@app.get("/sync")
-def sync_handler(request):
-    return {"message": "Hello from sync!"}
-
-# Async handler - for I/O operations (database, HTTP, files)
-@app.get("/async")
-async def async_handler(request):
-    data = await database.fetch_users()
-    return {"users": data}
-
-# Mix freely in the same app
-@app.post("/users")
-async def create_user(request):
-    user = request.json()
-    await database.insert_user(user)
-    return {"id": user["id"], "created": True}
-```
-
-**When to use `async def`:**
-- Database queries (asyncpg, motor, databases)
-- HTTP requests (httpx, aiohttp)
-- File I/O (aiofiles)
-- Any operation that benefits from non-blocking I/O
 
 ### Middleware
 
 ```python
 app = App()
 
-# CORS - allow cross-origin requests
+# CORS - Cross-Origin Resource Sharing
 app.enable_cors()
-app.enable_cors(origins=["https://example.com"])
+app.enable_cors(origins=["https://example.com", "https://app.example.com"])
 
-# Logging - log all requests
+# Request logging
 app.enable_logging()
 
-# Compression - gzip responses
+# Gzip compression
 app.enable_compression()
-app.enable_compression(min_size=1024)
+app.enable_compression(min_size=1024)  # Only compress if > 1KB
+
+# Security headers (CSP, HSTS, X-Frame-Options, etc.)
+app.enable_security_headers()
+
+# Rate limiting
+app.enable_rate_limit(requests=100, window=60)  # 100 req/min
 ```
 
 ### WebSocket
 
 ```python
-@app.websocket("/ws")
-def websocket_handler(ws):
-    ws.send_text("Welcome!")
+@app.websocket("/ws/chat")
+def chat_handler(ws):
+    ws.send_text("Welcome to the chat!")
+    
     while True:
-        msg = ws.recv()
-        if msg is None:
+        message = ws.recv()
+        if message is None:
             break
-        ws.send_text(f"Echo: {msg.text}")
+        
+        # Echo back
+        ws.send_text(f"You said: {message.text}")
+        
+        # Or send JSON
+        ws.send_json({"type": "message", "content": message.text})
 ```
 
-### Server-Sent Events
+### Server-Sent Events (SSE)
 
 ```python
 from cello import SseEvent, SseStream
 
 @app.get("/events")
-def events(request):
+def event_stream(request):
     stream = SseStream()
-    stream.add_data("Hello")
-    stream.add_event("update", '{"count": 1}')
+    
+    # Simple data
+    stream.add_data("Connection established")
+    
+    # Named events with JSON
+    stream.add_event("update", '{"count": 42}')
+    stream.add_event("notification", '{"message": "New data available"}')
+    
     return stream
 ```
 
-## 🏗️ Architecture
+### JWT Authentication
 
+```python
+from cello import App
+from cello.middleware import JwtConfig, JwtAuth
+
+# Configure JWT
+jwt_config = JwtConfig(secret=b"your-secret-key-min-32-bytes-long")
+jwt_auth = JwtAuth(jwt_config).skip_path("/public")
+
+app = App()
+app.use(jwt_auth)
+
+@app.get("/protected")
+def protected(request):
+    claims = request.context.get("jwt_claims")
+    return {"user": claims["sub"]}
 ```
-Request → Rust HTTP Engine → Python Handler → Rust Response
-              │                    │
-              ├─ SIMD JSON         ├─ Return dict
-              ├─ Radix routing     └─ Return Response
-              └─ Middleware
+
+---
+
+## 🛠️ CLI & Configuration
+
+```bash
+# Development mode (hot reload + debug logs)
+python app.py --env development --reload
+
+# Production mode
+python app.py --env production --workers 8 --port 8080 --no-logs
 ```
+
+| Argument | Default | Description |
+|----------|---------|-------------|
+| `--host` | 127.0.0.1 | Host to bind to |
+| `--port` | 8000 | Port to bind to |
+| `--env` | development | Environment mode |
+| `--reload` | False | Hot reload on file changes |
+| `--workers` | CPU count | Number of worker threads |
+| `--debug` | Auto | Enable debug logging |
+| `--no-logs` | False | Disable request logging |
+
+```python
+# Programmatic configuration
+app.run(
+    host="0.0.0.0",
+    port=8080,
+    env="production",
+    workers=4
+)
+```
+
+---
+
+## 🏗️ Tech Stack
+
+| Component | Technology |
+|-----------|------------|
+| **Runtime** | Tokio (async Rust) |
+| **HTTP Server** | Hyper 1.x |
+| **JSON** | simd-json + serde |
+| **Routing** | matchit (radix tree) |
+| **Python Bindings** | PyO3 |
+| **TLS/SSL** | rustls |
+| **HTTP/2** | h2 |
+| **HTTP/3** | quinn (QUIC) |
+| **Compression** | flate2 (gzip) |
+| **JWT** | jsonwebtoken |
+| **Concurrent Maps** | dashmap |
+| **Security** | subtle (constant-time ops) |
+
+---
+
+## 🔒 Security
+
+Cello is built with security as a priority:
+
+- ✅ **Constant-time comparison** for passwords, API keys, and tokens
+- ✅ **CSRF protection** with double-submit cookies and signed tokens
+- ✅ **Security headers** (CSP, HSTS, X-Frame-Options, Referrer-Policy)
+- ✅ **Rate limiting** to prevent abuse
+- ✅ **Session security** (Secure, HttpOnly, SameSite cookies)
+- ✅ **Path traversal protection** in static file serving
+- ✅ **JWT blacklisting** for token revocation
+
+---
+
+## 📊 Benchmarks
+
+Cello is designed to be the fastest Python web framework:
+
+- **Zero-copy** request parsing
+- **SIMD-accelerated** JSON
+- **Arena allocation** for memory efficiency
+- **Lock-free** concurrent data structures
+- **Native Rust** HTTP handling
+
+*Benchmark results coming soon*
+
+---
 
 ## 🛠️ Development
 
 ```bash
 # Setup
+git clone https://github.com/jagadeesh32/cello.git
+cd cello
 python -m venv .venv
 source .venv/bin/activate
-pip install maturin pytest ruff
+pip install maturin pytest requests
 
-# Build & Test
+# Build
 maturin develop
+
+# Test
 pytest tests/ -v
 
 # Lint
-ruff check python/ tests/
 cargo clippy
+cargo fmt
 ```
 
-## 📊 Tech Stack
+---
 
-| Component | Technology |
-|-----------|------------|
-| HTTP Server | Tokio + Hyper |
-| JSON | simd-json + serde |
-| Routing | matchit (radix tree) |
-| Python Bindings | PyO3 |
-| Compression | flate2 (gzip) |
+## 📚 Documentation
+
+- 📖 [Getting Started](docs/getting-started.md)
+- 🔧 [Configuration](docs/configuration.md)
+- 🛡️ [Security Guide](docs/security.md)
+- 📡 [WebSocket Guide](docs/websocket.md)
+- 🏭 [Deployment](docs/deployment.md)
+
+Full documentation: [docs/README.md](docs/README.md)
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+---
 
 ## 📄 License
 
 MIT License - see [LICENSE](LICENSE)
 
+---
+
 ## 👤 Author
 
 **Jagadeesh Katla**
 
-- GitHub: [@jagadeeshkatla](https://github.com/jagadeeshkatla)
-# cello
+- GitHub: [@jagadeesh32](https://github.com/jagadeesh32)
+
+---
+
+<p align="center">
+  Made with ❤️ and 🦀
+</p>
