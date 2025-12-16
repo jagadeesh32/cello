@@ -101,28 +101,69 @@ Then create a Pull Request on GitHub.
 
 ```
 cello/
-├── src/                    # Rust source code
-│   ├── lib.rs             # Main entry, Python module
-│   ├── request.rs         # Request handling
-│   ├── response.rs        # Response types
-│   ├── router.rs          # URL routing
-│   ├── handler.rs         # Handler registry
-│   ├── middleware.rs      # Middleware system
-│   ├── blueprint.rs       # Route grouping
-│   ├── websocket.rs       # WebSocket support
-│   ├── sse.rs             # Server-Sent Events
-│   ├── multipart.rs       # File uploads
-│   ├── json.rs            # SIMD JSON
-│   ├── arena.rs           # Arena allocators
-│   └── server.rs          # HTTP server
-├── python/cello/          # Python package
-│   └── __init__.py        # Python API wrapper
-├── tests/                  # Python tests
-├── examples/              # Example applications
-├── Cargo.toml             # Rust dependencies
-└── pyproject.toml         # Python project config
+├── src/                       # Rust source code
+│   ├── lib.rs                 # Main entry, Python module
+│   ├── request.rs             # Request handling
+│   ├── response.rs            # Response types
+│   ├── router.rs              # URL routing
+│   ├── handler.rs             # Handler registry
+│   ├── blueprint.rs           # Route grouping
+│   ├── websocket.rs           # WebSocket support
+│   ├── sse.rs                 # Server-Sent Events
+│   ├── multipart.rs           # File uploads
+│   ├── json.rs                # SIMD JSON
+│   ├── arena.rs               # Arena allocators
+│   ├── context.rs             # Request context, DI container
+│   ├── error.rs               # RFC 7807 error handling
+│   ├── lifecycle.rs           # Hooks and lifecycle events
+│   ├── timeout.rs             # Timeout and limits
+│   ├── middleware/            # Middleware modules
+│   │   ├── mod.rs             # Core middleware traits
+│   │   ├── auth.rs            # JWT, Basic, API Key auth
+│   │   ├── rate_limit.rs      # Rate limiting
+│   │   ├── session.rs         # Cookie sessions
+│   │   ├── security.rs        # Security headers, CSP
+│   │   ├── csrf.rs            # CSRF protection
+│   │   ├── static_files.rs    # Static file serving
+│   │   ├── body_limit.rs      # Body size limits
+│   │   ├── request_id.rs      # Request ID generation
+│   │   ├── etag.rs            # ETag caching
+│   │   └── cors.rs            # CORS handling
+│   ├── routing/               # Routing modules
+│   │   └── mod.rs             # Route constraints, versioning
+│   ├── request/               # Request modules
+│   │   └── mod.rs             # Lazy parsing, typed params
+│   ├── response/              # Response modules
+│   │   └── mod.rs             # Streaming, XML
+│   └── server/                # Server modules
+│       └── mod.rs             # Cluster, TLS, HTTP/2, HTTP/3
+├── python/cello/              # Python package
+│   └── __init__.py            # Python API wrapper
+├── tests/                     # Python tests
+├── examples/                  # Example applications
+│   ├── hello.py               # Basic example
+│   ├── advanced.py            # Advanced features
+│   ├── enterprise.py          # Enterprise configurations
+│   ├── security.py            # Security features
+│   ├── middleware_demo.py     # Middleware demo
+│   ├── cluster_demo.py        # Cluster mode demo
+│   └── streaming_demo.py      # SSE and streaming
+├── docs/                      # Documentation
+│   ├── README.md              # Documentation index
+│   ├── getting-started.md     # Installation and basics
+│   ├── configuration.md       # Configuration reference
+│   ├── middleware.md          # Middleware guide
+│   ├── security.md            # Security guide
+│   ├── enterprise.md          # Enterprise features
+│   ├── routing.md             # Routing guide
+│   ├── api-reference.md       # API reference
+│   ├── deployment.md          # Deployment guide
+│   └── changelog.md           # Version history
+├── Cargo.toml                 # Rust dependencies
+└── pyproject.toml             # Python project config
 ```
 
 ## Questions?
 
 Open an issue on GitHub!
+

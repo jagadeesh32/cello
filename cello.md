@@ -92,6 +92,44 @@ path.
   FFI         pyo3 + abi3
   Memory      Arena allocators
   Syscalls    io_uring
+  TLS         rustls
+  HTTP/2      h2
+  HTTP/3      quinn (QUIC)
+  JWT         jsonwebtoken
+  Rate Limit  dashmap
+
+------------------------------------------------------------------------
+
+## 4.5️⃣ Enterprise Features (v0.4.0)
+
+### Configuration Classes
+
+| Class | Purpose |
+|-------|---------|
+| `TimeoutConfig` | Request/response timeouts |
+| `LimitsConfig` | Connection and body limits |
+| `ClusterConfig` | Multi-worker deployment |
+| `TlsConfig` | TLS/SSL configuration |
+| `Http2Config` | HTTP/2 settings |
+| `Http3Config` | HTTP/3 (QUIC) settings |
+| `JwtConfig` | JWT authentication |
+| `RateLimitConfig` | Rate limiting |
+| `SessionConfig` | Cookie sessions |
+| `SecurityHeadersConfig` | Security headers |
+| `CSP` | Content Security Policy |
+| `StaticFilesConfig` | Static file serving |
+
+### Enterprise Modules
+
+| Module | Purpose |
+|--------|---------|
+| `context.rs` | Request context, dependency injection |
+| `error.rs` | RFC 7807 Problem Details |
+| `lifecycle.rs` | Startup/shutdown hooks, signals |
+| `timeout.rs` | Timeout enforcement, limits |
+| `middleware/` | Auth, rate limiting, sessions, security |
+| `routing/` | Route constraints, API versioning |
+| `server/` | Cluster mode, TLS, HTTP/2, HTTP/3 |
 
 ------------------------------------------------------------------------
 
@@ -120,7 +158,7 @@ path.
 ### 🤖 Agent 4: Python DX Agent
 
 ``` python
-from ultrarust import App
+from cello import App
 
 app = App()
 
@@ -139,12 +177,29 @@ def hello(req):
 
 ## 6️⃣ Why This Beats Robyn
 
-  Feature           Robyn    This
+  Feature           Robyn    Cello
   ----------------- -------- -----------
   Python hot path   Yes      No
   Routing           Python   Rust
   JSON              Python   SIMD Rust
   io_uring          No       Yes
+  Cluster mode      Limited  Full
+  TLS               Yes      Yes (rustls)
+  HTTP/2            Yes      Yes (h2)
+  HTTP/3            No       Yes (QUIC)
 
 ------------------------------------------------------------------------
+
+## 📚 Documentation
+
+See [docs/README.md](docs/README.md) for full documentation including:
+
+- Getting Started
+- Configuration Reference
+- Middleware Guide
+- Security Guide
+- Enterprise Features
+- API Reference
+- Deployment Guide
+
 

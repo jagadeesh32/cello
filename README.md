@@ -22,6 +22,21 @@ Cello is a high-performance web framework that combines Python's developer exper
 | 📁 **File Uploads** | Multipart form data handling |
 | 🐍 **Pythonic** | Decorator-based routing like Flask |
 
+### Enterprise Features (v0.4.0)
+
+| Feature | Description |
+|---------|-------------|
+| 🔐 **Authentication** | JWT, Basic Auth, API Key authentication |
+| ⏱️ **Rate Limiting** | Token bucket and sliding window algorithms |
+| 🍪 **Sessions** | Secure cookie-based session management |
+| 🛡️ **Security Headers** | CSP, HSTS, X-Frame-Options, and more |
+| 🏭 **Cluster Mode** | Multi-worker process deployment |
+| 🔒 **TLS/SSL** | Native HTTPS support |
+| 🌐 **HTTP/2 & HTTP/3** | Modern protocol support (QUIC) |
+| ⏰ **Timeouts & Limits** | Request protection and resource limits |
+
+📚 **Full documentation**: [docs/README.md](docs/README.md)
+
 ## 📦 Installation
 
 ```bash
@@ -266,6 +281,11 @@ cargo clippy
 | Routing | matchit (radix tree) |
 | Python Bindings | PyO3 |
 | Compression | flate2 (gzip) |
+| TLS/SSL | rustls + tokio-rustls |
+| HTTP/2 | h2 |
+| HTTP/3 | quinn (QUIC) |
+| JWT | jsonwebtoken |
+| Rate Limiting | dashmap (concurrent) |
 
 ## 📄 License
 

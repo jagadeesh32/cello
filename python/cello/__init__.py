@@ -11,6 +11,15 @@ Features:
 - Blueprint-based routing with inheritance
 - WebSocket and SSE support
 - File uploads and multipart form handling
+- Enterprise features:
+  - JWT, Basic, and API Key authentication
+  - Rate limiting (token bucket, sliding window)
+  - Session management
+  - Security headers (CSP, HSTS, etc.)
+  - Cluster mode with multiple workers
+  - HTTP/2 and HTTP/3 (QUIC) support
+  - TLS/SSL configuration
+  - Request/response timeouts
 
 Example:
     from cello import App, Blueprint
@@ -61,7 +70,24 @@ from cello._cello import (
     WebSocketMessage,
 )
 
+# Enterprise configuration classes
+from cello._cello import (
+    TimeoutConfig,
+    LimitsConfig,
+    ClusterConfig,
+    TlsConfig,
+    Http2Config,
+    Http3Config,
+    JwtConfig,
+    RateLimitConfig,
+    SessionConfig,
+    SecurityHeadersConfig,
+    CSP,
+    StaticFilesConfig,
+)
+
 __all__ = [
+    # Core
     "App",
     "Blueprint",
     "Request",
@@ -72,8 +98,21 @@ __all__ = [
     "SseStream",
     "FormData",
     "UploadedFile",
+    # Enterprise Configuration
+    "TimeoutConfig",
+    "LimitsConfig",
+    "ClusterConfig",
+    "TlsConfig",
+    "Http2Config",
+    "Http3Config",
+    "JwtConfig",
+    "RateLimitConfig",
+    "SessionConfig",
+    "SecurityHeadersConfig",
+    "CSP",
+    "StaticFilesConfig",
 ]
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 
 
 class Blueprint:
@@ -153,6 +192,16 @@ class App:
 
     Provides a Flask-like API for defining routes and running the server.
     All heavy lifting is done in Rust for maximum performance.
+
+    Enterprise Features:
+        - JWT, Basic, and API Key authentication
+        - Rate limiting with token bucket or sliding window
+        - Session management with cookies
+        - Security headers (CSP, HSTS, X-Frame-Options, etc.)
+        - Cluster mode for multi-process scaling
+        - HTTP/2 and HTTP/3 (QUIC) protocol support
+        - TLS/SSL configuration
+        - Request/response timeouts and limits
     """
 
     def __init__(self):
@@ -304,8 +353,8 @@ class App:
         """
         self._app.enable_compression(min_size)
 
-    def run(self, host: str = "127.0.0.1", port: int = 8000, 
-            debug: bool = None, env: str = None, 
+    def run(self, host: str = "127.0.0.1", port: int = 8000,
+            debug: bool = None, env: str = None,
             workers: int = None, reload: bool = False,
             loogs: bool = None):
         """
@@ -319,6 +368,18 @@ class App:
             workers: Number of worker threads (default: CPU count)
             reload: Enable hot reload (default: False)
             logs: Enable logging (default: True in dev)
+
+        Example:
+            # Simple development server
+            app.run()
+
+            # Production configuration
+            app.run(
+                host="0.0.0.0",
+                port=8080,
+                env="production",
+                workers=4,
+            )
         """
         import sys
         import os
@@ -336,17 +397,17 @@ class App:
             parser.add_argument("--reload", action="store_true")
             parser.add_argument("--workers", type=int, default=workers)
             parser.add_argument("--no-logs", action="store_true")
-            
+
             # Use parse_known_args to avoid conflicts
             args, _ = parser.parse_known_args()
-            
+
             # Update configuration from CLI
             host = args.host
             port = args.port
             if env is None: env = args.env
             if workers is None: workers = args.workers
             if reload is False and args.reload: reload = True
-            
+
             # Debug logic: CLI flag enables it, or defaults to dev env
             if debug is None:
                 debug = args.debug or (env == "development")
@@ -364,7 +425,7 @@ class App:
         if reload and os.environ.get("CELLO_RUN_MAIN") != "true":
             print(f"🔄 Hot reload enabled ({env})")
             print(f"   Watching {os.getcwd()}")
-            
+
             # Simple polling reloader
             while True:
                 p = subprocess.Popen(
@@ -377,7 +438,7 @@ class App:
                 except KeyboardInterrupt:
                     p.terminate()
                     sys.exit(0)
-                
+
                 print("🔄 Reloading...")
                 p.terminate()
                 p.wait()
@@ -396,9 +457,9 @@ class App:
     def _watch_files(self, process):
         import os
         import time
-        
+
         mtimes = {}
-        
+
         def get_mtimes():
             changes = False
             for root, dirs, files in os.walk(os.getcwd()):
@@ -410,7 +471,7 @@ class App:
                     dirs.remove("target")
                 if ".venv" in dirs:
                     dirs.remove(".venv")
-                    
+
                 for file in files:
                     if file.endswith(".py"):
                         path = os.path.join(root, file)
@@ -427,7 +488,7 @@ class App:
 
         # Initial scan
         get_mtimes()
-        
+
         while process.poll() is None:
             if get_mtimes():
                 return

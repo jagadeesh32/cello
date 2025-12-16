@@ -49,12 +49,54 @@ async-trait = "0.1"
 pin-project-lite = "0.2"
 thiserror = "1"
 tracing = "0.1"
+futures-core = "0.3"
 
 # Multipart form parsing
 multer = "3"
 
 # Compression
 flate2 = "1"
+
+# === Enterprise Features ===
+
+# JWT Authentication
+jsonwebtoken = "9"
+
+# Concurrent HashMap for rate limiting
+dashmap = "5"
+
+# XML serialization
+quick-xml = { version = "0.31", features = ["serialize"] }
+
+# HTTP/3 (QUIC) and TLS
+quinn = "0.10"
+tokio-rustls = "0.25"
+rustls = { version = "0.22", default-features = false, features = ["ring"] }
+rustls-pemfile = "2"
+
+# Cancellation and utilities
+tokio-util = { version = "0.7", features = ["rt"] }
+
+# Session and security
+uuid = { version = "1", features = ["v4"] }
+rand = "0.8"
+base64 = "0.21"
+hmac = "0.12"
+sha2 = "0.10"
+hex = "0.4"
+crc32fast = "1"
+
+# System info
+num_cpus = "1"
+
+# Route constraints
+regex = "1"
+
+# Unix process management (for pre-fork)
+libc = "0.2"
+
+# HTTP/2 support
+h2 = "0.4"
 
 [dev-dependencies]
 reqwest = { version = "0.11", features = ["blocking", "json", "multipart"] }

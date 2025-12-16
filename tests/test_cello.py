@@ -53,6 +53,268 @@ def test_import_multipart():
 
 
 # =============================================================================
+# Unit Tests - Enterprise Configuration Classes
+# =============================================================================
+
+
+def test_import_enterprise_configs():
+    """Test enterprise configuration imports."""
+    from cello import (
+        TimeoutConfig,
+        LimitsConfig,
+        ClusterConfig,
+        TlsConfig,
+        Http2Config,
+        Http3Config,
+        JwtConfig,
+        RateLimitConfig,
+        SessionConfig,
+        SecurityHeadersConfig,
+        CSP,
+        StaticFilesConfig,
+    )
+
+    assert TimeoutConfig is not None
+    assert LimitsConfig is not None
+    assert ClusterConfig is not None
+    assert TlsConfig is not None
+    assert Http2Config is not None
+    assert Http3Config is not None
+    assert JwtConfig is not None
+    assert RateLimitConfig is not None
+    assert SessionConfig is not None
+    assert SecurityHeadersConfig is not None
+    assert CSP is not None
+    assert StaticFilesConfig is not None
+
+
+def test_timeout_config():
+    """Test TimeoutConfig creation and defaults."""
+    from cello import TimeoutConfig
+
+    # Create with defaults
+    config = TimeoutConfig()
+    assert config is not None
+    assert config.read_header_timeout == 5
+    assert config.handler_timeout == 30
+
+    # Create with custom values
+    custom = TimeoutConfig(
+        read_header=10,
+        read_body=60,
+        write=60,
+        idle=120,
+        handler=45,
+    )
+    assert custom.read_header_timeout == 10
+    assert custom.handler_timeout == 45
+
+
+def test_limits_config():
+    """Test LimitsConfig creation and defaults."""
+    from cello import LimitsConfig
+
+    # Create with defaults
+    config = LimitsConfig()
+    assert config is not None
+    assert config.max_header_size == 8192
+    assert config.max_body_size == 10485760
+
+    # Create with custom values
+    custom = LimitsConfig(
+        max_header_size=16384,
+        max_body_size=52428800,
+        max_connections=50000,
+    )
+    assert custom.max_header_size == 16384
+    assert custom.max_body_size == 52428800
+
+
+def test_cluster_config():
+    """Test ClusterConfig creation."""
+    from cello import ClusterConfig
+
+    # Create with defaults
+    config = ClusterConfig()
+    assert config is not None
+    assert config.workers >= 1
+    assert config.graceful_shutdown == True
+
+    # Create with custom values
+    custom = ClusterConfig(
+        workers=4,
+        cpu_affinity=True,
+        max_restarts=10,
+        graceful_shutdown=True,
+        shutdown_timeout=60,
+    )
+    assert custom.workers == 4
+    assert custom.cpu_affinity == True
+    assert custom.shutdown_timeout == 60
+
+    # Test auto() factory
+    auto_config = ClusterConfig.auto()
+    assert auto_config is not None
+    assert auto_config.workers >= 1
+
+
+def test_tls_config():
+    """Test TlsConfig creation."""
+    from cello import TlsConfig
+
+    config = TlsConfig(
+        cert_path="/path/to/cert.pem",
+        key_path="/path/to/key.pem",
+    )
+    assert config is not None
+    assert config.cert_path == "/path/to/cert.pem"
+    assert config.key_path == "/path/to/key.pem"
+    assert config.min_version == "1.2"
+    assert config.max_version == "1.3"
+
+
+def test_http2_config():
+    """Test Http2Config creation and defaults."""
+    from cello import Http2Config
+
+    # Create with defaults
+    config = Http2Config()
+    assert config is not None
+    assert config.max_concurrent_streams == 100
+    assert config.enable_push == False
+
+    # Create with custom values
+    custom = Http2Config(
+        max_concurrent_streams=250,
+        initial_window_size=2097152,
+        max_frame_size=32768,
+        enable_push=False,
+    )
+    assert custom.max_concurrent_streams == 250
+
+
+def test_http3_config():
+    """Test Http3Config creation and defaults."""
+    from cello import Http3Config
+
+    # Create with defaults
+    config = Http3Config()
+    assert config is not None
+    assert config.max_idle_timeout == 30
+    assert config.enable_0rtt == False
+
+
+def test_jwt_config():
+    """Test JwtConfig creation."""
+    from cello import JwtConfig
+
+    config = JwtConfig(secret="my-secret-key")
+    assert config is not None
+    assert config.secret == "my-secret-key"
+    assert config.algorithm == "HS256"
+    assert config.header_name == "Authorization"
+
+    # Test with custom values
+    custom = JwtConfig(
+        secret="custom-secret",
+        algorithm="HS512",
+        header_name="X-Auth-Token",
+        cookie_name="auth_token",
+        leeway=60,
+    )
+    assert custom.algorithm == "HS512"
+    assert custom.cookie_name == "auth_token"
+
+
+def test_rate_limit_config():
+    """Test RateLimitConfig creation."""
+    from cello import RateLimitConfig
+
+    # Token bucket factory
+    token_bucket = RateLimitConfig.token_bucket(capacity=100, refill_rate=10)
+    assert token_bucket is not None
+    assert token_bucket.algorithm == "token_bucket"
+    assert token_bucket.capacity == 100
+    assert token_bucket.refill_rate == 10
+
+    # Sliding window factory
+    sliding = RateLimitConfig.sliding_window(max_requests=100, window_secs=60)
+    assert sliding is not None
+    assert sliding.algorithm == "sliding_window"
+    assert sliding.capacity == 100
+    assert sliding.window_secs == 60
+
+
+def test_session_config():
+    """Test SessionConfig creation and defaults."""
+    from cello import SessionConfig
+
+    # Create with defaults
+    config = SessionConfig()
+    assert config is not None
+    assert config.cookie_name == "session_id"
+    assert config.cookie_secure == True
+    assert config.cookie_http_only == True
+    assert config.cookie_same_site == "Lax"
+
+    # Create with custom values
+    custom = SessionConfig(
+        cookie_name="my_session",
+        cookie_path="/app",
+        cookie_secure=False,
+        cookie_same_site="Strict",
+        max_age=7200,
+    )
+    assert custom.cookie_name == "my_session"
+    assert custom.max_age == 7200
+
+
+def test_security_headers_config():
+    """Test SecurityHeadersConfig creation."""
+    from cello import SecurityHeadersConfig
+
+    # Create with defaults
+    config = SecurityHeadersConfig()
+    assert config is not None
+    assert config.x_frame_options == "DENY"
+    assert config.x_content_type_options == True
+
+    # Test secure() factory
+    secure = SecurityHeadersConfig.secure()
+    assert secure is not None
+    assert secure.hsts_max_age == 31536000
+    assert secure.hsts_include_subdomains == True
+
+
+def test_csp_builder():
+    """Test CSP builder."""
+    from cello import CSP
+
+    csp = CSP()
+    csp.default_src(["'self'"])
+    csp.script_src(["'self'", "https://cdn.example.com"])
+    csp.style_src(["'self'", "'unsafe-inline'"])
+    csp.img_src(["'self'", "data:", "https:"])
+
+    header_value = csp.build()
+    assert header_value is not None
+    assert "default-src" in header_value
+    assert "'self'" in header_value
+
+
+def test_static_files_config():
+    """Test StaticFilesConfig creation."""
+    from cello import StaticFilesConfig
+
+    config = StaticFilesConfig(root="./static")
+    assert config is not None
+    assert config.root == "./static"
+    assert config.prefix == "/static"
+    assert config.enable_etag == True
+    assert config.directory_listing == False
+
+
+# =============================================================================
 # Unit Tests - App
 # =============================================================================
 
@@ -596,7 +858,7 @@ class TestIntegration:
     @pytest.mark.integration
     def test_cors_headers(self, server):
         """Test CORS headers are present."""
-        resp = requests.get(f"{server}/")
+        resp = requests.get(f"{server}/", headers={"Origin": "http://example.com"})
         assert resp.status_code == 200
         assert "Access-Control-Allow-Origin" in resp.headers
 
