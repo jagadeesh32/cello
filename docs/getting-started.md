@@ -14,7 +14,7 @@ pip install cello-framework
 
 ```bash
 pip install maturin
-git clone https://github.com/jagadeeshkatla/cello.git
+git clone https://github.com/jagadeesh32/cello.git
 cd cello
 maturin develop
 ```

@@ -12,10 +12,23 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use subtle::ConstantTimeEq;
 
 use super::{Middleware, MiddlewareAction, MiddlewareError, MiddlewareResult};
 use crate::request::Request;
 use crate::response::Response;
+
+/// Constant-time string comparison to prevent timing attacks.
+/// This is critical for password and token validation.
+#[inline]
+fn secure_compare(a: &str, b: &str) -> bool {
+    // First check if lengths match (this can leak length, but that's acceptable)
+    if a.len() != b.len() {
+        return false;
+    }
+    // Use constant-time comparison for the actual bytes
+    a.as_bytes().ct_eq(b.as_bytes()).into()
+}
 
 // ============================================================================
 // JWT Authentication
@@ -335,13 +348,17 @@ pub struct BasicAuth {
 
 impl BasicAuth {
     /// Create new Basic auth with static credentials.
+    /// Uses constant-time comparison to prevent timing attacks.
     pub fn new(username: &str, password: &str) -> Self {
         let expected_user = username.to_string();
         let expected_pass = password.to_string();
 
         Self {
             realm: "Restricted".to_string(),
-            validator: Arc::new(move |u, p| u == expected_user && p == expected_pass),
+            // Use secure_compare for timing-attack-resistant validation
+            validator: Arc::new(move |u, p| {
+                secure_compare(u, &expected_user) && secure_compare(p, &expected_pass)
+            }),
             skip_paths: Vec::new(),
             user_key: "basic_auth_user".to_string(),
         }
@@ -477,12 +494,14 @@ pub struct ApiKeyAuth {
 
 impl ApiKeyAuth {
     /// Create new API key auth with static key.
+    /// Uses constant-time comparison to prevent timing attacks.
     pub fn new(api_key: &str) -> Self {
         let expected_key = api_key.to_string();
         Self {
             location: ApiKeyLocation::default(),
+            // Use secure_compare for timing-attack-resistant validation
             validator: Arc::new(move |key| {
-                if key == expected_key {
+                if secure_compare(key, &expected_key) {
                     Some("default".to_string())
                 } else {
                     None

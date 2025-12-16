@@ -14,7 +14,7 @@ Thank you for your interest in contributing to Cello! 🐍
 
 ```bash
 # Clone the repository
-git clone https://github.com/jagadeeshkatla/cello.git
+git clone https://github.com/jagadeesh32/cello.git
 cd cello
 
 # Create virtual environment

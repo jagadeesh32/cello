@@ -10,10 +10,20 @@ use hmac::{Hmac, Mac};
 use rand::Rng;
 use sha2::Sha256;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use subtle::ConstantTimeEq;
 
 use super::{Middleware, MiddlewareAction, MiddlewareError, MiddlewareResult};
 use crate::request::Request;
 use crate::response::Response;
+
+/// Constant-time string comparison to prevent timing attacks on CSRF tokens.
+#[inline]
+fn secure_compare(a: &str, b: &str) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    a.as_bytes().ct_eq(b.as_bytes()).into()
+}
 
 // ============================================================================
 // CSRF Token Generation
@@ -426,7 +436,8 @@ impl Middleware for CsrfMiddleware {
                 let cookie_token = self.get_cookie_token(request);
                 let request_token = self.get_request_token(request);
                 match (cookie_token, request_token) {
-                    (Some(c), Some(r)) => c == r,
+                    // Use constant-time comparison to prevent timing attacks
+                    (Some(c), Some(r)) => secure_compare(&c, &r),
                     _ => false,
                 }
             }

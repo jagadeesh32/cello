@@ -68,8 +68,8 @@ See [Getting Started](getting-started.md) for more details.
 
 ## Community
 
-- **GitHub**: [github.com/jagadeeshkatla/cello](https://github.com/jagadeeshkatla/cello)
-- **Issues**: [Report bugs](https://github.com/jagadeeshkatla/cello/issues)
+- **GitHub**: [github.com/jagadeesh32/cello](https://github.com/jagadeesh32/cello)
+- **Issues**: [Report bugs](https://github.com/jagadeesh32/cello/issues)
 - **Contributing**: [Contribution guide](../CONTRIBUTING.md)
 
 ## License
