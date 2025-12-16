@@ -76,37 +76,52 @@ jobs:
         run: pytest tests/ -v -k "not integration"
 
   # ============================================================================
-  # Linux Builds (x86_64 and aarch64) using manylinux
+  # Linux x86_64 Build
   # ============================================================================
-  build-linux:
-    name: Build Linux (${{ matrix.target }})
+  build-linux-x86:
+    name: Build Linux (x86_64)
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        target:
-          - x86_64-unknown-linux-gnu
-          - aarch64-unknown-linux-gnu
     steps:
       - uses: actions/checkout@v4
 
       - name: Build wheels (manylinux)
         uses: PyO3/maturin-action@v1
         with:
-          target: ${{ matrix.target }}
+          target: x86_64-unknown-linux-gnu
           args: --release --out dist
-          manylinux: 2_28
-          docker-options: -e CI
-          before-script-linux: |
-            # Install dependencies for ring crate on aarch64
-            if [ "${{ matrix.target }}" = "aarch64-unknown-linux-gnu" ]; then
-              yum install -y perl-IPC-Cmd || apt-get update && apt-get install -y perl
-            fi
+          manylinux: auto
 
       - name: Upload wheel
         uses: actions/upload-artifact@v4
         with:
-          name: wheel-linux-${{ matrix.target }}
+          name: wheel-linux-x86_64
+          path: dist/*.whl
+
+  # ============================================================================
+  # Linux aarch64 Build (uses QEMU for cross-compilation)
+  # ============================================================================
+  build-linux-aarch64:
+    name: Build Linux (aarch64)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Build wheels (manylinux aarch64)
+        uses: PyO3/maturin-action@v1
+        with:
+          target: aarch64-unknown-linux-gnu
+          args: --release --out dist
+          manylinux: 2_28
+
+      - name: Upload wheel
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheel-linux-aarch64
           path: dist/*.whl
 
   # ============================================================================
