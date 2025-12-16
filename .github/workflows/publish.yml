@@ -1,6 +1,6 @@
 # Publish to PyPI when a new release is created
 # Builds wheels for all platforms and uploads to PyPI
-# Platforms: Linux (x86_64, aarch64), macOS (x86_64, aarch64), Windows (x86_64)
+# Platforms: Linux (x86_64, aarch64), macOS (aarch64), Windows (x86_64)
 
 name: Publish to PyPI
 
@@ -43,31 +43,52 @@ jobs:
           path: dist/*.tar.gz
 
   # ============================================================================
-  # Linux Builds (x86_64 and aarch64) using manylinux
+  # Linux x86_64 Build
   # ============================================================================
-  build-linux:
-    name: Build Linux (${{ matrix.target }})
+  build-linux-x86:
+    name: Build Linux (x86_64-unknown-linux-gnu)
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        target:
-          - x86_64-unknown-linux-gnu
-          - aarch64-unknown-linux-gnu
     steps:
       - uses: actions/checkout@v4
 
       - name: Build wheels (manylinux)
         uses: PyO3/maturin-action@v1
         with:
-          target: ${{ matrix.target }}
+          target: x86_64-unknown-linux-gnu
           args: --release --out dist
           manylinux: auto
 
       - name: Upload wheel
         uses: actions/upload-artifact@v4
         with:
-          name: wheel-linux-${{ matrix.target }}
+          name: wheel-linux-x86_64-unknown-linux-gnu
+          path: dist/*.whl
+
+  # ============================================================================
+  # Linux aarch64 Build (uses QEMU for cross-compilation)
+  # ============================================================================
+  build-linux-aarch64:
+    name: Build Linux (aarch64-unknown-linux-gnu)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Build wheels (manylinux aarch64)
+        uses: PyO3/maturin-action@v1
+        with:
+          target: aarch64-unknown-linux-gnu
+          args: --release --out dist
+          manylinux: 2_28
+
+      - name: Upload wheel
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheel-linux-aarch64-unknown-linux-gnu
           path: dist/*.whl
 
   # ============================================================================
@@ -121,7 +142,7 @@ jobs:
   # ============================================================================
   publish:
     name: Publish to PyPI
-    needs: [build-sdist, build-linux, build-macos, build-windows]
+    needs: [build-sdist, build-linux-x86, build-linux-aarch64, build-macos, build-windows]
     runs-on: ubuntu-latest
     if: github.event_name == 'release' || (github.event_name == 'push' && github.ref == 'refs/heads/release')
     environment:
@@ -150,7 +171,7 @@ jobs:
   # ============================================================================
   publish-test:
     name: Publish to Test PyPI
-    needs: [build-sdist, build-linux, build-macos, build-windows]
+    needs: [build-sdist, build-linux-x86, build-linux-aarch64, build-macos, build-windows]
     runs-on: ubuntu-latest
     if: github.event_name == 'workflow_dispatch' && github.event.inputs.publish_to_test_pypi == 'true'
     permissions:
