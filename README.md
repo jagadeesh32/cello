@@ -475,5 +475,5 @@ MIT License - see [LICENSE](LICENSE)
 ---
 
 <p align="center">
-  Made with ❤️ and 🦀
+  Made with ❤️ using 🐍 Python and 🦀 Rust
 </p>
