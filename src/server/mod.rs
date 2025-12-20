@@ -375,16 +375,21 @@ pub struct Server {
     websocket_handlers: WebSocketRegistry,
     metrics: ServerMetrics,
     shutdown: ShutdownCoordinator,
+    dependency_container: Arc<crate::dependency::DependencyContainer>,
+    guards: Arc<crate::middleware::guards::GuardsMiddleware>,
+    prometheus: Arc<parking_lot::RwLock<Option<crate::middleware::prometheus::PrometheusMiddleware>>>,
 }
 
 impl Server {
-    /// Create a new server instance with configuration.
     pub fn new(
         config: ServerConfig,
         router: Router,
         handlers: HandlerRegistry,
         middleware: MiddlewareChain,
         websocket_handlers: WebSocketRegistry,
+        dependency_container: Arc<crate::dependency::DependencyContainer>,
+        guards: Arc<crate::middleware::guards::GuardsMiddleware>,
+        prometheus: Arc<parking_lot::RwLock<Option<crate::middleware::prometheus::PrometheusMiddleware>>>,
     ) -> Self {
         let shutdown = ShutdownCoordinator::new(config.shutdown_timeout);
         Server {
@@ -395,6 +400,9 @@ impl Server {
             websocket_handlers,
             metrics: ServerMetrics::new(),
             shutdown,
+            dependency_container,
+            guards,
+            prometheus,
         }
     }
 
@@ -408,7 +416,16 @@ impl Server {
         websocket_handlers: WebSocketRegistry,
     ) -> Self {
         let config = ServerConfig::new(&host, port);
-        Self::new(config, router, handlers, middleware, websocket_handlers)
+        Self::new(
+            config,
+            router,
+            handlers,
+            middleware,
+            websocket_handlers,
+            Arc::new(crate::dependency::DependencyContainer::new()),
+            Arc::new(crate::middleware::guards::GuardsMiddleware::new()),
+            Arc::new(parking_lot::RwLock::new(None)),
+        )
     }
 
     /// Get server metrics.
@@ -444,6 +461,9 @@ impl Server {
         let _websocket_handlers = Arc::new(self.websocket_handlers);
         let metrics = Arc::new(self.metrics);
         let shutdown = Arc::new(self.shutdown);
+        let dependency_container = self.dependency_container.clone();
+        let guards = self.guards.clone();
+        let prometheus = self.prometheus.clone();
 
         let mut shutdown_rx = shutdown.subscribe();
 
@@ -482,6 +502,10 @@ impl Server {
                             let metrics_for_cleanup = metrics.clone();
                             let shutdown = shutdown.clone();
 
+                            let dependency_container = dependency_container.clone();
+                            let guards = guards.clone();
+                            let prometheus = prometheus.clone();
+
                             tokio::task::spawn(async move {
                                 let service = service_fn(move |req| {
                                     let router = router.clone();
@@ -489,6 +513,9 @@ impl Server {
                                     let middleware = middleware.clone();
                                     let metrics = metrics_for_service.clone();
                                     let shutdown = shutdown.clone();
+                                    let dependency_container = dependency_container.clone();
+                                    let guards = guards.clone();
+                                    let prometheus = prometheus.clone();
 
                                     async move {
                                         shutdown.request_started();
@@ -500,6 +527,9 @@ impl Server {
                                             handlers,
                                             middleware,
                                             metrics.clone(),
+                                            dependency_container,
+                                            guards,
+                                            prometheus,
                                         )
                                         .await;
 
@@ -540,13 +570,15 @@ impl Server {
     }
 }
 
-/// Handle an incoming HTTP request.
 async fn handle_request(
     req: HyperRequest<Incoming>,
     router: Arc<Router>,
     handlers: Arc<HandlerRegistry>,
     middleware: Arc<MiddlewareChain>,
     metrics: Arc<ServerMetrics>,
+    dependency_container: Arc<crate::dependency::DependencyContainer>,
+    guards: Arc<crate::middleware::guards::GuardsMiddleware>,
+    prometheus: Arc<parking_lot::RwLock<Option<crate::middleware::prometheus::PrometheusMiddleware>>>,
 ) -> Result<HyperResponse<Full<Bytes>>, Infallible> {
     metrics.inc_requests();
 
@@ -606,57 +638,98 @@ async fn handle_request(
 
     // Match route
     let route_match = router.match_route(&method, &path);
+    let params = match &route_match {
+        Some(m) => m.params.clone(),
+        None => HashMap::new(),
+    };
 
-    let response = match route_match {
-        Some(RouteMatch { handler_id, params }) => {
-            // Create request object
-            let mut request =
-                Request::from_http(method.clone(), path.clone(), params, query, headers, body_bytes);
+    // Create request object
+    let mut request =
+        Request::from_http(method.clone(), path.clone(), params, query, headers, body_bytes);
 
-            // Execute before middleware
-            match middleware.execute_before(&mut request) {
-                Ok(MiddlewareAction::Continue) => {}
-                Ok(MiddlewareAction::Stop(response)) => {
-                    return build_hyper_response(&response, &metrics);
-                }
-                Err(e) => {
-                    metrics.inc_errors();
-                    let response = Response::error(e.status, &e.message);
-                    return build_hyper_response(&response, &metrics);
-                }
+    // Execute before middleware
+    match middleware.execute_before(&mut request) {
+        Ok(MiddlewareAction::Continue) => {}
+        Ok(MiddlewareAction::Stop(response)) => {
+            return build_hyper_response(&response, &metrics);
+        }
+        Err(e) => {
+            metrics.inc_errors();
+            let response = Response::error(e.status, &e.message);
+            return build_hyper_response(&response, &metrics);
+        }
+    }
+
+    // Execute Prometheus before middleware
+    if let Some(ref p) = *prometheus.read() {
+        use crate::middleware::{Middleware, MiddlewareAction};
+        match p.before(&mut request) {
+            Ok(MiddlewareAction::Continue) => {}
+            Ok(MiddlewareAction::Stop(response)) => {
+                return build_hyper_response(&response, &metrics);
             }
+            Err(e) => {
+                metrics.inc_errors();
+                let response = Response::error(e.status, &e.message);
+                return build_hyper_response(&response, &metrics);
+            }
+        }
+    }
 
+    // Execute Guards
+    {
+        use crate::middleware::{Middleware, MiddlewareAction};
+        match Middleware::before(&*guards, &mut request) {
+            Ok(MiddlewareAction::Continue) => {}
+            Ok(MiddlewareAction::Stop(response)) => {
+                return build_hyper_response(&response, &metrics);
+            }
+            Err(e) => {
+                metrics.inc_errors();
+                let response = Response::error(e.status, &e.message);
+                return build_hyper_response(&response, &metrics);
+            }
+        }
+    }
+
+    // Handle route
+    let mut response = match route_match {
+        Some(RouteMatch { handler_id, .. }) => {
             // Invoke handler
-            let result = handlers.invoke_async(handler_id, request.clone()).await;
+            let result = handlers.invoke_async(handler_id, request.clone(), dependency_container.clone()).await;
 
-            let mut response = match result {
+            match result {
                 Ok(json_value) => Response::from_json_value(json_value, 200),
                 Err(err) => {
                     metrics.inc_errors();
                     Response::error(500, &err)
                 }
-            };
-
-            // Execute after middleware
-            match middleware.execute_after(&request, &mut response) {
-                Ok(MiddlewareAction::Continue) => {}
-                Ok(MiddlewareAction::Stop(new_response)) => {
-                    return build_hyper_response(&new_response, &metrics);
-                }
-                Err(e) => {
-                    metrics.inc_errors();
-                    let error_response = Response::error(e.status, &e.message);
-                    return build_hyper_response(&error_response, &metrics);
-                }
             }
-
-            response
         }
         None => {
             // 404 Not Found
             Response::not_found(&format!("Not Found: {} {}", method, path))
         }
     };
+
+    // Execute after middleware
+    match middleware.execute_after(&request, &mut response) {
+        Ok(MiddlewareAction::Continue) => {}
+        Ok(MiddlewareAction::Stop(new_response)) => {
+            return build_hyper_response(&new_response, &metrics);
+        }
+        Err(e) => {
+            metrics.inc_errors();
+            let error_response = Response::error(e.status, &e.message);
+            return build_hyper_response(&error_response, &metrics);
+        }
+    }
+
+    // Execute Prometheus after middleware
+    if let Some(ref p) = *prometheus.read() {
+        use crate::middleware::Middleware;
+        let _ = p.after(&request, &mut response);
+    }
 
     build_hyper_response(&response, &metrics)
 }

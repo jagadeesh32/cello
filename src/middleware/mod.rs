@@ -12,14 +12,21 @@
 
 pub mod auth;
 pub mod body_limit;
+pub mod cache;
 pub mod cors;
 pub mod csrf;
 pub mod etag;
+pub mod exception_handler;
+pub mod guards;
+pub mod prometheus;
 pub mod rate_limit;
 pub mod request_id;
 pub mod security;
 pub mod session;
 pub mod static_files;
+
+// Re-export DTO types from the dto module
+pub use crate::dto::*;
 
 use parking_lot::RwLock;
 use std::future::Future;
@@ -32,9 +39,13 @@ use crate::response::Response;
 // Re-export all middleware types
 pub use auth::{ApiKeyAuth, BasicAuth, JwtAuth};
 pub use body_limit::BodyLimitMiddleware;
+pub use cache::{CacheMiddleware, CacheConfig, CacheStore, CachedResponse, CacheError, CacheKeyBuilder, DefaultCacheKeyBuilder, InMemoryCacheStore, create_cache_key};
 pub use cors::CorsMiddleware;
 pub use csrf::CsrfMiddleware;
 pub use etag::EtagMiddleware;
+pub use exception_handler::{ExceptionHandler, ExceptionHandlerMiddleware, ExceptionHandlerConfig, ExceptionContext, ValidationErrorHandler, AuthenticationErrorHandler, AuthorizationErrorHandler, NotFoundErrorHandler, InternalServerErrorHandler, CustomExceptionHandler};
+pub use guards::{Guard, GuardsMiddleware, RoleGuard, PermissionGuard, AuthenticatedGuard, AndGuard, OrGuard, NotGuard, CustomGuard};
+pub use prometheus::{PrometheusMiddleware, PrometheusConfig, PrometheusMetrics};
 pub use rate_limit::{RateLimitMiddleware, RateLimitStore, TokenBucketConfig, SlidingWindowConfig};
 pub use request_id::RequestIdMiddleware;
 pub use security::{SecurityHeadersMiddleware, ContentSecurityPolicy, HstsConfig};

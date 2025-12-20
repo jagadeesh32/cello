@@ -173,7 +173,7 @@ mod tests {
         let mut arena = RequestArena::with_capacity(1024);
         
         let _ = arena.alloc_str("hello world");
-        let bytes_before = arena.allocated_bytes();
+        let _bytes_before = arena.allocated_bytes();
         
         arena.reset();
         

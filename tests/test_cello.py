@@ -869,3 +869,242 @@ class TestIntegration:
         assert resp.status_code == 404
         data = resp.json()
         assert "error" in data
+
+
+# =============================================================================
+# v0.5.0 Feature Tests
+# =============================================================================
+
+
+def test_import_v050_features():
+    """Test that v0.5.0 features can be imported."""
+    from cello import BackgroundTasks, TemplateEngine, Depends
+
+    assert BackgroundTasks is not None
+    assert TemplateEngine is not None
+    assert Depends is not None
+
+
+def test_background_tasks_creation():
+    """Test BackgroundTasks creation and basic operations."""
+    from cello import BackgroundTasks
+
+    tasks = BackgroundTasks()
+    assert tasks is not None
+    assert tasks.pending_count() == 0
+
+
+def test_background_tasks_add_and_run():
+    """Test adding and running background tasks."""
+    from cello import BackgroundTasks
+
+    tasks = BackgroundTasks()
+    results = []
+
+    def task_func(value):
+        results.append(value)
+
+    # Add tasks
+    tasks.add_task(task_func, ["task1"])
+    tasks.add_task(task_func, ["task2"])
+    assert tasks.pending_count() == 2
+
+    # Run all tasks
+    tasks.run_all()
+    assert tasks.pending_count() == 0
+    assert "task1" in results
+    assert "task2" in results
+
+
+def test_template_engine_creation():
+    """Test TemplateEngine creation."""
+    from cello import TemplateEngine
+
+    engine = TemplateEngine("templates")
+    assert engine is not None
+
+
+def test_template_engine_render_string():
+    """Test TemplateEngine string rendering."""
+    from cello import TemplateEngine
+
+    engine = TemplateEngine("templates")
+
+    # Test simple variable substitution
+    result = engine.render_string(
+        "Hello, {{ name }}! You are {{ age }} years old.",
+        {"name": "John", "age": 30}
+    )
+    assert result == "Hello, John! You are 30 years old."
+
+
+def test_template_engine_render_no_spaces():
+    """Test TemplateEngine with no spaces in placeholders."""
+    from cello import TemplateEngine
+
+    engine = TemplateEngine("templates")
+
+    result = engine.render_string(
+        "<h1>{{title}}</h1><p>{{content}}</p>",
+        {"title": "Welcome", "content": "Hello World"}
+    )
+    assert result == "<h1>Welcome</h1><p>Hello World</p>"
+
+
+def test_depends_creation():
+    """Test Depends marker creation."""
+    from cello import Depends
+
+    dep = Depends("database")
+    assert dep is not None
+    assert dep.dependency == "database"
+
+
+def test_depends_multiple():
+    """Test multiple Depends markers."""
+    from cello import Depends
+
+    db_dep = Depends("database")
+    cache_dep = Depends("cache")
+    config_dep = Depends("config")
+
+    assert db_dep.dependency == "database"
+    assert cache_dep.dependency == "cache"
+    assert config_dep.dependency == "config"
+
+
+def test_prometheus_middleware():
+    """Test that Prometheus middleware can be enabled."""
+    from cello import App
+
+    app = App()
+    app.enable_prometheus()
+    assert True
+
+
+def test_prometheus_custom_config():
+    """Test Prometheus with custom configuration."""
+    from cello import App
+
+    app = App()
+    app.enable_prometheus(
+        endpoint="/custom-metrics",
+        namespace="myapp",
+        subsystem="api"
+    )
+    assert True
+
+
+def test_guards_registration():
+    """Test that guards can be registered."""
+    from cello import App
+
+    app = App()
+
+    def my_guard(request):
+        return True
+
+    app.add_guard(my_guard)
+    assert True
+
+
+def test_dependency_injection_registration():
+    """Test that dependencies can be registered."""
+    from cello import App
+
+    app = App()
+
+    # Register a singleton dependency
+    app.register_singleton("database", {"url": "postgres://localhost/db"})
+    app.register_singleton("cache", {"host": "localhost", "port": 6379})
+
+    assert True
+
+
+def test_version():
+    """Test that version is 0.5.0."""
+    import cello
+
+    assert cello.__version__ == "0.5.0"
+
+
+def test_all_exports():
+    """Test that all expected exports are available."""
+    from cello import (
+        # Core
+        App,
+        Blueprint,
+        Request,
+        Response,
+        WebSocket,
+        WebSocketMessage,
+        SseEvent,
+        SseStream,
+        FormData,
+        UploadedFile,
+        # Advanced Configuration
+        TimeoutConfig,
+        LimitsConfig,
+        ClusterConfig,
+        TlsConfig,
+        Http2Config,
+        Http3Config,
+        JwtConfig,
+        RateLimitConfig,
+        SessionConfig,
+        SecurityHeadersConfig,
+        CSP,
+        StaticFilesConfig,
+        # v0.5.0 features
+        BackgroundTasks,
+        TemplateEngine,
+        Depends,
+    )
+
+    # Verify all are not None
+    assert all([
+        App, Blueprint, Request, Response,
+        WebSocket, WebSocketMessage, SseEvent, SseStream,
+        FormData, UploadedFile, TimeoutConfig, LimitsConfig,
+        ClusterConfig, TlsConfig, Http2Config, Http3Config,
+        JwtConfig, RateLimitConfig, SessionConfig,
+        SecurityHeadersConfig, CSP, StaticFilesConfig,
+        BackgroundTasks, TemplateEngine, Depends
+    ])
+
+
+# =============================================================================
+# Rename Enterprise to Advanced in existing tests
+# =============================================================================
+
+
+def test_import_advanced_configs():
+    """Test advanced configuration imports (renamed from enterprise)."""
+    from cello import (
+        TimeoutConfig,
+        LimitsConfig,
+        ClusterConfig,
+        TlsConfig,
+        Http2Config,
+        Http3Config,
+        JwtConfig,
+        RateLimitConfig,
+        SessionConfig,
+        SecurityHeadersConfig,
+        CSP,
+        StaticFilesConfig,
+    )
+
+    # All should be importable
+    assert TimeoutConfig is not None
+    assert LimitsConfig is not None
+    assert ClusterConfig is not None
+    assert TlsConfig is not None
+    assert Http2Config is not None
+    assert Http3Config is not None
+    assert JwtConfig is not None
+    assert RateLimitConfig is not None
+    assert SessionConfig is not None
+    assert SecurityHeadersConfig is not None
+    assert CSP is not None
+    assert StaticFilesConfig is not None

@@ -10,7 +10,7 @@ Welcome to the Cello documentation! Cello is an ultra-fast Rust-powered Python a
 | [Configuration](configuration.md) | All configuration options |
 | [Middleware](middleware.md) | Built-in and custom middleware |
 | [Security](security.md) | Authentication, rate limiting, headers |
-| [Enterprise Features](enterprise.md) | Cluster mode, protocols, lifecycle |
+| [Advanced Features](advanced.md) | Cluster mode, protocols, lifecycle |
 | [Routing](routing.md) | Routes, blueprints, constraints |
 | [API Reference](api-reference.md) | Complete API documentation |
 | [Deployment](deployment.md) | Production deployment guide |
@@ -39,7 +39,7 @@ Request → Rust HTTP Engine → Python Handler → Rust Response
 - 📡 **SSE** - Server-Sent Events streaming
 - 📁 **File Uploads** - Multipart form data handling
 
-### Enterprise Features (v0.4.0)
+### Advanced Features (v0.5.0)
 - 🔐 **Authentication** - JWT, Basic Auth, API Key
 - ⏱️ **Rate Limiting** - Token bucket, sliding window
 - 🍪 **Sessions** - Secure cookie-based sessions
@@ -48,6 +48,12 @@ Request → Rust HTTP Engine → Python Handler → Rust Response
 - 🔒 **TLS/SSL** - Native TLS support
 - 🌐 **HTTP/2 & HTTP/3** - Modern protocol support
 - ⏰ **Timeouts & Limits** - Request protection
+- 💉 **Dependency Injection** - FastAPI-style DI
+- 🛡️ **Guards (RBAC)** - Role-based access control
+- 📊 **Prometheus Metrics** - Production metrics
+- 📄 **OpenAPI/Swagger** - Auto API documentation
+- 🎯 **Background Tasks** - Post-response execution
+- 📝 **Template Rendering** - Jinja2-style templates
 
 ## Quick Start
 

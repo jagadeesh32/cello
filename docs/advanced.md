@@ -1,6 +1,6 @@
-# Enterprise Features
+# Advanced Features
 
-Cello v0.4.0 includes enterprise-grade features for production deployments.
+Cello v0.5.0 includes advanced features for production deployments.
 
 ## Overview
 

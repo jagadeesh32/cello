@@ -70,7 +70,7 @@ from cello._cello import (
     WebSocketMessage,
 )
 
-# Enterprise configuration classes
+# Advanced configuration classes
 from cello._cello import (
     TimeoutConfig,
     LimitsConfig,
@@ -86,6 +86,12 @@ from cello._cello import (
     StaticFilesConfig,
 )
 
+# v0.5.0 - New features
+from cello._cello import (
+    PyBackgroundTasks as BackgroundTasks,
+    PyTemplateEngine as TemplateEngine,
+)
+
 __all__ = [
     # Core
     "App",
@@ -98,7 +104,7 @@ __all__ = [
     "SseStream",
     "FormData",
     "UploadedFile",
-    # Enterprise Configuration
+    # Advanced Configuration
     "TimeoutConfig",
     "LimitsConfig",
     "ClusterConfig",
@@ -111,8 +117,12 @@ __all__ = [
     "SecurityHeadersConfig",
     "CSP",
     "StaticFilesConfig",
+    # v0.5.0 - New features
+    "BackgroundTasks",
+    "TemplateEngine",
+    "Depends",
 ]
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 
 
 class Blueprint:
@@ -353,6 +363,36 @@ class App:
         """
         self._app.enable_compression(min_size)
 
+    def enable_prometheus(self, endpoint: str = "/metrics", namespace: str = "cello", subsystem: str = "http"):
+        """
+        Enable Prometheus metrics middleware.
+
+        Args:
+            endpoint: URL path for metrics (default: "/metrics")
+            namespace: Prometheus namespace (default: "cello")
+            subsystem: Prometheus subsystem (default: "http")
+        """
+        self._app.enable_prometheus(endpoint, namespace, subsystem)
+
+    def add_guard(self, guard):
+        """
+        Add a security guard to the application.
+
+        Args:
+            guard: A guard object or function.
+        """
+        self._app.add_guard(guard)
+
+    def register_singleton(self, name: str, value):
+        """
+        Register a singleton dependency.
+
+        Args:
+            name: Dependency name
+            value: The singleton value
+        """
+        self._app.register_singleton(name, value)
+
     def run(self, host: str = "127.0.0.1", port: int = 8000,
             debug: bool = None, env: str = None,
             workers: int = None, reload: bool = False,
@@ -493,3 +533,17 @@ class App:
             if get_mtimes():
                 return
             time.sleep(1)
+
+
+class Depends:
+    """
+    Dependency injection marker for handler arguments.
+
+    Example:
+        @app.get("/users")
+        def get_users(db=Depends("database")):
+            return db.query("SELECT * FROM users")
+    """
+
+    def __init__(self, dependency: str):
+        self.dependency = dependency
