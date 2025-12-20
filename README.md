@@ -1,11 +1,9 @@
 <p align="center">
-  <img src="docs/assets/cello-logo.png" alt="Cello" width="200" height="200">
+  <img src="docs/logo-full.png" alt="Cello" width="400">
 </p>
 
-<h1 align="center">Cello</h1>
-
 <p align="center">
-  <strong>Ultra-fast Rust-powered Python web framework</strong>
+  <strong>The World's Fastest Python Web Framework</strong>
 </p>
 
 <p align="center">
@@ -105,7 +103,7 @@ python app.py
 | 📡 **SSE** | Server-Sent Events for streaming |
 | 📁 **Multipart** | File uploads and form data handling |
 
-### Enterprise Features
+### Advanced Features
 
 | Feature | Description |
 |---------|-------------|
@@ -113,15 +111,49 @@ python app.py
 | 🛡️ **CSRF Protection** | Double-submit cookie and signed token patterns |
 | ⏱️ **Rate Limiting** | Token bucket and sliding window algorithms |
 | 🍪 **Sessions** | Secure cookie-based session management |
-| � **Security Headers** | CSP, HSTS, X-Frame-Options, Referrer-Policy |
+| 🛡️ **Security Headers** | CSP, HSTS, X-Frame-Options, Referrer-Policy |
 | 🏭 **Cluster Mode** | Multi-worker process deployment |
-| � **TLS/SSL** | Native HTTPS with rustls |
+| 🔒 **TLS/SSL** | Native HTTPS with rustls |
 | ⚡ **HTTP/2 & HTTP/3** | Modern protocol support including QUIC |
 | ⏰ **Timeouts** | Request/response timeout protection |
+| 🆔 **Request ID** | Automatic request tracing with UUID |
+| 📏 **Body Limits** | Request size validation and protection |
+| 📂 **Static Files** | Efficient static file serving with caching |
+| 🏷️ **ETag/Caching** | HTTP caching with ETag support |
+| ⚠️ **Exception Handling** | Global error handlers with RFC 7807 support |
+| 🔄 **Lifecycle Hooks** | Startup/shutdown events for app initialization |
+| 📦 **DTOs** | Data Transfer Objects with field filtering |
+
+### 🆕 New in v0.5.0 - Best of FastAPI, Litestar, Robyn & Django!
+
+| Feature | Inspired By | Description |
+|---------|-------------|-------------|
+| 💉 **Dependency Injection** | FastAPI | Type-safe DI with Singleton/Request/Transient scopes |
+| 🛡️ **Guards (RBAC)** | Litestar | Role & permission-based access control with composable guards |
+| 📊 **Prometheus Metrics** | Litestar | Production-ready metrics with automatic `/metrics` endpoint |
+| 📄 **OpenAPI/Swagger** | FastAPI | Auto-generated API documentation at `/docs` |
+| 🎯 **Background Tasks** | FastAPI | Execute tasks after response is sent |
+| 📝 **Template Rendering** | Django | Jinja2-compatible template support |
+
+> All implemented in **pure Rust** for maximum performance! See [docs/new-middleware-features.md](docs/new-middleware-features.md) for details.
 
 ---
 
 ## � Examples
+
+#### 🎯 Advanced Features Demo (v0.5.0)
+
+See `examples/comprehensive_demo.py` for a complete demonstration of all new features:
+- Dependency Injection
+- Guards/RBAC
+- Prometheus Metrics
+- Exception Handling
+- Advanced Caching
+- DTO System
+
+```bash
+python examples/comprehensive_demo.py
+```
 
 ### Blueprints (Route Grouping)
 

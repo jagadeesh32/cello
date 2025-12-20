@@ -12,7 +12,7 @@ pub mod multipart_streaming;
 use pyo3::prelude::*;
 use std::collections::HashMap;
 
-use crate::json::{json_to_python, parse_json};
+use crate::json::{json_to_python, parse_json, python_to_json};
 use crate::multipart::parse_urlencoded;
 
 pub use parsing::{LazyBody, TypedParams, ParamError};
@@ -24,7 +24,7 @@ pub use multipart_streaming::{StreamingMultipart, MultipartPart};
 
 /// HTTP Request wrapper exposed to Python.
 #[pyclass]
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct Request {
     /// HTTP method (GET, POST, etc.)
     #[pyo3(get)]
@@ -336,6 +336,22 @@ impl Request {
             .map(|s| s.to_string())
     }
 
+    /// Get a context value by key.
+    pub fn get_context(&self, py: Python<'_>, key: &str) -> PyResult<PyObject> {
+        match self.context.get(key) {
+            Some(value) => json_to_python(py, value),
+            None => Ok(py.None()),
+        }
+    }
+
+    /// Set a context value by key.
+    pub fn set_context(&mut self, py: Python<'_>, key: String, value: PyObject) -> PyResult<()> {
+        let json_value = python_to_json(py, value.as_ref(py))
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e))?;
+        self.context.insert(key, json_value);
+        Ok(())
+    }
+
     /// Get a context value as string by key.
     pub fn get_context_string(&self, key: &str) -> Option<String> {
         self.context
@@ -422,32 +438,22 @@ impl Request {
         })
     }
 
-    /// Set a context value.
-    pub fn set_context(&mut self, key: &str, value: serde_json::Value) {
+    /// Set a context value (Rust-only, internal use).
+    pub fn set_context_internal(&mut self, key: &str, value: serde_json::Value) {
         self.context.insert(key.to_string(), value);
     }
 
-    /// Get a context value by key.
-    pub fn get_context(&self, key: &str) -> Option<serde_json::Value> {
+    /// Get a context value by key (Rust-only, internal use).
+    pub fn get_context_internal(&self, key: &str) -> Option<serde_json::Value> {
         self.context.get(key).cloned()
     }
 
-    /// Get a context value as string.
+    /// Get a context value as string (Rust-only, internal use).
     pub fn get_context_str(&self, key: &str) -> Option<String> {
         self.context
             .get(key)
             .and_then(|v| v.as_str())
             .map(|s| s.to_string())
-    }
-
-    /// Remove a context value.
-    pub fn remove_context(&mut self, key: &str) -> Option<serde_json::Value> {
-        self.context.remove(key)
-    }
-
-    /// Clear all context values.
-    pub fn clear_context(&mut self) {
-        self.context.clear();
     }
 }
 
@@ -489,11 +495,11 @@ mod tests {
     #[test]
     fn test_context() {
         let mut request = Request::new("GET", "/test");
-        request.set_context("user_id", serde_json::json!(123));
-        request.set_context("role", serde_json::json!("admin"));
+        request.set_context_internal("user_id", serde_json::json!(123));
+        request.set_context_internal("role", serde_json::json!("admin"));
 
         assert_eq!(
-            request.get_context("user_id"),
+            request.get_context_internal("user_id"),
             Some(serde_json::json!(123))
         );
         assert_eq!(

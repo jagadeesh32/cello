@@ -33,6 +33,8 @@ pub mod websocket;
 
 // Enterprise modules (available for direct use)
 pub mod context;
+pub mod dependency;
+pub mod dto;
 pub mod error;
 pub mod lifecycle;
 pub mod timeout;
@@ -42,7 +44,13 @@ pub mod request;
 pub mod response;
 pub mod server;
 
+// New v0.5.0 modules
+pub mod openapi;
+pub mod background;
+pub mod template;
+
 use pyo3::prelude::*;
+use std::sync::Arc;
 
 use blueprint::Blueprint;
 use handler::HandlerRegistry;
@@ -60,6 +68,9 @@ pub struct Cello {
     handlers: HandlerRegistry,
     middleware: middleware::MiddlewareChain,
     websocket_handlers: WebSocketRegistry,
+    dependency_container: Arc<dependency::DependencyContainer>,
+    guards: Arc<middleware::guards::GuardsMiddleware>,
+    prometheus: Arc<parking_lot::RwLock<Option<middleware::prometheus::PrometheusMiddleware>>>,
 }
 
 #[pymethods]
@@ -72,6 +83,9 @@ impl Cello {
             handlers: HandlerRegistry::new(),
             middleware: middleware::MiddlewareChain::new(),
             websocket_handlers: WebSocketRegistry::new(),
+            dependency_container: Arc::new(dependency::DependencyContainer::new()),
+            guards: Arc::new(middleware::guards::GuardsMiddleware::new()),
+            prometheus: Arc::new(parking_lot::RwLock::new(None)),
         }
     }
 
@@ -129,9 +143,37 @@ impl Cello {
     #[pyo3(signature = (origins=None))]
     pub fn enable_cors(&mut self, origins: Option<Vec<String>>) {
         let cors = middleware::CorsMiddleware::new();
-        // Origins are configured via the cors module's CorsConfig
-        let _ = origins; // TODO: integrate with new CorsConfig
+        if let Some(o) = origins {
+            // TODO: Update CorsConfig when ready
+            let _ = o;
+        }
         self.middleware.add(cors);
+    }
+
+    /// Enable Prometheus metrics.
+    #[pyo3(signature = (endpoint=None, namespace=None, subsystem=None))]
+    pub fn enable_prometheus(&mut self, endpoint: Option<String>, namespace: Option<String>, subsystem: Option<String>) -> PyResult<()> {
+        let mut config = middleware::prometheus::PrometheusConfig::default();
+        if let Some(e) = endpoint { config.endpoint = e; }
+        if let Some(n) = namespace { config.namespace = n; }
+        if let Some(s) = subsystem { config.subsystem = s; }
+
+        let mw = middleware::prometheus::PrometheusMiddleware::with_config(config)
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        
+        *self.prometheus.write() = Some(mw);
+        Ok(())
+    }
+
+    pub fn add_guard(&mut self, guard: PyObject) -> PyResult<()> {
+        let python_guard = middleware::guards::PythonGuard::new(guard);
+        self.guards.add_guard(python_guard);
+        Ok(())
+    }
+
+    /// Register a singleton dependency.
+    pub fn register_singleton(&mut self, name: String, value: PyObject) {
+        self.dependency_container.register_py_singleton(&name, value);
     }
 
     /// Enable logging middleware.
@@ -173,13 +215,18 @@ impl Cello {
                 .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
 
             rt.block_on(async {
-                let server = Server::simple(
-                    host.to_string(),
-                    port,
+                let mut config = server::ServerConfig::new(host, port);
+                config.workers = workers.unwrap_or(0);
+
+                let server = Server::new(
+                    config,
                     self.router.clone(),
                     self.handlers.clone(),
                     self.middleware.clone(),
                     self.websocket_handlers.clone(),
+                    self.dependency_container.clone(),
+                    self.guards.clone(),
+                    self.prometheus.clone(),
                 );
                 server.run().await
             })
@@ -730,6 +777,12 @@ fn _cello(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_class::<PySecurityHeadersConfig>()?;
     m.add_class::<PyCsp>()?;
     m.add_class::<PyStaticFilesConfig>()?;
+
+    // v0.5.0 - Background Tasks
+    m.add_class::<background::PyBackgroundTasks>()?;
+
+    // v0.5.0 - Template Engine
+    m.add_class::<template::PyTemplateEngine>()?;
 
     Ok(())
 }
