@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/logo-full.png" alt="Cello" width="400">
+  <img src="https://raw.githubusercontent.com/jagadeesh32/cello/main/docs/logo-full.png" alt="Cello" width="400">
 </p>
 
 <p align="center">

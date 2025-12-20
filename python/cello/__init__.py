@@ -122,7 +122,7 @@ __all__ = [
     "TemplateEngine",
     "Depends",
 ]
-__version__ = "0.5.0"
+__version__ = "0.5.1"
 
 
 class Blueprint:
