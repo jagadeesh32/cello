@@ -1025,7 +1025,7 @@ def test_version():
     """Test that version is 0.5.0."""
     import cello
 
-    assert cello.__version__ == "0.5.0"
+    assert cello.__version__ == "0.5.1"
 
 
 def test_all_exports():
