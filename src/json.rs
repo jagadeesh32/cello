@@ -93,6 +93,42 @@ pub fn python_to_json(py: Python<'_>, obj: &PyAny) -> Result<serde_json::Value, 
         return Ok(serde_json::Value::Array(items?));
     }
 
+    // Handle Response object - check by class name
+    let class_name = obj.get_type().name().unwrap_or("");
+    if class_name == "Response" {
+        let mut response_obj = serde_json::Map::new();
+        response_obj.insert("__cello_response__".to_string(), serde_json::Value::Bool(true));
+        
+        if let Ok(status) = obj.getattr("status") {
+            if let Ok(s) = status.extract::<u16>() {
+                response_obj.insert("status".to_string(), serde_json::Value::Number(s.into()));
+            }
+        }
+        
+        if let Ok(headers) = obj.getattr("headers") {
+            if let Ok(dict) = headers.downcast::<PyDict>() {
+                let mut headers_map = serde_json::Map::new();
+                for (key, value) in dict.iter() {
+                    if let (Ok(k), Ok(v)) = (key.extract::<String>(), value.extract::<String>()) {
+                        headers_map.insert(k, serde_json::Value::String(v));
+                    }
+                }
+                response_obj.insert("headers".to_string(), serde_json::Value::Object(headers_map));
+            }
+        }
+        
+        // Get body - use body() which is Python-accessible
+        if let Ok(body_bytes) = obj.call_method0("body") {
+            if let Ok(bytes) = body_bytes.extract::<Vec<u8>>() {
+                if let Ok(body_str) = String::from_utf8(bytes) {
+                    response_obj.insert("body".to_string(), serde_json::Value::String(body_str));
+                }
+            }
+        }
+        
+        return Ok(serde_json::Value::Object(response_obj));
+    }
+
     Err(format!("Cannot convert Python object to JSON: {:?}", obj))
 }
 

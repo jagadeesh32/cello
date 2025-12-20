@@ -699,7 +699,34 @@ async fn handle_request(
             let result = handlers.invoke_async(handler_id, request.clone(), dependency_container.clone()).await;
 
             match result {
-                Ok(json_value) => Response::from_json_value(json_value, 200),
+                Ok(json_value) => {
+                    // Check if this is a serialized Response object
+                    if let Some(obj) = json_value.as_object() {
+                        if obj.get("__cello_response__").and_then(|v| v.as_bool()).unwrap_or(false) {
+                            // Reconstruct Response from serialized format
+                            let status = obj.get("status").and_then(|v| v.as_u64()).unwrap_or(200) as u16;
+                            let body = obj.get("body").and_then(|v| v.as_str()).unwrap_or("");
+                            
+                            let mut resp = Response::new(status);
+                            resp.set_body(body.as_bytes().to_vec());
+                            
+                            // Copy headers
+                            if let Some(headers) = obj.get("headers").and_then(|v| v.as_object()) {
+                                for (key, value) in headers {
+                                    if let Some(v) = value.as_str() {
+                                        resp.set_header(key, v);
+                                    }
+                                }
+                            }
+                            
+                            resp
+                        } else {
+                            Response::from_json_value(json_value, 200)
+                        }
+                    } else {
+                        Response::from_json_value(json_value, 200)
+                    }
+                }
                 Err(err) => {
                     metrics.inc_errors();
                     Response::error(500, &err)
