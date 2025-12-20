@@ -695,7 +695,7 @@ async fn handle_request(
     // Handle route
     let mut response = match route_match {
         Some(RouteMatch { handler_id, .. }) => {
-            // Invoke handler
+            // Invoke handler - pass request directly (no clone)
             let result = handlers.invoke_async(handler_id, request.clone(), dependency_container.clone()).await;
 
             match result {

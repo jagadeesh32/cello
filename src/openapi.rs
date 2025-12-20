@@ -3,7 +3,6 @@
 //! This module provides automatic OpenAPI 3.0 schema generation from routes,
 //! similar to FastAPI's approach but implemented in Rust for maximum performance.
 
-use pyo3::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;

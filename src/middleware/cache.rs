@@ -212,6 +212,7 @@ impl InMemoryCacheStore {
     }
 
     /// Clean expired entries.
+    #[allow(dead_code)]
     fn cleanup_expired(&self) {
         let mut store = self.store.write();
         store.retain(|_, entry| !entry.is_expired());
@@ -488,6 +489,7 @@ impl CacheMiddleware {
     }
 
     /// Check conditional request headers.
+    #[allow(dead_code)]
     fn check_conditional_request(&self, request: &Request, cached: &CachedResponse) -> Option<Response> {
         // Check If-None-Match (ETag)
         if let Some(request_etag) = request.headers.get("if-none-match") {
@@ -546,6 +548,7 @@ impl CacheMiddleware {
         }
 
     /// Restore Response from cached response.
+    #[allow(dead_code)]
     fn restore_response(&self, cached: &CachedResponse) -> Response {
         let mut response = Response::new(cached.status);
         response.set_body(cached.body.clone());
