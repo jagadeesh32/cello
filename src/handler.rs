@@ -47,85 +47,83 @@ impl HandlerRegistry {
     /// This method automatically detects if the handler returns a coroutine
     /// (async def) or a regular value (def), and handles both appropriately.
     ///
-    /// For async handlers, the coroutine is executed using Python's asyncio.run().
-    /// For sync handlers, the result is returned directly.
+    /// OPTIMIZED: Skips expensive DI introspection when no dependencies exist.
     pub async fn invoke_async(
         &self,
         handler_id: usize,
         request: Request,
-        _dependency_container: Arc<crate::dependency::DependencyContainer>,
+        dependency_container: Arc<crate::dependency::DependencyContainer>,
     ) -> Result<serde_json::Value, String> {
         let handler = self
             .get(handler_id)
             .ok_or_else(|| format!("Handler {} not found", handler_id))?;
 
-        // All Python work happens inside with_gil
+        // FAST PATH: Skip expensive DI introspection if no dependencies registered
+        let has_dependencies = dependency_container.has_py_singletons();
+
         Python::with_gil(|py| {
-            // Step 1: Resolve dependencies
-            let inspect = py.import("inspect")
-                .map_err(|e| format!("Failed to import inspect: {}", e))?;
-            
-            let sig = inspect.call_method1("signature", (handler.as_ref(py),))
-                .map_err(|e| format!("Failed to get signature: {}", e))?;
-            
-            let parameters = sig.getattr("parameters")
-                .map_err(|e| format!("Failed to get parameters: {}", e))?;
-            
-            let kwargs = pyo3::types::PyDict::new(py);
-            let cello_module = py.import("cello").ok();
-            let depends_type = cello_module.and_then(|m| m.getattr("Depends").ok());
-
-            let items = parameters.call_method0("items")
-                .map_err(|e| format!("Failed to call items() on parameters: {}", e))?;
-
-            for item in items.iter().map_err(|e| format!("Failed to iterate over parameters: {}", e))? {
-                let pair = item.map_err(|e| format!("Item error: {}", e))?;
-                let name: String = pair.get_item(0).map_err(|e| format!("No key: {}", e))?.extract()
-                    .map_err(|e| format!("Name extract error: {}", e))?;
-                let param = pair.get_item(1).map_err(|e| format!("No value: {}", e))?;
-
-                let default = param.getattr("default")
-                    .map_err(|e| format!("Failed to get default: {}", e))?;
+            let call_result = if has_dependencies {
+                // SLOW PATH: DI resolution needed
+                let inspect = py.import("inspect")
+                    .map_err(|e| format!("Failed to import inspect: {}", e))?;
                 
-                if let Some(dt) = &depends_type {
-                    if default.is_instance(dt).unwrap_or(false) {
-                        let dep_name: String = default.getattr("dependency")
-                            .and_then(|d| d.extract())
-                            .map_err(|e| format!("Failed to get dependency name: {}", e))?;
-                        
-                        if let Some(dep_value) = _dependency_container.get_py_singleton(&dep_name) {
-                            kwargs.set_item(name, dep_value)
-                                .map_err(|e| format!("Failed to set kwarg: {}", e))?;
+                let sig = inspect.call_method1("signature", (handler.as_ref(py),))
+                    .map_err(|e| format!("Failed to get signature: {}", e))?;
+                
+                let parameters = sig.getattr("parameters")
+                    .map_err(|e| format!("Failed to get parameters: {}", e))?;
+                
+                let kwargs = pyo3::types::PyDict::new(py);
+                let cello_module = py.import("cello").ok();
+                let depends_type = cello_module.and_then(|m| m.getattr("Depends").ok());
+
+                if let Ok(items) = parameters.call_method0("items") {
+                    if let Ok(iter) = items.iter() {
+                        for item in iter.flatten() {
+                            if let (Ok(name), Ok(param)) = (
+                                item.get_item(0).and_then(|v| v.extract::<String>()),
+                                item.get_item(1)
+                            ) {
+                                if let Ok(default) = param.getattr("default") {
+                                    if let Some(dt) = &depends_type {
+                                        if default.is_instance(dt).unwrap_or(false) {
+                                            if let Ok(dep_name) = default.getattr("dependency")
+                                                .and_then(|d| d.extract::<String>())
+                                            {
+                                                if let Some(dep_value) = dependency_container.get_py_singleton(&dep_name) {
+                                                    let _ = kwargs.set_item(name, dep_value);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
-            }
 
-            // Step 2: Call the handler
-            let call_result = handler
-                .call(py, (request,), Some(kwargs))
-                .map_err(|e| format!("Handler error: {}", e))?;
+                handler.call(py, (request,), Some(kwargs))
+                    .map_err(|e| format!("Handler error: {}", e))?
+            } else {
+                // FAST PATH: Direct call without DI
+                handler.call1(py, (request,))
+                    .map_err(|e| format!("Handler error: {}", e))?
+            };
 
-            // Step 3: Check if the result is a coroutine (async def)
-            let is_coro = inspect
-                .call_method1("iscoroutine", (call_result.as_ref(py),))
-                .map_err(|e| format!("Failed to check coroutine: {}", e))?;
-            let is_coroutine = is_coro.is_true()
-                .map_err(|e| format!("Bool conversion error: {}", e))?;
+            // Check if async
+            let is_coroutine = py.import("inspect")
+                .and_then(|inspect| inspect.call_method1("iscoroutine", (call_result.as_ref(py),)))
+                .and_then(|r| r.is_true())
+                .unwrap_or(false);
 
             let final_result = if is_coroutine {
-                // Step 4a: Async handler - run coroutine with asyncio.run()
-                let asyncio = py.import("asyncio")
-                    .map_err(|e| format!("Failed to import asyncio: {}", e))?;
-                asyncio
-                    .call_method1("run", (call_result.as_ref(py),))
+                py.import("asyncio")
+                    .and_then(|asyncio| asyncio.call_method1("run", (call_result.as_ref(py),)))
                     .map_err(|e| format!("Async handler error: {}", e))?
             } else {
-                // Step 4b: Sync handler - use result directly
                 call_result.as_ref(py)
             };
 
-            // Convert the result to JSON
             python_to_json(py, final_result)
         })
     }

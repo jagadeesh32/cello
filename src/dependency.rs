@@ -254,6 +254,12 @@ impl DependencyContainer {
         self.py_singletons.read().get(name).cloned()
     }
 
+    /// Check if any Python singletons are registered (for fast-path optimization).
+    #[inline]
+    pub fn has_py_singletons(&self) -> bool {
+        !self.py_singletons.read().is_empty()
+    }
+
     /// Override a provider (useful for testing).
     pub fn override_provider<T: 'static>(&self, provider: Box<dyn Provider>) {
         let type_id = TypeId::of::<T>();

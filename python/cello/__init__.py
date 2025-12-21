@@ -122,7 +122,7 @@ __all__ = [
     "TemplateEngine",
     "Depends",
 ]
-__version__ = "0.5.0"
+__version__ = "0.5.1"
 
 
 class Blueprint:
@@ -217,13 +217,34 @@ class App:
     def __init__(self):
         """Create a new Cello application."""
         self._app = Cello()
+        self._routes = []  # Track routes for OpenAPI generation
 
-    def get(self, path: str):
+    def _register_route(self, method: str, path: str, func, tags: list = None, summary: str = None, description: str = None):
+        """Internal: Register a route and track metadata for OpenAPI."""
+        # Extract docstring if no description provided
+        doc = func.__doc__ or ""
+        route_summary = summary or doc.split('\n')[0].strip() if doc else f"{method} {path}"
+        route_description = description or doc.strip() if doc else None
+        
+        # Store route metadata
+        self._routes.append({
+            "method": method,
+            "path": path,
+            "handler": func.__name__,
+            "summary": route_summary,
+            "description": route_description,
+            "tags": tags or []
+        })
+
+    def get(self, path: str, tags: list = None, summary: str = None, description: str = None):
         """
         Register a GET route.
 
         Args:
             path: URL path pattern (e.g., "/users/{id}")
+            tags: OpenAPI tags for grouping
+            summary: OpenAPI summary
+            description: OpenAPI description
 
         Returns:
             Decorator function for the route handler.
@@ -235,34 +256,39 @@ class App:
         """
         def decorator(func):
             self._app.get(path, func)
+            self._register_route("GET", path, func, tags, summary, description)
             return func
         return decorator
 
-    def post(self, path: str):
+    def post(self, path: str, tags: list = None, summary: str = None, description: str = None):
         """Register a POST route."""
         def decorator(func):
             self._app.post(path, func)
+            self._register_route("POST", path, func, tags, summary, description)
             return func
         return decorator
 
-    def put(self, path: str):
+    def put(self, path: str, tags: list = None, summary: str = None, description: str = None):
         """Register a PUT route."""
         def decorator(func):
             self._app.put(path, func)
+            self._register_route("PUT", path, func, tags, summary, description)
             return func
         return decorator
 
-    def delete(self, path: str):
+    def delete(self, path: str, tags: list = None, summary: str = None, description: str = None):
         """Register a DELETE route."""
         def decorator(func):
             self._app.delete(path, func)
+            self._register_route("DELETE", path, func, tags, summary, description)
             return func
         return decorator
 
-    def patch(self, path: str):
+    def patch(self, path: str, tags: list = None, summary: str = None, description: str = None):
         """Register a PATCH route."""
         def decorator(func):
             self._app.patch(path, func)
+            self._register_route("PATCH", path, func, tags, summary, description)
             return func
         return decorator
 
@@ -373,6 +399,160 @@ class App:
             subsystem: Prometheus subsystem (default: "http")
         """
         self._app.enable_prometheus(endpoint, namespace, subsystem)
+
+    def enable_openapi(self, title: str = "Cello API", version: str = "0.5.1"):
+        """
+        Enable OpenAPI documentation endpoints.
+
+        This adds:
+        - GET /docs - Swagger UI
+        - GET /redoc - ReDoc documentation
+        - GET /openapi.json - OpenAPI JSON schema
+
+        Args:
+            title: API title (default: "Cello API")
+            version: API version (default: "0.5.1")
+        """
+        # Store for closure
+        api_title = title
+        api_version = version
+
+        # Create handlers in Python directly
+        @self.get("/docs")
+        def docs_handler(request):
+            html = f'''<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{api_title} - Swagger UI</title>
+    <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5.9.0/swagger-ui.css" />
+    <style>
+        body {{ margin: 0; padding: 0; }}
+        .swagger-ui .topbar {{ display: none; }}
+    </style>
+</head>
+<body>
+    <div id="swagger-ui"></div>
+    <script src="https://unpkg.com/swagger-ui-dist@5.9.0/swagger-ui-bundle.js"></script>
+    <script src="https://unpkg.com/swagger-ui-dist@5.9.0/swagger-ui-standalone-preset.js"></script>
+    <script>
+        window.onload = () => {{
+            window.ui = SwaggerUIBundle({{
+                url: "/openapi.json",
+                dom_id: '#swagger-ui',
+                deepLinking: true,
+                presets: [SwaggerUIBundle.presets.apis, SwaggerUIStandalonePreset],
+                layout: "StandaloneLayout"
+            }});
+        }};
+    </script>
+</body>
+</html>'''
+            return Response.html(html)
+
+        @self.get("/redoc")
+        def redoc_handler(request):
+            html = f'''<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{api_title} - ReDoc</title>
+    <link href="https://fonts.googleapis.com/css?family=Montserrat:300,400,700|Roboto:300,400,700" rel="stylesheet">
+    <style>body {{ margin: 0; padding: 0; }}</style>
+</head>
+<body>
+    <redoc spec-url="/openapi.json"></redoc>
+    <script src="https://cdn.redoc.ly/redoc/latest/bundles/redoc.standalone.js"></script>
+</body>
+</html>'''
+            return Response.html(html)
+
+        # Store reference to self for closure
+        app_ref = self
+        
+        @self.get("/openapi.json")
+        def openapi_handler(request):
+            # Auto-generate paths from registered routes
+            paths = {}
+            
+            for route in app_ref._routes:
+                path = route["path"]
+                method = route["method"].lower()
+                
+                # Skip internal routes
+                if path in ["/docs", "/redoc", "/openapi.json"]:
+                    continue
+                
+                # Extract path parameters
+                import re
+                param_pattern = re.compile(r'\{([^}]+)\}')
+                params = param_pattern.findall(path)
+                
+                # Build operation object
+                operation = {
+                    "summary": route["summary"],
+                    "operationId": f"{method}_{route['handler']}",
+                    "responses": {
+                        "200": {
+                            "description": "Successful response",
+                            "content": {
+                                "application/json": {
+                                    "schema": {"type": "object"}
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                if route["description"]:
+                    operation["description"] = route["description"]
+                
+                if route["tags"]:
+                    operation["tags"] = route["tags"]
+                
+                # Add path parameters
+                if params:
+                    operation["parameters"] = [
+                        {
+                            "name": p,
+                            "in": "path",
+                            "required": True,
+                            "schema": {"type": "string"}
+                        }
+                        for p in params
+                    ]
+                
+                # Add request body for POST/PUT/PATCH
+                if method in ["post", "put", "patch"]:
+                    operation["requestBody"] = {
+                        "content": {
+                            "application/json": {
+                                "schema": {"type": "object"}
+                            }
+                        }
+                    }
+                
+                # Add to paths
+                if path not in paths:
+                    paths[path] = {}
+                paths[path][method] = operation
+            
+            return {
+                "openapi": "3.0.3",
+                "info": {
+                    "title": api_title,
+                    "version": api_version,
+                    "description": f"{api_title} - Powered by Cello Framework"
+                },
+                "paths": paths
+            }
+
+        print("📚 OpenAPI docs enabled:")
+        print("   Swagger UI: /docs")
+        print("   ReDoc:      /redoc")
+        print("   OpenAPI:    /openapi.json")
 
     def add_guard(self, guard):
         """

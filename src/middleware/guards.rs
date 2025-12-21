@@ -527,6 +527,14 @@ impl Default for GuardsMiddleware {
 
 impl Middleware for GuardsMiddleware {
     fn before(&self, request: &mut Request) -> MiddlewareResult {
+        // FAST PATH: Skip if no guards registered
+        {
+            let guards = self.guards.read();
+            if guards.is_empty() {
+                return Ok(MiddlewareAction::Continue);
+            }
+        }
+
         // Check if path should be skipped
         for skip_path in &self.skip_paths {
             if request.path.starts_with(skip_path) {

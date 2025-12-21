@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/logo-full.png" alt="Cello" width="400">
+  <img src="https://raw.githubusercontent.com/jagadeesh32/cello/main/docs/logo-full.png" alt="Cello" width="400">
 </p>
 
 <p align="center">
@@ -124,7 +124,7 @@ python app.py
 | 🔄 **Lifecycle Hooks** | Startup/shutdown events for app initialization |
 | 📦 **DTOs** | Data Transfer Objects with field filtering |
 
-### 🆕 New in v0.5.0 - Best of FastAPI, Litestar, Robyn & Django!
+### 🆕 New in v0.5.1 - Best of FastAPI, Litestar, Robyn & Django!
 
 | Feature | Inspired By | Description |
 |---------|-------------|-------------|
@@ -141,7 +141,7 @@ python app.py
 
 ## � Examples
 
-#### 🎯 Advanced Features Demo (v0.5.0)
+#### 🎯 Advanced Features Demo (v0.5.1)
 
 See `examples/comprehensive_demo.py` for a complete demonstration of all new features:
 - Dependency Injection

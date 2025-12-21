@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "cello-framework"
-version = "0.5.0"
+version = "0.5.1"
 description = "Ultra-fast Rust-powered Python async web framework"
 readme = "README.md"
 license = { text = "MIT" }

@@ -191,6 +191,107 @@ impl Cello {
         self.middleware.add(compression);
     }
 
+    /// Enable OpenAPI documentation endpoints.
+    /// This adds:
+    /// - GET /docs - Swagger UI
+    /// - GET /redoc - ReDoc documentation
+    /// - GET /openapi.json - OpenAPI JSON schema
+    #[pyo3(signature = (title=None, version=None))]
+    pub fn enable_openapi(&mut self, py: Python<'_>, title: Option<String>, version: Option<String>) -> PyResult<()> {
+        let title = title.unwrap_or_else(|| "Cello API".to_string());
+        let version = version.unwrap_or_else(|| "0.5.1".to_string());
+
+        // Store title and version for later use
+        let title_clone = title.clone();
+        let version_clone = version.clone();
+
+        // Create a Python handler for /docs (Swagger UI)
+        let docs_code = format!(r#"
+def docs_handler(request):
+    from cello import Response
+    html = '''<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{title} - Swagger UI</title>
+    <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5.9.0/swagger-ui.css" />
+    <style>
+        body {{ margin: 0; padding: 0; }}
+        .swagger-ui .topbar {{ display: none; }}
+    </style>
+</head>
+<body>
+    <div id="swagger-ui"></div>
+    <script src="https://unpkg.com/swagger-ui-dist@5.9.0/swagger-ui-bundle.js"></script>
+    <script>
+        window.onload = () => {{
+            window.ui = SwaggerUIBundle({{
+                url: "/openapi.json",
+                dom_id: '#swagger-ui',
+                deepLinking: true,
+                presets: [SwaggerUIBundle.presets.apis, SwaggerUIBundle.SwaggerUIStandalonePreset],
+                layout: "StandaloneLayout"
+            }});
+        }};
+    </script>
+</body>
+</html>'''
+    return Response.html(html)
+"#, title = title_clone);
+
+        // Create /redoc handler
+        let redoc_code = format!(r#"
+def redoc_handler(request):
+    from cello import Response
+    html = '''<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{title} - ReDoc</title>
+    <link href="https://fonts.googleapis.com/css?family=Montserrat:300,400,700|Roboto:300,400,700" rel="stylesheet">
+    <style>body {{ margin: 0; padding: 0; }}</style>
+</head>
+<body>
+    <redoc spec-url="/openapi.json"></redoc>
+    <script src="https://cdn.redoc.ly/redoc/latest/bundles/redoc.standalone.js"></script>
+</body>
+</html>'''
+    return Response.html(html)
+"#, title = title_clone);
+
+        // Create /openapi.json handler
+        let openapi_code = format!(r#"
+def openapi_handler(request):
+    return {{
+        "openapi": "3.0.3",
+        "info": {{
+            "title": "{title}",
+            "version": "{version}",
+            "description": "{title} - Powered by Cello Framework"
+        }},
+        "paths": {{}}
+    }}
+"#, title = title_clone, version = version_clone);
+
+        // Execute Python code and register handlers
+        let docs_handler = py.eval(&format!("{}\ndocs_handler", docs_code), None, None)?;
+        let redoc_handler = py.eval(&format!("{}\nredoc_handler", redoc_code), None, None)?;
+        let openapi_handler = py.eval(&format!("{}\nopenapi_handler", openapi_code), None, None)?;
+
+        self.add_route("GET", "/docs", docs_handler.into())?;
+        self.add_route("GET", "/redoc", redoc_handler.into())?;
+        self.add_route("GET", "/openapi.json", openapi_handler.into())?;
+
+        println!("📚 OpenAPI docs enabled:");
+        println!("   Swagger UI: /docs");
+        println!("   ReDoc:      /redoc");
+        println!("   OpenAPI:    /openapi.json");
+
+        Ok(())
+    }
+
     /// Start the HTTP server.
     #[pyo3(signature = (host=None, port=None, workers=None))]
     pub fn run(&self, py: Python<'_>, host: Option<&str>, port: Option<u16>, workers: Option<usize>) -> PyResult<()> {
