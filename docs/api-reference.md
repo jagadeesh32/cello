@@ -35,6 +35,7 @@ app = App()
 | `enable_circuit_breaker(threshold)` | Enable circuit breaker middleware |
 | `enable_rate_limit(config)` | Enable rate limiting middleware |
 | `invalidate_cache(tags)` | Invalidate cache by tags |
+| `add_guard(guard)` | Register a global security guard |
 | `on_event(event_type)` | Register lifecycle hook |
 | `run(host, port, **kwargs)` | Start the server |
 
@@ -499,4 +500,62 @@ cello/
 ├── SecurityHeadersConfig  # Security headers
 ├── CSP              # CSP builder
 └── StaticFilesConfig     # Static files
+```
+
+---
+
+## Guards System (Security)
+The Guards system provides role-based and permission-based access control.
+
+### Basic Usage
+```python
+from cello import App
+from cello.guards import Role, Permission, Authenticated
+
+app = App()
+
+# Role-based
+@app.get("/admin", guards=[Role(["admin"])])
+def admin_only(request):
+    return "Admin Only"
+
+# Permission-based
+@app.post("/users", guards=[Permission(["users:write"])])
+def create_user(request):
+    return "User Created"
+
+# Authenticated Only
+@app.get("/profile", guards=[Authenticated()])
+def profile(request):
+    return "User Profile"
+```
+
+### Composable Logic
+Combine guards using `And`, `Or`, `Not`.
+```python
+from cello.guards import And, Or, Not
+
+# Admin AND Delete Permission
+@app.delete("/users/{id}", guards=[
+    And([Role(["admin"]), Permission(["delete"])])
+])
+def delete(request): ...
+
+# Admin OR Moderator
+@app.get("/logs", guards=[
+    Or([Role(["admin"]), Role(["moderator"])])
+])
+def logs(request): ...
+```
+
+### Protocol
+Guards expect `request.context["user"]` to be populated (e.g., by authentication middleware) with `roles` and `permissions` lists.
+```json
+{
+  "user": {
+    "id": 123,
+    "roles": ["admin"],
+    "permissions": ["read", "write"]
+  }
+}
 ```

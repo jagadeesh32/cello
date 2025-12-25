@@ -236,7 +236,7 @@ class App:
             "tags": tags or []
         })
 
-    def get(self, path: str, tags: list = None, summary: str = None, description: str = None):
+    def get(self, path: str, tags: list = None, summary: str = None, description: str = None, guards: list = None):
         """
         Register a GET route.
 
@@ -245,65 +245,152 @@ class App:
             tags: OpenAPI tags for grouping
             summary: OpenAPI summary
             description: OpenAPI description
+            guards: List of guard functions/classes
 
         Returns:
             Decorator function for the route handler.
 
         Example:
-            @app.get("/hello/{name}")
+            @app.get("/hello/{name}", guards=[Authenticated()])
             def hello(request):
                 return {"message": f"Hello, {request.params['name']}!"}
         """
         def decorator(func):
-            self._app.get(path, wrap_handler_with_validation(func))
+            wrapped = wrap_handler_with_validation(func)
+            
+            if guards:
+                from .guards import verify_guards
+                original_handler = wrapped
+                
+                # We need to wrap again to check guards
+                # Note: Rust calls the handler with (request, ...) so signature is preserved?
+                # wrap_handler_with_validation preserves signature mostly but handles args.
+                # Here we just need to intercept.
+                
+                def guard_wrapper(request, *args, **kwargs):
+                    verify_guards(guards, request)
+                    return original_handler(request, *args, **kwargs)
+                
+                # Copy metadata
+                import functools
+                functools.update_wrapper(guard_wrapper, original_handler)
+                wrapped = guard_wrapper
+
+            self._app.get(path, wrapped)
             self._register_route("GET", path, func, tags, summary, description)
-            return func
+            return wrapped
         return decorator
 
-    def post(self, path: str, tags: list = None, summary: str = None, description: str = None):
+    def post(self, path: str, tags: list = None, summary: str = None, description: str = None, guards: list = None):
         """Register a POST route."""
         def decorator(func):
-            self._app.post(path, wrap_handler_with_validation(func))
+            wrapped = wrap_handler_with_validation(func)
+            if guards:
+                from .guards import verify_guards
+                original_handler = wrapped
+                def guard_wrapper(request, *args, **kwargs):
+                    verify_guards(guards, request)
+                    return original_handler(request, *args, **kwargs)
+                import functools
+                functools.update_wrapper(guard_wrapper, original_handler)
+                wrapped = guard_wrapper
+
+            self._app.post(path, wrapped)
             self._register_route("POST", path, func, tags, summary, description)
-            return func
+            return wrapped
         return decorator
 
-    def put(self, path: str, tags: list = None, summary: str = None, description: str = None):
+    def put(self, path: str, tags: list = None, summary: str = None, description: str = None, guards: list = None):
         """Register a PUT route."""
         def decorator(func):
-            self._app.put(path, wrap_handler_with_validation(func))
+            wrapped = wrap_handler_with_validation(func)
+            if guards:
+                from .guards import verify_guards
+                original_handler = wrapped
+                def guard_wrapper(request, *args, **kwargs):
+                    verify_guards(guards, request)
+                    return original_handler(request, *args, **kwargs)
+                import functools
+                functools.update_wrapper(guard_wrapper, original_handler)
+                wrapped = guard_wrapper
+
+            self._app.put(path, wrapped)
             self._register_route("PUT", path, func, tags, summary, description)
-            return func
+            return wrapped
         return decorator
 
-    def delete(self, path: str, tags: list = None, summary: str = None, description: str = None):
+    def delete(self, path: str, tags: list = None, summary: str = None, description: str = None, guards: list = None):
         """Register a DELETE route."""
         def decorator(func):
-            self._app.delete(path, wrap_handler_with_validation(func))
+            wrapped = wrap_handler_with_validation(func)
+            if guards:
+                from .guards import verify_guards
+                original_handler = wrapped
+                def guard_wrapper(request, *args, **kwargs):
+                    verify_guards(guards, request)
+                    return original_handler(request, *args, **kwargs)
+                import functools
+                functools.update_wrapper(guard_wrapper, original_handler)
+                wrapped = guard_wrapper
+
+            self._app.delete(path, wrapped)
             self._register_route("DELETE", path, func, tags, summary, description)
-            return func
+            return wrapped
         return decorator
 
-    def patch(self, path: str, tags: list = None, summary: str = None, description: str = None):
+    def patch(self, path: str, tags: list = None, summary: str = None, description: str = None, guards: list = None):
         """Register a PATCH route."""
         def decorator(func):
-            self._app.patch(path, wrap_handler_with_validation(func))
+            wrapped = wrap_handler_with_validation(func)
+            if guards:
+                from .guards import verify_guards
+                original_handler = wrapped
+                def guard_wrapper(request, *args, **kwargs):
+                    verify_guards(guards, request)
+                    return original_handler(request, *args, **kwargs)
+                import functools
+                functools.update_wrapper(guard_wrapper, original_handler)
+                wrapped = guard_wrapper
+
+            self._app.patch(path, wrapped)
             self._register_route("PATCH", path, func, tags, summary, description)
-            return func
+            return wrapped
         return decorator
 
-    def options(self, path: str):
+    def options(self, path: str, guards: list = None):
         """Register an OPTIONS route."""
         def decorator(func):
-            self._app.options(path, func)
-            return func
+            wrapped = func
+            if guards:
+                 from .guards import verify_guards
+                 original_handler = wrapped
+                 def guard_wrapper(request, *args, **kwargs):
+                     verify_guards(guards, request)
+                     return original_handler(request, *args, **kwargs)
+                 import functools
+                 functools.update_wrapper(guard_wrapper, original_handler)
+                 wrapped = guard_wrapper
+                 
+            self._app.options(path, wrapped)
+            return wrapped
         return decorator
 
-    def head(self, path: str):
+    def head(self, path: str, guards: list = None):
         """Register a HEAD route."""
         def decorator(func):
-            self._app.head(path, func)
-            return func
+            wrapped = func
+            if guards:
+                 from .guards import verify_guards
+                 original_handler = wrapped
+                 def guard_wrapper(request, *args, **kwargs):
+                     verify_guards(guards, request)
+                     return original_handler(request, *args, **kwargs)
+                 import functools
+                 functools.update_wrapper(guard_wrapper, original_handler)
+                 wrapped = guard_wrapper
+                 
+            self._app.head(path, wrapped)
+            return wrapped
         return decorator
 
     def websocket(self, path: str):
