@@ -2,6 +2,34 @@
 
 All notable changes to Cello are documented in this file.
 
+## [0.6.0] - 2025-12-25
+
+### Added
+
+#### Features
+- **Smart Caching System**: 
+  - `@cache` decorator for route-specific caching.
+  - TTL support and tag-based invalidation (`invalidate_cache`).
+  - Async middleware implementation for high performance.
+- **Intelligent Adaptive Rate Limiting**:
+  - `Adaptive` algorithm that adjusts limits based on server load.
+  - Monitors CPU, Memory, and Latency.
+- **DTO Validation System**:
+  - Pydantic integration for request payload validation.
+  - Automatic 422 Unprocessable Entity responses with detailed error messages.
+- **Circuit Breaker**:
+  - Fault tolerance middleware to detect and isolate failing services.
+  - Configurable failure threshold, reset timeout, and failure codes.
+- **Lifecycle Hooks**:
+  - `@app.on_event("startup")` and `@app.on_event("shutdown")` decorators.
+  - Database connection management and cleanup support.
+
+### Changed
+- Refactored Middleware architecture to support fully async execution (`AsyncMiddleware`).
+- Enhanced `CacheMiddleware` to support case-insensitive header checking.
+
+---
+
 ## [0.4.0] - 2024-12-16
 
 ### Added

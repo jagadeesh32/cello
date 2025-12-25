@@ -1022,10 +1022,10 @@ def test_dependency_injection_registration():
 
 
 def test_version():
-    """Test that version is 0.5.0."""
+    """Test that version is 0.6.0."""
     import cello
 
-    assert cello.__version__ == "0.5.1"
+    assert cello.__version__ == "0.6.0"
 
 
 def test_all_exports():

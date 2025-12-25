@@ -51,10 +51,9 @@ Example:
 
     app.register_blueprint(api)
 
-    if __name__ == "__main__":
-        app.run()
 """
 
+from .validation import wrap_handler_with_validation
 from cello._cello import (
     Blueprint as _RustBlueprint,
 )
@@ -121,8 +120,9 @@ __all__ = [
     "BackgroundTasks",
     "TemplateEngine",
     "Depends",
+    "cache",
 ]
-__version__ = "0.5.1"
+__version__ = "0.6.0"
 
 
 class Blueprint:
@@ -255,7 +255,7 @@ class App:
                 return {"message": f"Hello, {request.params['name']}!"}
         """
         def decorator(func):
-            self._app.get(path, func)
+            self._app.get(path, wrap_handler_with_validation(func))
             self._register_route("GET", path, func, tags, summary, description)
             return func
         return decorator
@@ -263,7 +263,7 @@ class App:
     def post(self, path: str, tags: list = None, summary: str = None, description: str = None):
         """Register a POST route."""
         def decorator(func):
-            self._app.post(path, func)
+            self._app.post(path, wrap_handler_with_validation(func))
             self._register_route("POST", path, func, tags, summary, description)
             return func
         return decorator
@@ -271,7 +271,7 @@ class App:
     def put(self, path: str, tags: list = None, summary: str = None, description: str = None):
         """Register a PUT route."""
         def decorator(func):
-            self._app.put(path, func)
+            self._app.put(path, wrap_handler_with_validation(func))
             self._register_route("PUT", path, func, tags, summary, description)
             return func
         return decorator
@@ -279,7 +279,7 @@ class App:
     def delete(self, path: str, tags: list = None, summary: str = None, description: str = None):
         """Register a DELETE route."""
         def decorator(func):
-            self._app.delete(path, func)
+            self._app.delete(path, wrap_handler_with_validation(func))
             self._register_route("DELETE", path, func, tags, summary, description)
             return func
         return decorator
@@ -287,7 +287,7 @@ class App:
     def patch(self, path: str, tags: list = None, summary: str = None, description: str = None):
         """Register a PATCH route."""
         def decorator(func):
-            self._app.patch(path, func)
+            self._app.patch(path, wrap_handler_with_validation(func))
             self._register_route("PATCH", path, func, tags, summary, description)
             return func
         return decorator
@@ -339,18 +339,19 @@ class App:
             methods = ["GET"]
 
         def decorator(func):
+            wrapped = wrap_handler_with_validation(func)
             for method in methods:
                 method_upper = method.upper()
                 if method_upper == "GET":
-                    self._app.get(path, func)
+                    self._app.get(path, wrapped)
                 elif method_upper == "POST":
-                    self._app.post(path, func)
+                    self._app.post(path, wrapped)
                 elif method_upper == "PUT":
-                    self._app.put(path, func)
+                    self._app.put(path, wrapped)
                 elif method_upper == "DELETE":
-                    self._app.delete(path, func)
+                    self._app.delete(path, wrapped)
                 elif method_upper == "PATCH":
-                    self._app.patch(path, func)
+                    self._app.patch(path, wrapped)
                 elif method_upper == "OPTIONS":
                     self._app.options(path, func)
                 elif method_upper == "HEAD":
@@ -400,7 +401,65 @@ class App:
         """
         self._app.enable_prometheus(endpoint, namespace, subsystem)
 
-    def enable_openapi(self, title: str = "Cello API", version: str = "0.5.1"):
+    def enable_rate_limit(self, config: RateLimitConfig):
+        """
+        Enable rate limiting middleware.
+
+        Args:
+            config: RateLimitConfig instance. Use RateLimitConfig.token_bucket(), .sliding_window() or .adaptive() to create.
+        """
+        self._app.enable_rate_limit(config)
+
+    def enable_caching(self, ttl: int = 300, methods: list = None, exclude_paths: list = None):
+        """
+        Enable smart caching middleware.
+
+        Args:
+            ttl: Default TTL in seconds (default: 300)
+            methods: List of HTTP methods to cache (default: ["GET", "HEAD"])
+            exclude_paths: List of paths to exclude from cache
+        """
+        self._app.enable_caching(ttl, methods, exclude_paths)
+
+    def enable_circuit_breaker(self, failure_threshold: int = 5, reset_timeout: int = 30, half_open_target: int = 3, failure_codes: list = None):
+        """
+        Enable Circuit Breaker middleware.
+        
+        Args:
+           failure_threshold: Failures before opening circuit.
+           reset_timeout: Seconds to wait before Half-Open.
+           half_open_target: Successes needed to Close.
+           failure_codes: List of status codes considered failures (default: [500, 502, 503, 504]).
+        """
+        self._app.enable_circuit_breaker(failure_threshold, reset_timeout, half_open_target, failure_codes)
+
+    def on_event(self, event_type: str):
+        """
+        Register a lifecycle event handler.
+        
+        Args:
+            event_type: "startup" or "shutdown"
+        """
+        def decorator(func):
+            if event_type == "startup":
+                self._app.on_startup(func)
+            elif event_type == "shutdown":
+                self._app.on_shutdown(func)
+            else:
+                raise ValueError(f"Invalid event type: {event_type}")
+            return func
+        return decorator
+
+    def invalidate_cache(self, tags: list):
+        """
+        Invalidate cache by tags.
+        
+        Args:
+            tags: List of tags to invalidate.
+        """
+        self._app.invalidate_cache(tags)
+
+    def enable_openapi(self, title: str = "Cello API", version: str = "0.6.0"):
         """
         Enable OpenAPI documentation endpoints.
 
@@ -411,7 +470,7 @@ class App:
 
         Args:
             title: API title (default: "Cello API")
-            version: API version (default: "0.5.1")
+            version: API version (default: "0.6.0")
         """
         # Store for closure
         api_title = title
@@ -727,3 +786,43 @@ class Depends:
 
     def __init__(self, dependency: str):
         self.dependency = dependency
+
+
+def cache(ttl: int = None, tags: list = None):
+    """
+    Decorator to cache response (Smart Caching).
+    
+    Args:
+        ttl: Time to live in seconds (overrides default).
+        tags: List of tags for invalidation.
+    """
+    from functools import wraps
+    from cello._cello import Response
+    
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            response = func(*args, **kwargs)
+            
+            # Ensure we have a Response object to set headers
+            if not isinstance(response, Response):
+                 if isinstance(response, dict):
+                     response = Response.json(response)
+                 elif isinstance(response, str):
+                     response = Response.text(response)
+                 elif isinstance(response, bytes):
+                     response = Response.binary(response)
+            
+            if isinstance(response, Response):
+                if ttl is not None:
+                     response.set_header("X-Cache-TTL", str(ttl))
+                if tags:
+                     # Check if tags is list
+                     if isinstance(tags, list):
+                         response.set_header("X-Cache-Tags", ",".join(tags))
+                     elif isinstance(tags, str):
+                         response.set_header("X-Cache-Tags", tags)
+            
+            return response
+        return wrapper
+    return decorator

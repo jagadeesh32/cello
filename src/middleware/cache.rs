@@ -14,7 +14,10 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
-use super::{Middleware, MiddlewareAction, MiddlewareResult};
+use std::future::Future;
+use std::pin::Pin;
+
+use super::{AsyncMiddleware, MiddlewareAction, MiddlewareResult};
 use crate::request::Request;
 use crate::response::Response;
 
@@ -39,6 +42,8 @@ pub struct CachedResponse {
     pub etag: Option<String>,
     /// Last modified timestamp
     pub last_modified: Option<String>,
+    /// Cache tags for invalidation
+    pub tags: Vec<String>,
 }
 
 impl CachedResponse {
@@ -75,6 +80,9 @@ pub trait CacheStore: Send + Sync {
 
     /// Clear all cache entries.
     async fn clear(&self) -> Result<(), CacheError>;
+
+    /// Invalidate entries by tags.
+    async fn invalidate_tags(&self, tags: &[String]) -> Result<(), CacheError>;
 
     /// Check if cache store is available.
     async fn is_available(&self) -> bool {
@@ -295,6 +303,15 @@ impl CacheStore for InMemoryCacheStore {
 
     async fn clear(&self) -> Result<(), CacheError> {
         self.store.write().clear();
+        Ok(())
+    }
+
+    async fn invalidate_tags(&self, tags: &[String]) -> Result<(), CacheError> {
+        let mut store = self.store.write();
+        store.retain(|_, entry| {
+            // Keep entry only if it DOES NOT contain any of the invalidation tags
+            !entry.tags.iter().any(|t| tags.contains(t))
+        });
         Ok(())
     }
 }
@@ -536,6 +553,16 @@ impl CacheMiddleware {
             None
         };
 
+        // Extract tags from X-Cache-Tags header
+        let tags_str = response.headers.get("x-cache-tags")
+            .or_else(|| response.headers.get("X-Cache-Tags"));
+
+        let tags = if let Some(tags_str) = tags_str {
+            tags_str.split(',').map(|s| s.trim().to_string()).collect()
+        } else {
+            Vec::new()
+        };
+
         CachedResponse {
             body: response.body_bytes().to_vec(),
             status: response.status,
@@ -544,9 +571,12 @@ impl CacheMiddleware {
             ttl,
             etag,
             last_modified,
+            tags,
         }
         }
 
+    /// Restore Response from cached response.
+    #[allow(dead_code)]
     /// Restore Response from cached response.
     #[allow(dead_code)]
     fn restore_response(&self, cached: &CachedResponse) -> Response {
@@ -583,56 +613,96 @@ impl Default for CacheMiddleware {
     }
 }
 
-impl Middleware for CacheMiddleware {
-    fn before(&self, request: &mut Request) -> MiddlewareResult {
-        // Check if this request should be cached
-        if !self.should_cache_request(request) {
-            return Ok(MiddlewareAction::Continue);
-        }
+impl AsyncMiddleware for CacheMiddleware {
+    fn before_async<'a>(
+        &'a self,
+        request: &'a mut Request,
+    ) -> Pin<Box<dyn Future<Output = MiddlewareResult> + Send + 'a>> {
+        Box::pin(async move {
+            // Check if this request should be cached
+            if !self.should_cache_request(request) {
+                return Ok(MiddlewareAction::Continue);
+            }
 
-        // Build cache key
-        let cache_key = self.config.key_builder.build_key(request);
+            // Build cache key
+            let cache_key = self.config.key_builder.build_key(request);
 
-        // Check cache (async operation, but we'll handle it in after() for simplicity)
-        // Store cache key in request context for after() method
-        request.context.insert(
-            "__cache_key".to_string(),
-            serde_json::Value::String(cache_key),
-        );
+            // Store cache key in request context for after() method
+            request.context.insert(
+                "__cache_key".to_string(),
+                serde_json::Value::String(cache_key.clone()),
+            );
 
-        Ok(MiddlewareAction::Continue)
+            // Check cache
+            match self.config.store.get(&cache_key).await {
+                Ok(Some(cached)) => {
+                    // Check if expired
+                    if cached.is_expired() {
+                        return Ok(MiddlewareAction::Continue);
+                    }
+                    
+                     // Return cached response
+                    let response = self.restore_response(&cached);
+                    return Ok(MiddlewareAction::Stop(response));
+                }
+                Ok(None) => {}
+                Err(e) => {
+                    // Log error but continue
+                    eprintln!("Cache error: {}", e);
+                }
+            }
+            
+            Ok(MiddlewareAction::Continue)
+        })
     }
 
-    fn after(&self, request: &Request, response: &mut Response) -> MiddlewareResult {
-        // Check if this request should be cached
-        if !self.should_cache_request(request) {
-            return Ok(MiddlewareAction::Continue);
-        }
-
-        // Get cache key from context
-        if let Some(serde_json::Value::String(cache_key)) = request.context.get("__cache_key") {
-            // Check if response should be cached
-            if self.should_cache_response(response) {
-                // Create cached response
-                let cached_response = self.create_cached_response(response, self.config.default_ttl);
-
-                // Store in cache (fire and forget)
-                let store = self.config.store.clone();
-                let key = cache_key.clone();
-                let cached = cached_response.clone();
-                tokio::spawn(async move {
-                    let _ = store.set(&key, cached).await;
-                });
-
-                // Add cache headers to response
-                response.set_header("X-Cache", "MISS");
-                response.set_header("Cache-Control", &format!("max-age={}", self.config.default_ttl));
-            } else {
-                response.set_header("X-Cache", "BYPASS");
+    fn after_async<'a>(
+        &'a self,
+        request: &'a Request,
+        response: &'a mut Response,
+    ) -> Pin<Box<dyn Future<Output = MiddlewareResult> + Send + 'a>> {
+        Box::pin(async move {
+            // Check if this request should be cached (skip if already handled or ignored)
+            if !self.should_cache_request(request) {
+                return Ok(MiddlewareAction::Continue);
             }
-        }
 
-        Ok(MiddlewareAction::Continue)
+            // Get cache key from context
+            if let Some(serde_json::Value::String(cache_key)) = request.context.get("__cache_key") {
+                // Check if response should be cached
+                if self.should_cache_response(response) {
+                    // Check for per-response TTL
+                    let ttl_str = response.headers.get("x-cache-ttl")
+                        .or_else(|| response.headers.get("X-Cache-TTL"));
+                        
+                    let ttl = if let Some(s) = ttl_str {
+                        s.parse::<u64>().unwrap_or(self.config.default_ttl)
+                    } else {
+                        self.config.default_ttl
+                    };
+
+                    // Create cached response
+                    let cached_response = self.create_cached_response(response, ttl);
+
+                    // Store in cache (fire and forget - but inside async we can await if we want, or spawn)
+                    // Spawning is better for latency
+                    let store = self.config.store.clone();
+                    let key = cache_key.clone();
+                    let cached = cached_response.clone();
+                    tokio::spawn(async move {
+                        let _ = store.set(&key, cached).await;
+                    });
+
+                    // Add cache headers to response
+                    response.set_header("X-Cache", "MISS");
+                    response.set_header("Cache-Control", &format!("max-age={}", self.config.default_ttl));
+                } else {
+                    response.set_header("X-Cache", "BYPASS");
+                }
+            }
+
+            Ok(MiddlewareAction::Continue)
+        })
     }
 
     fn priority(&self) -> i32 {
@@ -714,6 +784,7 @@ mod tests {
             ttl: 1, // 1 second
             etag: None,
             last_modified: None,
+            tags: Vec::new(),
         };
 
         assert!(!response.is_expired());

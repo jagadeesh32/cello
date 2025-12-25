@@ -1,6 +1,6 @@
 # API Reference
 
-Complete API reference for Cello v0.4.0.
+Complete API reference for Cello v0.6.0.
 
 ## Core Classes
 
@@ -31,6 +31,11 @@ app = App()
 | `enable_cors(origins)` | Enable CORS middleware |
 | `enable_logging()` | Enable request logging |
 | `enable_compression(min_size)` | Enable gzip compression |
+| `enable_caching(ttl, methods)` | Enable smart caching middleware |
+| `enable_circuit_breaker(threshold)` | Enable circuit breaker middleware |
+| `enable_rate_limit(config)` | Enable rate limiting middleware |
+| `invalidate_cache(tags)` | Invalidate cache by tags |
+| `on_event(event_type)` | Register lifecycle hook |
 | `run(host, port, **kwargs)` | Start the server |
 
 ---
@@ -252,7 +257,65 @@ msg = WebSocketMessage.text("Hello")
 
 ---
 
+---
+
+## Decorators
+
+### cache
+
+Smart caching decorator for route handlers.
+
+```python
+from cello import cache
+
+@app.get("/heavy")
+@cache(ttl=60, tags=["heavy"])
+def handler(request):
+    return {"data": "expensive"}
+```
+
+#### Arguments
+
+| Argument | Type | Description |
+|----------|------|-------------|
+| `ttl` | int | Time-to-live in seconds (optional) |
+| `tags` | list/str | invalidation tags (optional) |
+
+### on_event
+
+Register a lifecycle event handler.
+
+```python
+@app.on_event("startup")
+async def startup_db():
+    await db.connect()
+
+@app.on_event("shutdown")
+async def shutdown_db():
+    await db.close()
+```
+
+#### Arguments
+
+| Argument | Type | Description |
+|----------|------|-------------|
+| `event_type` | str | "startup" or "shutdown" |
+
+---
+
 ## Configuration Classes
+
+
+### CircuitBreakerConfig
+
+```python
+CircuitBreakerConfig(
+    failure_threshold=5,    # Failures before opening
+    reset_timeout=30,       # Seconds to wait in Open state
+    half_open_target=3,     # Successes needed to close
+    failure_codes=[500, 503], 
+)
+```
 
 ### TimeoutConfig
 

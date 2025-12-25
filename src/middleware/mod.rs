@@ -13,6 +13,7 @@
 pub mod auth;
 pub mod body_limit;
 pub mod cache;
+pub mod circuit_breaker;
 pub mod cors;
 pub mod csrf;
 pub mod etag;
@@ -40,6 +41,7 @@ use crate::response::Response;
 pub use auth::{ApiKeyAuth, BasicAuth, JwtAuth};
 pub use body_limit::BodyLimitMiddleware;
 pub use cache::{CacheMiddleware, CacheConfig, CacheStore, CachedResponse, CacheError, CacheKeyBuilder, DefaultCacheKeyBuilder, InMemoryCacheStore, create_cache_key};
+pub use circuit_breaker::{CircuitBreakerMiddleware, CircuitBreakerConfig};
 pub use cors::CorsMiddleware;
 pub use csrf::CsrfMiddleware;
 pub use etag::EtagMiddleware;
