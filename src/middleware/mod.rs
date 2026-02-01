@@ -9,6 +9,10 @@
 //! - Security headers (CSP, HSTS, etc.)
 //! - Request validation (Body limit, CSRF)
 //! - Request tracking (Request ID, ETag)
+//! - OpenTelemetry distributed tracing (Enterprise)
+//! - Health checks (Enterprise)
+//! - Database connection pooling (Enterprise)
+//! - GraphQL support (Enterprise)
 
 pub mod auth;
 pub mod body_limit;
@@ -25,6 +29,12 @@ pub mod request_id;
 pub mod security;
 pub mod session;
 pub mod static_files;
+
+// Enterprise modules
+pub mod telemetry;
+pub mod health;
+pub mod database;
+pub mod graphql;
 
 // Re-export DTO types from the dto module
 pub use crate::dto::*;
@@ -53,6 +63,12 @@ pub use request_id::RequestIdMiddleware;
 pub use security::{SecurityHeadersMiddleware, ContentSecurityPolicy, HstsConfig};
 pub use session::{SessionMiddleware, SessionStore, InMemorySessionStore};
 pub use static_files::StaticFilesMiddleware;
+
+// Enterprise module re-exports
+pub use telemetry::{OpenTelemetryMiddleware, OpenTelemetryConfig, TelemetryMetrics, TelemetryStats, TraceContext};
+pub use health::{HealthCheckMiddleware, HealthCheckConfig, HealthStatus, HealthCheckResult, HealthReport, SystemInfo};
+pub use database::{DatabaseConfig, DatabasePool, DatabaseConnection, DatabaseStats, DatabaseError, Row, SqlValue, ToSql, FromSql, MockDatabasePool};
+pub use graphql::{GraphQLMiddleware, GraphQLConfig, GraphQLRequest, GraphQLResponse, GraphQLError, GraphQLSchema, ResolverContext, ResolverFn};
 
 // ============================================================================
 // Core Middleware Types

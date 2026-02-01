@@ -91,6 +91,14 @@ from cello._cello import (
     PyTemplateEngine as TemplateEngine,
 )
 
+# v0.7.0 - Enterprise features
+from cello._cello import (
+    OpenTelemetryConfig,
+    HealthCheckConfig,
+    DatabaseConfig,
+    GraphQLConfig,
+)
+
 __all__ = [
     # Core
     "App",
@@ -121,8 +129,13 @@ __all__ = [
     "TemplateEngine",
     "Depends",
     "cache",
+    # v0.7.0 - Enterprise features
+    "OpenTelemetryConfig",
+    "HealthCheckConfig",
+    "DatabaseConfig",
+    "GraphQLConfig",
 ]
-__version__ = "0.6.0"
+__version__ = "0.7.0"
 
 
 class Blueprint:
@@ -699,6 +712,80 @@ class App:
         print("   Swagger UI: /docs")
         print("   ReDoc:      /redoc")
         print("   OpenAPI:    /openapi.json")
+
+    # ========================================================================
+    # Enterprise Features (v0.7.0+)
+    # ========================================================================
+
+    def enable_telemetry(self, config: "OpenTelemetryConfig" = None):
+        """
+        Enable OpenTelemetry distributed tracing and metrics.
+
+        Args:
+            config: OpenTelemetryConfig instance
+
+        Example:
+            from cello import App, OpenTelemetryConfig
+
+            app = App()
+            app.enable_telemetry(OpenTelemetryConfig(
+                service_name="my-service",
+                otlp_endpoint="http://collector:4317",
+                sampling_rate=0.1
+            ))
+        """
+        if config is None:
+            config = OpenTelemetryConfig("cello-service")
+        self._app.enable_telemetry(config)
+
+    def enable_health_checks(self, config: "HealthCheckConfig" = None):
+        """
+        Enable Kubernetes-compatible health check endpoints.
+
+        Adds the following endpoints:
+        - GET /health/live - Liveness probe
+        - GET /health/ready - Readiness probe
+        - GET /health/startup - Startup probe
+        - GET /health - Full health report
+
+        Args:
+            config: HealthCheckConfig instance
+
+        Example:
+            from cello import App, HealthCheckConfig
+
+            app = App()
+            app.enable_health_checks(HealthCheckConfig(
+                base_path="/health",
+                include_system_info=True
+            ))
+        """
+        self._app.enable_health_checks(config)
+
+    def enable_graphql(self, config: "GraphQLConfig" = None):
+        """
+        Enable GraphQL endpoint with optional Playground.
+
+        Args:
+            config: GraphQLConfig instance
+
+        Example:
+            from cello import App, GraphQLConfig
+
+            app = App()
+            app.enable_graphql(GraphQLConfig(
+                path="/graphql",
+                playground=True,
+                introspection=True
+            ))
+        """
+        if config is None:
+            config = GraphQLConfig()
+        self._app.enable_graphql(config)
+
+    # ========================================================================
+    # End Enterprise Features
+    # ========================================================================
 
     def add_guard(self, guard):
         """

@@ -1,0 +1,169 @@
+/* Cello Framework - Custom Styles for Material for MkDocs */
+
+/* Color scheme */
+:root {
+  --md-primary-fg-color: #7e57c2;
+  --md-primary-fg-color--light: #b085f5;
+  --md-primary-fg-color--dark: #4d2c91;
+  --md-accent-fg-color: #ffc107;
+}
+
+[data-md-color-scheme="slate"] {
+  --md-primary-fg-color: #9575cd;
+  --md-primary-fg-color--light: #c7a4ff;
+  --md-primary-fg-color--dark: #65499c;
+}
+
+/* Hero section on home page */
+.md-typeset .md-button--primary {
+  background-color: var(--md-primary-fg-color);
+  border-color: var(--md-primary-fg-color);
+}
+
+.md-typeset .md-button--primary:hover {
+  background-color: var(--md-primary-fg-color--dark);
+  border-color: var(--md-primary-fg-color--dark);
+}
+
+/* Card grid improvements */
+.md-typeset .grid.cards > ul > li {
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 8px;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.md-typeset .grid.cards > ul > li:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* Code blocks */
+.md-typeset pre > code {
+  border-radius: 6px;
+}
+
+/* Admonition customizations */
+.md-typeset .admonition.tip,
+.md-typeset details.tip {
+  border-color: var(--md-accent-fg-color);
+}
+
+.md-typeset .tip > .admonition-title,
+.md-typeset .tip > summary {
+  background-color: rgba(255, 193, 7, 0.1);
+}
+
+/* Tables */
+.md-typeset table:not([class]) th {
+  background-color: var(--md-primary-fg-color);
+  color: white;
+}
+
+/* Status badges */
+.green {
+  color: #4caf50 !important;
+}
+
+.orange {
+  color: #ff9800 !important;
+}
+
+.red {
+  color: #f44336 !important;
+}
+
+/* Feature comparison table */
+.md-typeset table:not([class]) td:first-child {
+  font-weight: 500;
+}
+
+/* Navigation tab styling */
+.md-tabs__link--active {
+  font-weight: 600;
+}
+
+/* Footer customization */
+.md-footer-meta {
+  background-color: var(--md-primary-fg-color--dark);
+}
+
+/* Announcement bar */
+.md-banner {
+  background-color: var(--md-accent-fg-color);
+  color: black;
+}
+
+/* Search highlights */
+.md-search-result mark {
+  background-color: rgba(255, 193, 7, 0.4);
+}
+
+/* TOC active item */
+.md-nav__link--active {
+  color: var(--md-primary-fg-color) !important;
+  font-weight: 500;
+}
+
+/* Version selector */
+.md-version__current {
+  font-weight: 500;
+}
+
+/* Responsive adjustments */
+@media screen and (max-width: 76.1875em) {
+  .md-typeset .grid.cards > ul {
+    gap: 0.5rem;
+  }
+}
+
+/* Print styles */
+@media print {
+  .md-header,
+  .md-footer,
+  .md-sidebar {
+    display: none;
+  }
+
+  .md-main__inner {
+    margin: 0;
+    padding: 0;
+  }
+}
+
+/* Inline code styling */
+.md-typeset code {
+  background-color: rgba(126, 87, 194, 0.1);
+  border-radius: 4px;
+  padding: 0.1em 0.3em;
+}
+
+/* Task list checkboxes */
+.md-typeset .task-list-indicator::before {
+  background-color: var(--md-primary-fg-color);
+}
+
+/* Content tabs */
+.md-typeset .tabbed-labels > label {
+  font-weight: 500;
+}
+
+.md-typeset .tabbed-labels > label:hover {
+  color: var(--md-primary-fg-color);
+}
+
+/* Mermaid diagrams */
+.mermaid {
+  text-align: center;
+  margin: 1rem 0;
+}
+
+/* Benchmark table styling */
+.md-typeset table.benchmark th,
+.md-typeset table.benchmark td {
+  text-align: center;
+}
+
+.md-typeset table.benchmark td:first-child {
+  text-align: left;
+  font-weight: 600;
+}
