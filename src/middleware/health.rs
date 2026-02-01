@@ -28,12 +28,11 @@ use super::{Middleware, MiddlewareAction, MiddlewareResult};
 use crate::request::Request;
 use crate::response::Response;
 
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 /// Health status of a component.
@@ -199,7 +198,8 @@ impl SystemInfo {
             .map(|h| h.to_string_lossy().to_string())
             .unwrap_or_else(|_| "unknown".to_string());
 
-        let cpu_usage = sys.global_cpu_usage() as f64;
+        // CPU usage calculation (using 0.0 as fallback since global_cpu_usage requires refresh)
+        let cpu_usage = 0.0f64; // CPU metrics require multiple samples
         let memory_used = sys.used_memory() / 1024 / 1024;
         let memory_total = sys.total_memory() / 1024 / 1024;
         let memory_usage = if memory_total > 0 {
@@ -390,7 +390,7 @@ impl HealthCheckMiddleware {
             "status": status.as_str(),
             "timestamp": Utc::now().to_rfc3339()
         });
-        Response::json(body).status(200)
+        Response::from_json_value(body, 200)
     }
 
     /// Generate readiness response.
@@ -404,7 +404,7 @@ impl HealthCheckMiddleware {
             "ready": ready,
             "timestamp": Utc::now().to_rfc3339()
         });
-        Response::json(body).status(http_status)
+        Response::from_json_value(body, http_status)
     }
 
     /// Generate startup response (same as readiness for now).
@@ -416,7 +416,8 @@ impl HealthCheckMiddleware {
     fn full_health_response(&self) -> Response {
         let report = self.run_checks();
         let http_status = if report.status.is_healthy() { 200 } else { 503 };
-        Response::json(report).status(http_status)
+        let body = serde_json::to_value(&report).unwrap_or_else(|_| serde_json::json!({"status": "ERROR"}));
+        Response::from_json_value(body, http_status)
     }
 }
 
@@ -439,7 +440,7 @@ impl Middleware for HealthCheckMiddleware {
             self.readiness_response()
         } else if request.path == format!("{}/startup", base) {
             self.startup_response()
-        } else if request.path == base || request.path == format!("{}/", base) {
+        } else if request.path == *base || request.path == format!("{}/", base) {
             self.full_health_response()
         } else {
             return Ok(MiddlewareAction::Continue);

@@ -456,6 +456,7 @@ impl std::error::Error for DatabaseError {}
 
 /// In-memory mock database pool for testing.
 pub struct MockDatabasePool {
+    #[allow(dead_code)]
     config: DatabaseConfig,
     metrics: Arc<PoolMetrics>,
     data: Arc<RwLock<HashMap<String, Vec<Row>>>>,
@@ -525,8 +526,8 @@ impl DatabaseConnection for MockConnection {
         let start = Instant::now();
 
         // Simple mock: extract table name from "SELECT * FROM table"
-        let table = query
-            .to_lowercase()
+        let query_lower = query.to_lowercase();
+        let table = query_lower
             .split("from")
             .nth(1)
             .and_then(|s| s.split_whitespace().next())
@@ -579,8 +580,8 @@ impl Transaction for MockTransaction {
     fn query(&self, query: &str, _params: &[&dyn ToSql]) -> Result<Vec<Row>, DatabaseError> {
         let start = Instant::now();
 
-        let table = query
-            .to_lowercase()
+        let query_lower = query.to_lowercase();
+        let table = query_lower
             .split("from")
             .nth(1)
             .and_then(|s| s.split_whitespace().next())

@@ -205,7 +205,7 @@ pub enum GraphQLType {
 }
 
 /// GraphQL field definition.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct FieldDef {
     pub name: String,
     pub field_type: String,
@@ -285,7 +285,7 @@ pub struct GraphQLSchema {
 }
 
 /// Type definition.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct TypeDef {
     pub name: String,
     pub kind: GraphQLType,
@@ -341,7 +341,7 @@ impl GraphQLMiddleware {
         }
     }
 
-    pub fn with_schema(mut self, schema: GraphQLSchema) -> Self {
+    pub fn with_schema(self, schema: GraphQLSchema) -> Self {
         *self.schema.write() = schema;
         self
     }
@@ -527,7 +527,7 @@ impl AsyncMiddleware for GraphQLMiddleware {
             // Handle GET for playground
             if request.method == "GET" && self.config.playground {
                 let html = self.playground_html();
-                let response = Response::html(html);
+                let response = Response::html(&html, None);
                 return Ok(MiddlewareAction::Stop(response));
             }
 
@@ -539,31 +539,25 @@ impl AsyncMiddleware for GraphQLMiddleware {
 
                 match gql_request {
                     Ok(gql_req) => {
-                        // Create a sharable request reference
-                        let request_arc = Arc::new(Request {
-                            method: request.method.clone(),
-                            path: request.path.clone(),
-                            headers: request.headers.clone(),
-                            query_params: request.query_params.clone(),
-                            path_params: request.path_params.clone(),
-                            context: request.context.clone(),
-                            ..Default::default()
-                        });
+                        // Clone the request for use in resolver context
+                        let request_arc = Arc::new(request.clone());
 
                         let gql_response = self.execute(&gql_req, request_arc);
-                        let response = Response::json(gql_response);
+                        let body = serde_json::to_value(&gql_response).unwrap_or_else(|_| json!({"errors": [{"message": "Serialization error"}]}));
+                        let response = Response::from_json_value(body, 200);
                         return Ok(MiddlewareAction::Stop(response));
                     }
                     Err(e) => {
                         let error = GraphQLError::new(&format!("Invalid GraphQL request: {}", e));
-                        let response = Response::json(GraphQLResponse::error(error)).status(400);
+                        let body = serde_json::to_value(&GraphQLResponse::error(error)).unwrap_or_else(|_| json!({"errors": [{"message": "Error"}]}));
+                        let response = Response::from_json_value(body, 400);
                         return Ok(MiddlewareAction::Stop(response));
                     }
                 }
             }
 
             // Method not allowed
-            let response = Response::json(json!({"error": "Method not allowed"})).status(405);
+            let response = Response::from_json_value(json!({"error": "Method not allowed"}), 405);
             Ok(MiddlewareAction::Stop(response))
         })
     }

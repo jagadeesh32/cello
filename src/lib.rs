@@ -320,6 +320,7 @@ impl Cello {
     /// Enable OpenTelemetry distributed tracing and metrics.
     #[pyo3(signature = (config))]
     pub fn enable_telemetry(&mut self, config: PyOpenTelemetryConfig) {
+        let service_name = config.service_name.clone();
         let otel_config = middleware::telemetry::OpenTelemetryConfig {
             service_name: config.service_name,
             service_version: config.service_version,
@@ -335,7 +336,7 @@ impl Cello {
         let mw = middleware::telemetry::OpenTelemetryMiddleware::new(otel_config);
         self.middleware.add_async(mw);
 
-        println!("📊 OpenTelemetry enabled for service: {}", config.service_name);
+        println!("📊 OpenTelemetry enabled for service: {}", service_name);
     }
 
     /// Enable health check endpoints.

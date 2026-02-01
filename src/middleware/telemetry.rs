@@ -23,15 +23,12 @@ use super::{AsyncMiddleware, MiddlewareAction, MiddlewareResult};
 use crate::request::Request;
 use crate::response::Response;
 
-use opentelemetry::{
-    global,
-    trace::{Span, SpanKind, Status, TraceContextExt, Tracer},
-    Context, KeyValue,
-};
-use opentelemetry_sdk::{
-    trace::{self, Sampler},
-    Resource,
-};
+// OpenTelemetry types available for future full SDK integration
+#[allow(unused_imports)]
+use opentelemetry::global;
+#[allow(unused_imports)]
+use opentelemetry_sdk::trace::Sampler;
+use serde_json;
 use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
@@ -264,10 +261,10 @@ impl AsyncMiddleware for OpenTelemetryMiddleware {
             let span_id = Self::generate_span_id();
 
             // Store trace context in request for later use
-            request.context.set("trace_id", trace_id.clone());
-            request.context.set("span_id", span_id.clone());
-            request.context.set("parent_span_id", parent_span_id);
-            request.context.set("trace_start_time", format!("{}", Instant::now().elapsed().as_nanos()));
+            request.context.insert("trace_id".to_string(), serde_json::Value::String(trace_id.clone()));
+            request.context.insert("span_id".to_string(), serde_json::Value::String(span_id.clone()));
+            request.context.insert("parent_span_id".to_string(), serde_json::Value::String(parent_span_id));
+            request.context.insert("trace_start_time".to_string(), serde_json::Value::String(format!("{}", Instant::now().elapsed().as_nanos())));
 
             // Log span start
             tracing::info!(
@@ -292,9 +289,15 @@ impl AsyncMiddleware for OpenTelemetryMiddleware {
                 return Ok(MiddlewareAction::Continue);
             }
 
-            // Get trace context
-            let trace_id = request.context.get("trace_id").unwrap_or_default();
-            let span_id = request.context.get("span_id").unwrap_or_default();
+            // Get trace context as strings
+            let trace_id = request.context.get("trace_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let span_id = request.context.get("span_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
 
             // Calculate latency (simplified - in production would use proper timestamps)
             let latency_ms = 1; // Placeholder - would calculate from start time

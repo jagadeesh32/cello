@@ -100,14 +100,15 @@ plugins:
   - git-revision-date-localized:
       enable_creation_date: true
       type: timeago
-  - git-committers:
-      repository: jagadeesh32/cello
-      branch: main
-  - tags:
-      tags_file: tags.md
-  - social:
-      cards_layout_options:
-        background_color: "#7e57c2"
+  # git-committers disabled - requires MKDOCS_GIT_COMMITTERS_APIKEY
+  # - git-committers:
+  #     repository: jagadeesh32/cello
+  #     branch: main
+  - tags
+  # Social cards disabled - requires cairosvg and PIL
+  # - social:
+  #     cards_layout_options:
+  #       background_color: "#7e57c2"
   - offline
   - glightbox
   - mkdocstrings:
