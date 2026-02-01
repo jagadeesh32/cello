@@ -16,6 +16,76 @@ use crate::request::Request;
 use crate::response::Response;
 
 // ============================================================================
+// Health Monitoring (For Adaptive Limiting)
+// ============================================================================
+
+/// Tracks service health for adaptive rate limiting.
+#[derive(Debug)]
+pub struct HealthMonitor {
+    /// Total requests in current window
+    total: AtomicU64,
+    /// Error requests in current window (5xx)
+    errors: AtomicU64,
+    /// Window start time (unix sec)
+    start: AtomicU64,
+    /// Window size in seconds
+    window: u64,
+}
+
+impl HealthMonitor {
+    pub fn new(window_seconds: u64) -> Self {
+        Self {
+            total: AtomicU64::new(0),
+            errors: AtomicU64::new(0),
+            start: AtomicU64::new(Self::now()),
+            window: window_seconds,
+        }
+    }
+
+    fn now() -> u64 {
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs()
+    }
+
+    /// Record a request outcome.
+    pub fn record(&self, is_error: bool) {
+        let now = Self::now();
+        let start = self.start.load(Ordering::Relaxed);
+
+        if now >= start + self.window {
+            // Reset window if needed
+            // Use compare_exchange to ensure only one thread resets
+            if self
+                .start
+                .compare_exchange(start, now, Ordering::SeqCst, Ordering::Relaxed)
+                .is_ok()
+            {
+                self.total.store(0, Ordering::SeqCst);
+                self.errors.store(0, Ordering::SeqCst);
+            }
+        }
+
+        self.total.fetch_add(1, Ordering::Relaxed);
+        if is_error {
+            self.errors.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+
+    /// Get current error rate (0.0 - 1.0).
+    pub fn error_rate(&self) -> f64 {
+        let total = self.total.load(Ordering::Relaxed) as f64;
+        if total == 0.0 {
+            return 0.0;
+        }
+        let errors = self.errors.load(Ordering::Relaxed) as f64;
+        errors / total
+    }
+}
+
+
+// ============================================================================
 // Rate Limit Store Trait
 // ============================================================================
 
@@ -102,6 +172,28 @@ impl Default for TokenBucketConfig {
     }
 }
 
+/// Adaptive Rate Limiting Configuration.
+#[derive(Clone, Debug)]
+pub struct AdaptiveConfig {
+    /// Base configuration (standard limit)
+    pub base: TokenBucketConfig,
+    /// Minimum limit when system is unhealthy
+    pub min_capacity: u64,
+    /// Error rate threshold (0.0 - 1.0) to start throttling
+    pub error_threshold: f64,
+}
+
+impl AdaptiveConfig {
+    pub fn new(base: TokenBucketConfig, min_capacity: u64, error_threshold: f64) -> Self {
+        Self {
+            base,
+            min_capacity,
+            error_threshold,
+        }
+    }
+}
+
+
 /// Token bucket state.
 struct TokenBucketState {
     tokens: f64,
@@ -111,15 +203,18 @@ struct TokenBucketState {
 /// In-memory token bucket store.
 pub struct TokenBucketStore {
     buckets: DashMap<String, TokenBucketState>,
+    health: Arc<HealthMonitor>,
 }
 
 impl TokenBucketStore {
     pub fn new() -> Self {
         Self {
             buckets: DashMap::new(),
+            health: Arc::new(HealthMonitor::new(10)), // 10s window for health
         }
     }
 }
+
 
 impl Default for TokenBucketStore {
     fn default() -> Self {
@@ -129,9 +224,28 @@ impl Default for TokenBucketStore {
 
 impl RateLimitStore for TokenBucketStore {
     fn check(&self, key: &str, config: &RateLimitConfig) -> RateLimitState {
-        let bucket_config = match config {
-            RateLimitConfig::TokenBucket(c) => c,
+        let (bucket_config, is_adaptive) = match config {
+            RateLimitConfig::TokenBucket(c) => (c, false),
+            RateLimitConfig::Adaptive(c) => (&c.base, true),
             _ => return self.peek(key, config),
+        };
+
+        // If adaptive, check health and adjust capacity
+        let capacity = if is_adaptive {
+            if let RateLimitConfig::Adaptive(c) = config {
+                let error_rate = self.health.error_rate();
+                if error_rate > c.error_threshold {
+                    // Linearly interpolate between base.capacity and min_capacity
+                    // Or just clamp to min_capacity for simplicity/safety
+                    c.min_capacity
+                } else {
+                    bucket_config.capacity
+                }
+            } else {
+                bucket_config.capacity
+            }
+        } else {
+            bucket_config.capacity
         };
 
         let now = Instant::now();
@@ -143,7 +257,7 @@ impl RateLimitStore for TokenBucketStore {
 
         let mut entry = self.buckets.entry(key.to_string()).or_insert_with(|| {
             TokenBucketState {
-                tokens: bucket_config.capacity as f64,
+                tokens: capacity as f64,
                 last_refill: now,
             }
         });
@@ -151,7 +265,7 @@ impl RateLimitStore for TokenBucketStore {
         // Refill tokens
         let elapsed = now.duration_since(entry.last_refill).as_secs_f64();
         let refill = elapsed * bucket_config.refill_rate;
-        entry.tokens = (entry.tokens + refill).min(bucket_config.capacity as f64);
+        entry.tokens = (entry.tokens + refill).min(capacity as f64);
         entry.last_refill = now;
 
         // Try to consume a token
@@ -159,14 +273,14 @@ impl RateLimitStore for TokenBucketStore {
             entry.tokens -= 1.0;
             RateLimitState {
                 remaining: entry.tokens as u64,
-                limit: bucket_config.capacity,
+                limit: capacity,
                 reset: reset_time,
                 exceeded: false,
             }
         } else {
             RateLimitState {
                 remaining: 0,
-                limit: bucket_config.capacity,
+                limit: capacity,
                 reset: reset_time,
                 exceeded: true,
             }
@@ -176,6 +290,7 @@ impl RateLimitStore for TokenBucketStore {
     fn peek(&self, key: &str, config: &RateLimitConfig) -> RateLimitState {
         let bucket_config = match config {
             RateLimitConfig::TokenBucket(c) => c,
+            RateLimitConfig::Adaptive(c) => &c.base,
             _ => {
                 return RateLimitState {
                     remaining: 0,
@@ -440,6 +555,7 @@ impl RateLimitStore for FixedWindowStore {
         let limit = match config {
             RateLimitConfig::TokenBucket(c) => c.capacity,
             RateLimitConfig::SlidingWindow(c) => c.max_requests,
+            RateLimitConfig::Adaptive(c) => c.base.capacity,
         };
 
         let current_window = self.current_window();
@@ -482,6 +598,7 @@ impl RateLimitStore for FixedWindowStore {
         let limit = match config {
             RateLimitConfig::TokenBucket(c) => c.capacity,
             RateLimitConfig::SlidingWindow(c) => c.max_requests,
+            RateLimitConfig::Adaptive(c) => c.base.capacity,
         };
 
         let current_window = self.current_window();
@@ -526,6 +643,7 @@ impl RateLimitStore for FixedWindowStore {
 pub enum RateLimitConfig {
     TokenBucket(TokenBucketConfig),
     SlidingWindow(SlidingWindowConfig),
+    Adaptive(AdaptiveConfig),
 }
 
 impl Default for RateLimitConfig {
@@ -617,6 +735,7 @@ pub struct RateLimitMiddleware {
     skip_paths: Vec<String>,
     headers_enabled: bool,
     custom_exceeded_response: Option<Arc<dyn Fn() -> Response + Send + Sync>>,
+    health: Option<Arc<HealthMonitor>>,
 }
 
 impl RateLimitMiddleware {
@@ -629,6 +748,7 @@ impl RateLimitMiddleware {
             skip_paths: Vec::new(),
             headers_enabled: true,
             custom_exceeded_response: None,
+            health: None,
         }
     }
 
@@ -641,6 +761,23 @@ impl RateLimitMiddleware {
             skip_paths: Vec::new(),
             headers_enabled: true,
             custom_exceeded_response: None,
+            health: None,
+        }
+    }
+
+    /// Create new adaptive rate limit middleware.
+    pub fn adaptive(config: AdaptiveConfig) -> Self {
+        let store = TokenBucketStore::new();
+        let health = store.health.clone();
+        
+        Self {
+            store: Arc::new(store),
+            config: RateLimitConfig::Adaptive(config),
+            key_extractor: KeyExtractors::client_ip(),
+            skip_paths: Vec::new(),
+            headers_enabled: true,
+            custom_exceeded_response: None,
+            health: Some(health),
         }
     }
 
@@ -653,6 +790,7 @@ impl RateLimitMiddleware {
             skip_paths: Vec::new(),
             headers_enabled: true,
             custom_exceeded_response: None,
+            health: None,
         }
     }
 
@@ -768,6 +906,13 @@ impl Middleware for RateLimitMiddleware {
                 self.add_headers(response, &state);
             }
         }
+
+        // Update health monitor if adaptive
+        if let Some(ref health) = self.health {
+            let is_error = response.status >= 500;
+            health.record(is_error);
+        }
+
         Ok(MiddlewareAction::Continue)
     }
 

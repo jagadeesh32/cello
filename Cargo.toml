@@ -1,6 +1,6 @@
 [package]
 name = "cello-framework"
-version = "0.5.1"
+version = "0.7.0"
 edition = "2021"
 description = "Ultra-fast Rust-powered Python async web framework"
 license = "MIT"
@@ -104,6 +104,39 @@ prometheus = { version = "0.13", features = ["process"] }
 
 # Date/time handling for exception timestamps
 chrono = { version = "0.4", features = ["serde"] }
+
+# === Enterprise Features v0.7.0+ ===
+
+# OpenTelemetry - Distributed Tracing & Observability
+opentelemetry = { version = "0.21", features = ["trace", "metrics"] }
+opentelemetry-otlp = { version = "0.14", features = ["tonic", "metrics"] }
+opentelemetry_sdk = { version = "0.21", features = ["rt-tokio", "trace", "metrics"] }
+tracing-opentelemetry = "0.22"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# Database Connection Pooling
+deadpool = "0.10"
+deadpool-postgres = { version = "0.12", optional = true }
+tokio-postgres = { version = "0.7", optional = true }
+
+# GraphQL Support
+async-graphql = { version = "7", optional = true }
+async-graphql-value = { version = "7", optional = true }
+
+# gRPC Support
+tonic = { version = "0.11", optional = true }
+prost = { version = "0.12", optional = true }
+
+# Additional utilities for enterprise features
+sysinfo = "0.30"  # System metrics for health checks
+hostname = "0.3"  # Hostname for tracing
+
+[features]
+default = []
+postgres = ["deadpool-postgres", "tokio-postgres"]
+graphql = ["async-graphql", "async-graphql-value"]
+grpc = ["tonic", "prost"]
+full = ["postgres", "graphql", "grpc"]
 
 [dev-dependencies]
 reqwest = { version = "0.11", features = ["blocking", "json", "multipart"] }

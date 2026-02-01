@@ -71,6 +71,9 @@ pub struct Cello {
     dependency_container: Arc<dependency::DependencyContainer>,
     guards: Arc<middleware::guards::GuardsMiddleware>,
     prometheus: Arc<parking_lot::RwLock<Option<middleware::prometheus::PrometheusMiddleware>>>,
+    cache_store: Arc<parking_lot::RwLock<Option<Arc<dyn middleware::cache::CacheStore>>>>,
+    startup_handlers: Vec<PyObject>,
+    shutdown_handlers: Vec<PyObject>,
 }
 
 #[pymethods]
@@ -86,6 +89,9 @@ impl Cello {
             dependency_container: Arc::new(dependency::DependencyContainer::new()),
             guards: Arc::new(middleware::guards::GuardsMiddleware::new()),
             prometheus: Arc::new(parking_lot::RwLock::new(None)),
+            cache_store: Arc::new(parking_lot::RwLock::new(None)),
+            startup_handlers: Vec::new(),
+            shutdown_handlers: Vec::new(),
         }
     }
 
@@ -165,6 +171,43 @@ impl Cello {
         Ok(())
     }
 
+    /// Enable rate limiting.
+    #[pyo3(signature = (config))]
+    pub fn enable_rate_limit(&mut self, config: PyRateLimitConfig) -> PyResult<()> {
+        let mw = match config.algorithm.as_str() {
+            "token_bucket" => {
+                let bucket = middleware::rate_limit::TokenBucketConfig::new(
+                    config.capacity,
+                    config.refill_rate as f64,
+                );
+                middleware::rate_limit::RateLimitMiddleware::token_bucket(bucket)
+            }
+            "sliding_window" => {
+                let window = middleware::rate_limit::SlidingWindowConfig::new(
+                    config.capacity,
+                    std::time::Duration::from_secs(config.window_secs),
+                );
+                middleware::rate_limit::RateLimitMiddleware::sliding_window(window)
+            }
+            "adaptive" => {
+                let base = middleware::rate_limit::TokenBucketConfig::new(
+                    config.capacity,
+                    config.refill_rate as f64,
+                );
+                let adaptive_config = middleware::rate_limit::AdaptiveConfig::new(
+                    base,
+                    config.min_capacity.unwrap_or(config.capacity / 2),
+                    config.error_threshold.unwrap_or(0.10),
+                );
+                middleware::rate_limit::RateLimitMiddleware::adaptive(adaptive_config)
+            }
+            _ => return Err(pyo3::exceptions::PyValueError::new_err("Unknown rate limit algorithm")),
+        };
+        
+        self.middleware.add(mw);
+        Ok(())
+    }
+
     pub fn add_guard(&mut self, guard: PyObject) -> PyResult<()> {
         let python_guard = middleware::guards::PythonGuard::new(guard);
         self.guards.add_guard(python_guard);
@@ -191,6 +234,164 @@ impl Cello {
         self.middleware.add(compression);
     }
 
+    /// Enable caching middleware.
+    #[pyo3(signature = (ttl=300, methods=None, exclude_paths=None))]
+    pub fn enable_caching(&mut self, ttl: u64, methods: Option<Vec<String>>, exclude_paths: Option<Vec<String>>) {
+         let mut config = middleware::cache::CacheConfig::default();
+         config.default_ttl = ttl;
+         if let Some(m) = methods {
+             config.methods = m;
+         }
+         if let Some(e) = exclude_paths {
+             config.exclude_paths = e;
+         }
+         
+
+         
+         let mw = middleware::cache::CacheMiddleware::with_config(config.clone());
+         
+         // Store reference for invalidation
+         *self.cache_store.write() = Some(config.store);
+         
+         self.middleware.add_async(mw);
+    }
+
+    /// Enable circuit breaker middleware.
+    #[pyo3(signature = (failure_threshold=5, reset_timeout=30, half_open_target=3, failure_codes=None))]
+    pub fn enable_circuit_breaker(
+        &mut self,
+        failure_threshold: u32,
+        reset_timeout: u64,
+        half_open_target: u32,
+        failure_codes: Option<Vec<u16>>
+    ) {
+         let mut config = middleware::circuit_breaker::CircuitBreakerConfig::default();
+         config.failure_threshold = failure_threshold;
+         config.reset_timeout = std::time::Duration::from_secs(reset_timeout);
+         config.half_open_target = half_open_target;
+         if let Some(codes) = failure_codes {
+             config.failure_codes = codes;
+         }
+         
+         let mw = middleware::circuit_breaker::CircuitBreakerMiddleware::new(config);
+         self.middleware.add(mw);
+    }
+
+    /// Register a startup handler.
+    pub fn on_startup(&mut self, handler: PyObject) {
+        self.startup_handlers.push(handler);
+    }
+
+    /// Register a shutdown handler.
+    pub fn on_shutdown(&mut self, handler: PyObject) {
+        self.shutdown_handlers.push(handler);
+    }
+
+    /// Invalidate cache tags.
+    #[pyo3(signature = (tags))]
+    pub fn invalidate_cache(&self, tags: Vec<String>) -> PyResult<()> {
+        if let Some(store) = self.cache_store.read().as_ref() {
+            let store = store.clone();
+            // Use std::thread to spawn if runtime not available or just spawn on default
+            // Since this runs in Python thread, we might not be in tokio context.
+            // But Cello starts a runtime?
+            // Safer to use block_in_place or just spawn if we knew we are in runtime.
+            // For now, let's assume we can just ignore errors or use simple blocking if the store is InMemory.
+            // But store is async.
+            // Let's spawn a thread that creates a runtime? No too heavy.
+            // let's try to get handle.
+            if let Ok(handle) = tokio::runtime::Handle::try_current() {
+                 handle.spawn(async move {
+                     let _ = store.invalidate_tags(&tags).await;
+                 });
+            } else {
+                 // Fallback: This might happen if called before app.run() or from outside.
+                 // We can start a temp runtime or just print warning.
+                 eprintln!("Warning: Cache invalidation failed - no async runtime");
+            }
+        }
+        Ok(())
+    }
+
+    // ========================================================================
+    // Enterprise Features (v0.7.0+)
+    // ========================================================================
+
+    /// Enable OpenTelemetry distributed tracing and metrics.
+    #[pyo3(signature = (config))]
+    pub fn enable_telemetry(&mut self, config: PyOpenTelemetryConfig) {
+        let service_name = config.service_name.clone();
+        let otel_config = middleware::telemetry::OpenTelemetryConfig {
+            service_name: config.service_name,
+            service_version: config.service_version,
+            otlp_endpoint: config.otlp_endpoint,
+            sampling_rate: config.sampling_rate,
+            export_traces: config.export_traces,
+            export_metrics: config.export_metrics,
+            propagate_context: true,
+            excluded_paths: config.excluded_paths,
+            resource_attributes: std::collections::HashMap::new(),
+        };
+
+        let mw = middleware::telemetry::OpenTelemetryMiddleware::new(otel_config);
+        self.middleware.add_async(mw);
+
+        println!("📊 OpenTelemetry enabled for service: {}", service_name);
+    }
+
+    /// Enable health check endpoints.
+    #[pyo3(signature = (config=None))]
+    pub fn enable_health_checks(&mut self, config: Option<PyHealthCheckConfig>) {
+        let config = config.unwrap_or_else(|| PyHealthCheckConfig::new("/health", true, false, None, 5, Some(5)));
+
+        let health_config = middleware::health::HealthCheckConfig {
+            base_path: config.base_path.clone(),
+            include_details: config.include_details,
+            include_system_info: config.include_system_info,
+            version: config.version,
+            timeout: std::time::Duration::from_secs(config.timeout_secs),
+            cache_duration: config.cache_secs.map(std::time::Duration::from_secs),
+        };
+
+        let mw = middleware::health::HealthCheckMiddleware::new(health_config);
+        self.middleware.add(mw);
+
+        println!("🏥 Health checks enabled:");
+        println!("   Liveness:  {}/live", config.base_path);
+        println!("   Readiness: {}/ready", config.base_path);
+        println!("   Full:      {}", config.base_path);
+    }
+
+    /// Enable GraphQL endpoint.
+    #[pyo3(signature = (config=None))]
+    pub fn enable_graphql(&mut self, config: Option<PyGraphQLConfig>) {
+        let config = config.unwrap_or_else(|| PyGraphQLConfig::new("/graphql", true, true, Some(10), Some(1000), false, false));
+
+        let gql_config = middleware::graphql::GraphQLConfig {
+            path: config.path.clone(),
+            playground: config.playground,
+            playground_path: None,
+            introspection: config.introspection,
+            max_depth: config.max_depth,
+            max_complexity: config.max_complexity,
+            batching: config.batching,
+            tracing: config.tracing,
+        };
+
+        let mw = middleware::graphql::GraphQLMiddleware::new(gql_config);
+        self.middleware.add_async(mw);
+
+        println!("🔷 GraphQL enabled:");
+        println!("   Endpoint:   {}", config.path);
+        if config.playground {
+            println!("   Playground: {} (GET)", config.path);
+        }
+    }
+
+    // ========================================================================
+    // End Enterprise Features
+    // ========================================================================
+
     /// Enable OpenAPI documentation endpoints.
     /// This adds:
     /// - GET /docs - Swagger UI
@@ -199,7 +400,7 @@ impl Cello {
     #[pyo3(signature = (title=None, version=None))]
     pub fn enable_openapi(&mut self, py: Python<'_>, title: Option<String>, version: Option<String>) -> PyResult<()> {
         let title = title.unwrap_or_else(|| "Cello API".to_string());
-        let version = version.unwrap_or_else(|| "0.5.1".to_string());
+        let version = version.unwrap_or_else(|| "0.7.0".to_string());
 
         // Store title and version for later use
         let title_clone = title.clone();
@@ -329,7 +530,28 @@ def openapi_handler(request):
                     self.guards.clone(),
                     self.prometheus.clone(),
                 );
-                server.run().await
+                
+                // Execute startup handlers
+                Python::with_gil(|py| {
+                    for handler in &self.startup_handlers {
+                        if let Err(e) = call_lifecycle_handler(py, handler) {
+                            eprintln!("Error in startup handler: {}", e);
+                        }
+                    }
+                });
+
+                let result = server.run().await;
+                
+                // Execute shutdown handlers
+                Python::with_gil(|py| {
+                    for handler in &self.shutdown_handlers {
+                        if let Err(e) = call_lifecycle_handler(py, handler) {
+                            eprintln!("Error in shutdown handler: {}", e);
+                        }
+                    }
+                });
+                
+                result
             })
         })
     }
@@ -618,18 +840,24 @@ pub struct PyRateLimitConfig {
     pub window_secs: u64,
     #[pyo3(get, set)]
     pub key_by: String,
+    #[pyo3(get, set)]
+    pub min_capacity: Option<u64>,
+    #[pyo3(get, set)]
+    pub error_threshold: Option<f64>,
 }
 
 #[pymethods]
 impl PyRateLimitConfig {
     #[new]
-    #[pyo3(signature = (algorithm="token_bucket", capacity=100, refill_rate=10, window_secs=60, key_by="ip"))]
+    #[pyo3(signature = (algorithm="token_bucket", capacity=100, refill_rate=10, window_secs=60, key_by="ip", min_capacity=None, error_threshold=None))]
     pub fn new(
         algorithm: &str,
         capacity: u64,
         refill_rate: u64,
         window_secs: u64,
         key_by: &str,
+        min_capacity: Option<u64>,
+        error_threshold: Option<f64>,
     ) -> Self {
         Self {
             algorithm: algorithm.to_string(),
@@ -637,19 +865,27 @@ impl PyRateLimitConfig {
             refill_rate,
             window_secs,
             key_by: key_by.to_string(),
+            min_capacity,
+            error_threshold,
         }
     }
 
     /// Create token bucket config.
     #[staticmethod]
     pub fn token_bucket(capacity: u64, refill_rate: u64) -> Self {
-        Self::new("token_bucket", capacity, refill_rate, 60, "ip")
+        Self::new("token_bucket", capacity, refill_rate, 60, "ip", None, None)
+    }
+
+    /// Create adaptive config.
+    #[staticmethod]
+    pub fn adaptive(capacity: u64, refill_rate: u64, min_capacity: u64, error_threshold: f64) -> Self {
+        Self::new("adaptive", capacity, refill_rate, 60, "ip", Some(min_capacity), Some(error_threshold))
     }
 
     /// Create sliding window config.
     #[staticmethod]
     pub fn sliding_window(max_requests: u64, window_secs: u64) -> Self {
-        Self::new("sliding_window", max_requests, 0, window_secs, "ip")
+        Self::new("sliding_window", max_requests, 0, window_secs, "ip", None, None)
     }
 }
 
@@ -842,6 +1078,247 @@ impl PyStaticFilesConfig {
     }
 }
 
+// ============================================================================
+// Enterprise Configuration Classes (v0.7.0+)
+// ============================================================================
+
+/// Python-exposed OpenTelemetry configuration.
+#[pyclass(name = "OpenTelemetryConfig")]
+#[derive(Clone)]
+pub struct PyOpenTelemetryConfig {
+    #[pyo3(get, set)]
+    pub service_name: String,
+    #[pyo3(get, set)]
+    pub service_version: String,
+    #[pyo3(get, set)]
+    pub otlp_endpoint: Option<String>,
+    #[pyo3(get, set)]
+    pub sampling_rate: f64,
+    #[pyo3(get, set)]
+    pub export_traces: bool,
+    #[pyo3(get, set)]
+    pub export_metrics: bool,
+    #[pyo3(get, set)]
+    pub excluded_paths: Vec<String>,
+}
+
+#[pymethods]
+impl PyOpenTelemetryConfig {
+    #[new]
+    #[pyo3(signature = (service_name, service_version="0.1.0", otlp_endpoint=None, sampling_rate=1.0, export_traces=true, export_metrics=true, excluded_paths=None))]
+    pub fn new(
+        service_name: &str,
+        service_version: &str,
+        otlp_endpoint: Option<String>,
+        sampling_rate: f64,
+        export_traces: bool,
+        export_metrics: bool,
+        excluded_paths: Option<Vec<String>>,
+    ) -> Self {
+        Self {
+            service_name: service_name.to_string(),
+            service_version: service_version.to_string(),
+            otlp_endpoint,
+            sampling_rate: sampling_rate.clamp(0.0, 1.0),
+            export_traces,
+            export_metrics,
+            excluded_paths: excluded_paths.unwrap_or_else(|| vec!["/health".to_string(), "/metrics".to_string()]),
+        }
+    }
+}
+
+/// Python-exposed Health Check configuration.
+#[pyclass(name = "HealthCheckConfig")]
+#[derive(Clone)]
+pub struct PyHealthCheckConfig {
+    #[pyo3(get, set)]
+    pub base_path: String,
+    #[pyo3(get, set)]
+    pub include_details: bool,
+    #[pyo3(get, set)]
+    pub include_system_info: bool,
+    #[pyo3(get, set)]
+    pub version: Option<String>,
+    #[pyo3(get, set)]
+    pub timeout_secs: u64,
+    #[pyo3(get, set)]
+    pub cache_secs: Option<u64>,
+}
+
+#[pymethods]
+impl PyHealthCheckConfig {
+    #[new]
+    #[pyo3(signature = (base_path="/health", include_details=true, include_system_info=false, version=None, timeout_secs=5, cache_secs=None))]
+    pub fn new(
+        base_path: &str,
+        include_details: bool,
+        include_system_info: bool,
+        version: Option<String>,
+        timeout_secs: u64,
+        cache_secs: Option<u64>,
+    ) -> Self {
+        Self {
+            base_path: base_path.to_string(),
+            include_details,
+            include_system_info,
+            version,
+            timeout_secs,
+            cache_secs,
+        }
+    }
+
+    /// Create Kubernetes-compatible health check config.
+    #[staticmethod]
+    pub fn kubernetes() -> Self {
+        Self::new("/health", false, false, None, 5, Some(5))
+    }
+
+    /// Create detailed health check config.
+    #[staticmethod]
+    pub fn detailed() -> Self {
+        Self::new("/health", true, true, None, 10, None)
+    }
+}
+
+/// Python-exposed Database configuration.
+#[pyclass(name = "DatabaseConfig")]
+#[derive(Clone)]
+pub struct PyDatabaseConfig {
+    #[pyo3(get, set)]
+    pub url: String,
+    #[pyo3(get, set)]
+    pub pool_size: usize,
+    #[pyo3(get, set)]
+    pub min_idle: usize,
+    #[pyo3(get, set)]
+    pub max_lifetime_secs: u64,
+    #[pyo3(get, set)]
+    pub connection_timeout_secs: u64,
+    #[pyo3(get, set)]
+    pub idle_timeout_secs: u64,
+    #[pyo3(get, set)]
+    pub application_name: Option<String>,
+}
+
+#[pymethods]
+impl PyDatabaseConfig {
+    #[new]
+    #[pyo3(signature = (url, pool_size=10, min_idle=1, max_lifetime_secs=1800, connection_timeout_secs=5, idle_timeout_secs=300, application_name=None))]
+    pub fn new(
+        url: &str,
+        pool_size: usize,
+        min_idle: usize,
+        max_lifetime_secs: u64,
+        connection_timeout_secs: u64,
+        idle_timeout_secs: u64,
+        application_name: Option<String>,
+    ) -> Self {
+        Self {
+            url: url.to_string(),
+            pool_size,
+            min_idle,
+            max_lifetime_secs,
+            connection_timeout_secs,
+            idle_timeout_secs,
+            application_name,
+        }
+    }
+
+    /// Create PostgreSQL config.
+    #[staticmethod]
+    #[pyo3(signature = (host, port=5432, database="postgres", user="postgres", password=None, pool_size=10))]
+    pub fn postgres(
+        host: &str,
+        port: u16,
+        database: &str,
+        user: &str,
+        password: Option<String>,
+        pool_size: usize,
+    ) -> Self {
+        let url = if let Some(pw) = password {
+            format!("postgresql://{}:{}@{}:{}/{}", user, pw, host, port, database)
+        } else {
+            format!("postgresql://{}@{}:{}/{}", user, host, port, database)
+        };
+        Self::new(&url, pool_size, 1, 1800, 5, 300, Some("cello".to_string()))
+    }
+}
+
+/// Python-exposed GraphQL configuration.
+#[pyclass(name = "GraphQLConfig")]
+#[derive(Clone)]
+pub struct PyGraphQLConfig {
+    #[pyo3(get, set)]
+    pub path: String,
+    #[pyo3(get, set)]
+    pub playground: bool,
+    #[pyo3(get, set)]
+    pub introspection: bool,
+    #[pyo3(get, set)]
+    pub max_depth: Option<usize>,
+    #[pyo3(get, set)]
+    pub max_complexity: Option<usize>,
+    #[pyo3(get, set)]
+    pub batching: bool,
+    #[pyo3(get, set)]
+    pub tracing: bool,
+}
+
+#[pymethods]
+impl PyGraphQLConfig {
+    #[new]
+    #[pyo3(signature = (path="/graphql", playground=true, introspection=true, max_depth=None, max_complexity=None, batching=false, tracing=false))]
+    pub fn new(
+        path: &str,
+        playground: bool,
+        introspection: bool,
+        max_depth: Option<usize>,
+        max_complexity: Option<usize>,
+        batching: bool,
+        tracing: bool,
+    ) -> Self {
+        Self {
+            path: path.to_string(),
+            playground,
+            introspection,
+            max_depth,
+            max_complexity,
+            batching,
+            tracing,
+        }
+    }
+
+    /// Create production-safe config (no playground, no introspection).
+    #[staticmethod]
+    pub fn production() -> Self {
+        Self::new("/graphql", false, false, Some(10), Some(1000), false, false)
+    }
+
+    /// Create development config (playground enabled).
+    #[staticmethod]
+    pub fn development() -> Self {
+        Self::new("/graphql", true, true, Some(20), None, true, true)
+    }
+}
+
+/// Helper to call lifecycle handlers (sync or async).
+fn call_lifecycle_handler(py: Python<'_>, handler: &PyObject) -> PyResult<()> {
+    // Call the handler. If it returns a coroutine, run it.
+    let result = handler.call0(py)?;
+    
+    let inspect = py.import("inspect")?;
+    let is_coroutine = inspect
+        .call_method1("iscoroutine", (result.as_ref(py),))?
+        .is_true()?;
+    
+    if is_coroutine {
+        let asyncio = py.import("asyncio")?;
+        let _ = asyncio.call_method1("run", (result.as_ref(py),))?;
+    }
+    
+    Ok(())
+}
+
 /// Python module definition.
 #[pymodule]
 fn _cello(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
@@ -884,6 +1361,12 @@ fn _cello(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
 
     // v0.5.0 - Template Engine
     m.add_class::<template::PyTemplateEngine>()?;
+
+    // v0.7.0 - Enterprise Configuration Classes
+    m.add_class::<PyOpenTelemetryConfig>()?;
+    m.add_class::<PyHealthCheckConfig>()?;
+    m.add_class::<PyDatabaseConfig>()?;
+    m.add_class::<PyGraphQLConfig>()?;
 
     Ok(())
 }

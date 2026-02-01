@@ -51,10 +51,9 @@ Example:
 
     app.register_blueprint(api)
 
-    if __name__ == "__main__":
-        app.run()
 """
 
+from .validation import wrap_handler_with_validation
 from cello._cello import (
     Blueprint as _RustBlueprint,
 )
@@ -92,6 +91,14 @@ from cello._cello import (
     PyTemplateEngine as TemplateEngine,
 )
 
+# v0.7.0 - Enterprise features
+from cello._cello import (
+    OpenTelemetryConfig,
+    HealthCheckConfig,
+    DatabaseConfig,
+    GraphQLConfig,
+)
+
 __all__ = [
     # Core
     "App",
@@ -121,8 +128,14 @@ __all__ = [
     "BackgroundTasks",
     "TemplateEngine",
     "Depends",
+    "cache",
+    # v0.7.0 - Enterprise features
+    "OpenTelemetryConfig",
+    "HealthCheckConfig",
+    "DatabaseConfig",
+    "GraphQLConfig",
 ]
-__version__ = "0.5.1"
+__version__ = "0.7.0"
 
 
 class Blueprint:
@@ -236,7 +249,7 @@ class App:
             "tags": tags or []
         })
 
-    def get(self, path: str, tags: list = None, summary: str = None, description: str = None):
+    def get(self, path: str, tags: list = None, summary: str = None, description: str = None, guards: list = None):
         """
         Register a GET route.
 
@@ -245,65 +258,152 @@ class App:
             tags: OpenAPI tags for grouping
             summary: OpenAPI summary
             description: OpenAPI description
+            guards: List of guard functions/classes
 
         Returns:
             Decorator function for the route handler.
 
         Example:
-            @app.get("/hello/{name}")
+            @app.get("/hello/{name}", guards=[Authenticated()])
             def hello(request):
                 return {"message": f"Hello, {request.params['name']}!"}
         """
         def decorator(func):
-            self._app.get(path, func)
+            wrapped = wrap_handler_with_validation(func)
+            
+            if guards:
+                from .guards import verify_guards
+                original_handler = wrapped
+                
+                # We need to wrap again to check guards
+                # Note: Rust calls the handler with (request, ...) so signature is preserved?
+                # wrap_handler_with_validation preserves signature mostly but handles args.
+                # Here we just need to intercept.
+                
+                def guard_wrapper(request, *args, **kwargs):
+                    verify_guards(guards, request)
+                    return original_handler(request, *args, **kwargs)
+                
+                # Copy metadata
+                import functools
+                functools.update_wrapper(guard_wrapper, original_handler)
+                wrapped = guard_wrapper
+
+            self._app.get(path, wrapped)
             self._register_route("GET", path, func, tags, summary, description)
-            return func
+            return wrapped
         return decorator
 
-    def post(self, path: str, tags: list = None, summary: str = None, description: str = None):
+    def post(self, path: str, tags: list = None, summary: str = None, description: str = None, guards: list = None):
         """Register a POST route."""
         def decorator(func):
-            self._app.post(path, func)
+            wrapped = wrap_handler_with_validation(func)
+            if guards:
+                from .guards import verify_guards
+                original_handler = wrapped
+                def guard_wrapper(request, *args, **kwargs):
+                    verify_guards(guards, request)
+                    return original_handler(request, *args, **kwargs)
+                import functools
+                functools.update_wrapper(guard_wrapper, original_handler)
+                wrapped = guard_wrapper
+
+            self._app.post(path, wrapped)
             self._register_route("POST", path, func, tags, summary, description)
-            return func
+            return wrapped
         return decorator
 
-    def put(self, path: str, tags: list = None, summary: str = None, description: str = None):
+    def put(self, path: str, tags: list = None, summary: str = None, description: str = None, guards: list = None):
         """Register a PUT route."""
         def decorator(func):
-            self._app.put(path, func)
+            wrapped = wrap_handler_with_validation(func)
+            if guards:
+                from .guards import verify_guards
+                original_handler = wrapped
+                def guard_wrapper(request, *args, **kwargs):
+                    verify_guards(guards, request)
+                    return original_handler(request, *args, **kwargs)
+                import functools
+                functools.update_wrapper(guard_wrapper, original_handler)
+                wrapped = guard_wrapper
+
+            self._app.put(path, wrapped)
             self._register_route("PUT", path, func, tags, summary, description)
-            return func
+            return wrapped
         return decorator
 
-    def delete(self, path: str, tags: list = None, summary: str = None, description: str = None):
+    def delete(self, path: str, tags: list = None, summary: str = None, description: str = None, guards: list = None):
         """Register a DELETE route."""
         def decorator(func):
-            self._app.delete(path, func)
+            wrapped = wrap_handler_with_validation(func)
+            if guards:
+                from .guards import verify_guards
+                original_handler = wrapped
+                def guard_wrapper(request, *args, **kwargs):
+                    verify_guards(guards, request)
+                    return original_handler(request, *args, **kwargs)
+                import functools
+                functools.update_wrapper(guard_wrapper, original_handler)
+                wrapped = guard_wrapper
+
+            self._app.delete(path, wrapped)
             self._register_route("DELETE", path, func, tags, summary, description)
-            return func
+            return wrapped
         return decorator
 
-    def patch(self, path: str, tags: list = None, summary: str = None, description: str = None):
+    def patch(self, path: str, tags: list = None, summary: str = None, description: str = None, guards: list = None):
         """Register a PATCH route."""
         def decorator(func):
-            self._app.patch(path, func)
+            wrapped = wrap_handler_with_validation(func)
+            if guards:
+                from .guards import verify_guards
+                original_handler = wrapped
+                def guard_wrapper(request, *args, **kwargs):
+                    verify_guards(guards, request)
+                    return original_handler(request, *args, **kwargs)
+                import functools
+                functools.update_wrapper(guard_wrapper, original_handler)
+                wrapped = guard_wrapper
+
+            self._app.patch(path, wrapped)
             self._register_route("PATCH", path, func, tags, summary, description)
-            return func
+            return wrapped
         return decorator
 
-    def options(self, path: str):
+    def options(self, path: str, guards: list = None):
         """Register an OPTIONS route."""
         def decorator(func):
-            self._app.options(path, func)
-            return func
+            wrapped = func
+            if guards:
+                 from .guards import verify_guards
+                 original_handler = wrapped
+                 def guard_wrapper(request, *args, **kwargs):
+                     verify_guards(guards, request)
+                     return original_handler(request, *args, **kwargs)
+                 import functools
+                 functools.update_wrapper(guard_wrapper, original_handler)
+                 wrapped = guard_wrapper
+                 
+            self._app.options(path, wrapped)
+            return wrapped
         return decorator
 
-    def head(self, path: str):
+    def head(self, path: str, guards: list = None):
         """Register a HEAD route."""
         def decorator(func):
-            self._app.head(path, func)
-            return func
+            wrapped = func
+            if guards:
+                 from .guards import verify_guards
+                 original_handler = wrapped
+                 def guard_wrapper(request, *args, **kwargs):
+                     verify_guards(guards, request)
+                     return original_handler(request, *args, **kwargs)
+                 import functools
+                 functools.update_wrapper(guard_wrapper, original_handler)
+                 wrapped = guard_wrapper
+                 
+            self._app.head(path, wrapped)
+            return wrapped
         return decorator
 
     def websocket(self, path: str):
@@ -339,18 +439,19 @@ class App:
             methods = ["GET"]
 
         def decorator(func):
+            wrapped = wrap_handler_with_validation(func)
             for method in methods:
                 method_upper = method.upper()
                 if method_upper == "GET":
-                    self._app.get(path, func)
+                    self._app.get(path, wrapped)
                 elif method_upper == "POST":
-                    self._app.post(path, func)
+                    self._app.post(path, wrapped)
                 elif method_upper == "PUT":
-                    self._app.put(path, func)
+                    self._app.put(path, wrapped)
                 elif method_upper == "DELETE":
-                    self._app.delete(path, func)
+                    self._app.delete(path, wrapped)
                 elif method_upper == "PATCH":
-                    self._app.patch(path, func)
+                    self._app.patch(path, wrapped)
                 elif method_upper == "OPTIONS":
                     self._app.options(path, func)
                 elif method_upper == "HEAD":
@@ -400,7 +501,65 @@ class App:
         """
         self._app.enable_prometheus(endpoint, namespace, subsystem)
 
-    def enable_openapi(self, title: str = "Cello API", version: str = "0.5.1"):
+    def enable_rate_limit(self, config: RateLimitConfig):
+        """
+        Enable rate limiting middleware.
+
+        Args:
+            config: RateLimitConfig instance. Use RateLimitConfig.token_bucket(), .sliding_window() or .adaptive() to create.
+        """
+        self._app.enable_rate_limit(config)
+
+    def enable_caching(self, ttl: int = 300, methods: list = None, exclude_paths: list = None):
+        """
+        Enable smart caching middleware.
+
+        Args:
+            ttl: Default TTL in seconds (default: 300)
+            methods: List of HTTP methods to cache (default: ["GET", "HEAD"])
+            exclude_paths: List of paths to exclude from cache
+        """
+        self._app.enable_caching(ttl, methods, exclude_paths)
+
+    def enable_circuit_breaker(self, failure_threshold: int = 5, reset_timeout: int = 30, half_open_target: int = 3, failure_codes: list = None):
+        """
+        Enable Circuit Breaker middleware.
+        
+        Args:
+           failure_threshold: Failures before opening circuit.
+           reset_timeout: Seconds to wait before Half-Open.
+           half_open_target: Successes needed to Close.
+           failure_codes: List of status codes considered failures (default: [500, 502, 503, 504]).
+        """
+        self._app.enable_circuit_breaker(failure_threshold, reset_timeout, half_open_target, failure_codes)
+
+    def on_event(self, event_type: str):
+        """
+        Register a lifecycle event handler.
+        
+        Args:
+            event_type: "startup" or "shutdown"
+        """
+        def decorator(func):
+            if event_type == "startup":
+                self._app.on_startup(func)
+            elif event_type == "shutdown":
+                self._app.on_shutdown(func)
+            else:
+                raise ValueError(f"Invalid event type: {event_type}")
+            return func
+        return decorator
+
+    def invalidate_cache(self, tags: list):
+        """
+        Invalidate cache by tags.
+        
+        Args:
+            tags: List of tags to invalidate.
+        """
+        self._app.invalidate_cache(tags)
+
+    def enable_openapi(self, title: str = "Cello API", version: str = "0.7.0"):
         """
         Enable OpenAPI documentation endpoints.
 
@@ -411,7 +570,7 @@ class App:
 
         Args:
             title: API title (default: "Cello API")
-            version: API version (default: "0.5.1")
+            version: API version (default: "0.7.0")
         """
         # Store for closure
         api_title = title
@@ -553,6 +712,80 @@ class App:
         print("   Swagger UI: /docs")
         print("   ReDoc:      /redoc")
         print("   OpenAPI:    /openapi.json")
+
+    # ========================================================================
+    # Enterprise Features (v0.7.0+)
+    # ========================================================================
+
+    def enable_telemetry(self, config: "OpenTelemetryConfig" = None):
+        """
+        Enable OpenTelemetry distributed tracing and metrics.
+
+        Args:
+            config: OpenTelemetryConfig instance
+
+        Example:
+            from cello import App, OpenTelemetryConfig
+
+            app = App()
+            app.enable_telemetry(OpenTelemetryConfig(
+                service_name="my-service",
+                otlp_endpoint="http://collector:4317",
+                sampling_rate=0.1
+            ))
+        """
+        if config is None:
+            config = OpenTelemetryConfig("cello-service")
+        self._app.enable_telemetry(config)
+
+    def enable_health_checks(self, config: "HealthCheckConfig" = None):
+        """
+        Enable Kubernetes-compatible health check endpoints.
+
+        Adds the following endpoints:
+        - GET /health/live - Liveness probe
+        - GET /health/ready - Readiness probe
+        - GET /health/startup - Startup probe
+        - GET /health - Full health report
+
+        Args:
+            config: HealthCheckConfig instance
+
+        Example:
+            from cello import App, HealthCheckConfig
+
+            app = App()
+            app.enable_health_checks(HealthCheckConfig(
+                base_path="/health",
+                include_system_info=True
+            ))
+        """
+        self._app.enable_health_checks(config)
+
+    def enable_graphql(self, config: "GraphQLConfig" = None):
+        """
+        Enable GraphQL endpoint with optional Playground.
+
+        Args:
+            config: GraphQLConfig instance
+
+        Example:
+            from cello import App, GraphQLConfig
+
+            app = App()
+            app.enable_graphql(GraphQLConfig(
+                path="/graphql",
+                playground=True,
+                introspection=True
+            ))
+        """
+        if config is None:
+            config = GraphQLConfig()
+        self._app.enable_graphql(config)
+
+    # ========================================================================
+    # End Enterprise Features
+    # ========================================================================
 
     def add_guard(self, guard):
         """
@@ -727,3 +960,43 @@ class Depends:
 
     def __init__(self, dependency: str):
         self.dependency = dependency
+
+
+def cache(ttl: int = None, tags: list = None):
+    """
+    Decorator to cache response (Smart Caching).
+    
+    Args:
+        ttl: Time to live in seconds (overrides default).
+        tags: List of tags for invalidation.
+    """
+    from functools import wraps
+    from cello._cello import Response
+    
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            response = func(*args, **kwargs)
+            
+            # Ensure we have a Response object to set headers
+            if not isinstance(response, Response):
+                 if isinstance(response, dict):
+                     response = Response.json(response)
+                 elif isinstance(response, str):
+                     response = Response.text(response)
+                 elif isinstance(response, bytes):
+                     response = Response.binary(response)
+            
+            if isinstance(response, Response):
+                if ttl is not None:
+                     response.set_header("X-Cache-TTL", str(ttl))
+                if tags:
+                     # Check if tags is list
+                     if isinstance(tags, list):
+                         response.set_header("X-Cache-Tags", ",".join(tags))
+                     elif isinstance(tags, str):
+                         response.set_header("X-Cache-Tags", tags)
+            
+            return response
+        return wrapper
+    return decorator

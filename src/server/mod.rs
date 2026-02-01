@@ -660,6 +660,19 @@ async fn handle_request(
         }
     }
 
+    // Execute async before middleware
+    match middleware.execute_before_async(&mut request).await {
+        Ok(MiddlewareAction::Continue) => {}
+        Ok(MiddlewareAction::Stop(response)) => {
+            return build_hyper_response(&response, &metrics);
+        }
+        Err(e) => {
+            metrics.inc_errors();
+            let response = Response::error(e.status, &e.message);
+            return build_hyper_response(&response, &metrics);
+        }
+    }
+
     // Execute Prometheus before middleware
     if let Some(ref p) = *prometheus.read() {
         use crate::middleware::{Middleware, MiddlewareAction};
@@ -738,6 +751,19 @@ async fn handle_request(
             Response::not_found(&format!("Not Found: {} {}", method, path))
         }
     };
+
+    // Execute async after middleware
+    match middleware.execute_after_async(&request, &mut response).await {
+        Ok(MiddlewareAction::Continue) => {}
+        Ok(MiddlewareAction::Stop(new_response)) => {
+            return build_hyper_response(&new_response, &metrics);
+        }
+        Err(e) => {
+            metrics.inc_errors();
+            let error_response = Response::error(e.status, &e.message);
+            return build_hyper_response(&error_response, &metrics);
+        }
+    }
 
     // Execute after middleware
     match middleware.execute_after(&request, &mut response) {

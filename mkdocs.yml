@@ -1,0 +1,363 @@
+# Material for MkDocs Configuration
+# https://squidfunk.github.io/mkdocs-material/
+
+site_name: Cello Framework
+site_url: https://jagadeesh32.github.io/cello/
+site_description: The World's Fastest Python Web Framework - Rust-powered performance with Python simplicity
+site_author: Jagadeesh Katla
+repo_url: https://github.com/jagadeesh32/cello
+repo_name: jagadeesh32/cello
+edit_uri: edit/main/docs/
+
+# Copyright
+copyright: Copyright &copy; 2024-2026 Jagadeesh Katla - MIT License
+
+# Theme Configuration
+theme:
+  name: material
+  custom_dir: docs/overrides
+  language: en
+
+  # Logo and favicon
+  logo: assets/logo.svg
+  favicon: assets/favicon.png
+
+  # Color palette
+  palette:
+    # Light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: deep purple
+      accent: amber
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    # Dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: deep purple
+      accent: amber
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+  # Font
+  font:
+    text: Inter
+    code: JetBrains Mono
+
+  # Features
+  features:
+    # Navigation
+    - navigation.instant
+    - navigation.instant.prefetch
+    - navigation.instant.progress
+    - navigation.tracking
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.expand
+    - navigation.path
+    - navigation.indexes
+    - navigation.top
+    - navigation.footer
+
+    # Table of contents
+    - toc.follow
+    - toc.integrate
+
+    # Search
+    - search.suggest
+    - search.highlight
+    - search.share
+
+    # Content
+    - content.code.copy
+    - content.code.select
+    - content.code.annotate
+    - content.tabs.link
+    - content.tooltips
+    - content.action.edit
+    - content.action.view
+
+    # Header
+    - header.autohide
+    - announce.dismiss
+
+  # Icons
+  icon:
+    repo: fontawesome/brands/github
+    edit: material/pencil
+    view: material/eye
+    annotation: material/plus-circle
+
+# Plugins
+plugins:
+  - search:
+      separator: '[\s\-,:!=\[\]()"/]+|(?!\b)(?=[A-Z][a-z])|\.(?!\d)|&[lg]t;'
+  - minify:
+      minify_html: true
+  - git-revision-date-localized:
+      enable_creation_date: true
+      type: timeago
+  # git-committers disabled - requires MKDOCS_GIT_COMMITTERS_APIKEY
+  # - git-committers:
+  #     repository: jagadeesh32/cello
+  #     branch: main
+  - tags
+  # Social cards disabled - requires cairosvg and PIL
+  # - social:
+  #     cards_layout_options:
+  #       background_color: "#7e57c2"
+  # - offline  # Disabled - may not be needed
+  - glightbox
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            show_source: true
+            show_root_heading: true
+            heading_level: 2
+
+# Extensions
+markdown_extensions:
+  # Python Markdown
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+      toc_depth: 3
+
+  # Python Markdown Extensions
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.betterem:
+      smart_enable: all
+  - pymdownx.caret
+  - pymdownx.critic
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.magiclink:
+      repo_url_shorthand: true
+      user: jagadeesh32
+      repo: cello
+  - pymdownx.mark
+  - pymdownx.smartsymbols
+  - pymdownx.snippets:
+      auto_append:
+        - includes/abbreviations.md
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.tilde
+
+# Extra configuration
+extra:
+  version:
+    provider: mike
+    default: stable
+
+  # Social links
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/jagadeesh32/cello
+      name: GitHub
+    - icon: fontawesome/brands/python
+      link: https://pypi.org/project/cello-framework/
+      name: PyPI
+    - icon: fontawesome/brands/discord
+      link: https://discord.gg/cello
+      name: Discord
+
+  # Analytics
+  analytics:
+    provider: google
+    property: G-XXXXXXXXXX
+    feedback:
+      title: Was this page helpful?
+      ratings:
+        - icon: material/emoticon-happy-outline
+          name: This page was helpful
+          data: 1
+          note: Thanks for your feedback!
+        - icon: material/emoticon-sad-outline
+          name: This page could be improved
+          data: 0
+          note: Thanks for your feedback! Help us improve by opening an issue.
+
+  # Status indicators
+  status:
+    new: Recently added
+    deprecated: Deprecated
+    enterprise: Enterprise feature
+
+  # Consent
+  consent:
+    title: Cookie consent
+    description: >-
+      We use cookies to recognize your repeated visits and preferences, as well
+      as to measure the effectiveness of our documentation and whether users
+      find what they're searching for.
+    actions:
+      - accept
+      - reject
+
+# Page tree (Navigation)
+nav:
+  - Home: index.md
+
+  - Getting Started:
+    - getting-started/index.md
+    - Installation: getting-started/installation.md
+    - Quick Start: getting-started/quickstart.md
+    - First Application: getting-started/first-app.md
+    - Project Structure: getting-started/project-structure.md
+    - Configuration: getting-started/configuration.md
+
+  - Features:
+    - features/index.md
+    - Core:
+      - Routing: features/core/routing.md
+      - Request Handling: features/core/requests.md
+      - Response Types: features/core/responses.md
+      - Blueprints: features/core/blueprints.md
+      - Async Support: features/core/async.md
+    - Middleware:
+      - Overview: features/middleware/overview.md
+      - CORS: features/middleware/cors.md
+      - Compression: features/middleware/compression.md
+      - Logging: features/middleware/logging.md
+      - Rate Limiting: features/middleware/rate-limiting.md
+      - Caching: features/middleware/caching.md
+      - Circuit Breaker: features/middleware/circuit-breaker.md
+    - Security:
+      - Overview: features/security/overview.md
+      - Authentication: features/security/authentication.md
+      - Authorization (Guards): features/security/guards.md
+      - JWT: features/security/jwt.md
+      - Sessions: features/security/sessions.md
+      - CSRF Protection: features/security/csrf.md
+      - Security Headers: features/security/headers.md
+    - Real-time:
+      - WebSocket: features/realtime/websocket.md
+      - Server-Sent Events: features/realtime/sse.md
+    - Advanced:
+      - Dependency Injection: features/advanced/dependency-injection.md
+      - Background Tasks: features/advanced/background-tasks.md
+      - Templates: features/advanced/templates.md
+      - Static Files: features/advanced/static-files.md
+      - File Uploads: features/advanced/file-uploads.md
+      - DTOs & Validation: features/advanced/dto-validation.md
+
+  - Learn:
+    - learn/index.md
+    - Tutorials:
+      - Build a REST API: learn/tutorials/rest-api.md
+      - Build a Chat App: learn/tutorials/chat-app.md
+      - Authentication System: learn/tutorials/auth-system.md
+      - Microservices: learn/tutorials/microservices.md
+    - Guides:
+      - Best Practices: learn/guides/best-practices.md
+      - Error Handling: learn/guides/error-handling.md
+      - Testing: learn/guides/testing.md
+      - Performance Tuning: learn/guides/performance.md
+      - Production Deployment: learn/guides/deployment.md
+    - Patterns:
+      - Repository Pattern: learn/patterns/repository.md
+      - Service Layer: learn/patterns/service-layer.md
+      - Event-Driven: learn/patterns/event-driven.md
+      - CQRS: learn/patterns/cqrs.md
+
+  - Reference:
+    - reference/index.md
+    - API Reference:
+      - App: reference/api/app.md
+      - Request: reference/api/request.md
+      - Response: reference/api/response.md
+      - Blueprint: reference/api/blueprint.md
+      - Middleware: reference/api/middleware.md
+      - Guards: reference/api/guards.md
+      - Context: reference/api/context.md
+    - Configuration:
+      - Server Config: reference/config/server.md
+      - Security Config: reference/config/security.md
+      - Middleware Config: reference/config/middleware.md
+    - CLI Reference: reference/cli.md
+    - Error Codes: reference/errors.md
+
+  - Examples:
+    - examples/index.md
+    - Basic Examples:
+      - Hello World: examples/basic/hello-world.md
+      - REST API: examples/basic/rest-api.md
+      - Form Handling: examples/basic/forms.md
+    - Advanced Examples:
+      - Full-Stack App: examples/advanced/fullstack.md
+      - Microservices: examples/advanced/microservices.md
+      - Real-time Dashboard: examples/advanced/realtime-dashboard.md
+    - Enterprise Examples:
+      - Multi-tenant SaaS: examples/enterprise/multi-tenant.md
+      - API Gateway: examples/enterprise/api-gateway.md
+      - Event Sourcing: examples/enterprise/event-sourcing.md
+
+  - Enterprise:
+    - enterprise/index.md
+    - Observability:
+      - OpenTelemetry: enterprise/observability/opentelemetry.md
+      - Distributed Tracing: enterprise/observability/tracing.md
+      - Metrics: enterprise/observability/metrics.md
+      - Health Checks: enterprise/observability/health-checks.md
+    - Integration:
+      - Database: enterprise/integration/database.md
+      - Message Queues: enterprise/integration/message-queues.md
+      - GraphQL: enterprise/integration/graphql.md
+      - gRPC: enterprise/integration/grpc.md
+    - Deployment:
+      - Docker: enterprise/deployment/docker.md
+      - Kubernetes: enterprise/deployment/kubernetes.md
+      - Service Mesh: enterprise/deployment/service-mesh.md
+    - Roadmap: enterprise/roadmap.md
+
+  - Release Notes:
+    - releases/index.md
+    - v0.6.0: releases/v0.6.0.md
+    - v0.5.0: releases/v0.5.0.md
+    - v0.4.0: releases/v0.4.0.md
+    - v0.3.0: releases/v0.3.0.md
+    - Changelog: releases/changelog.md
+    - Migration Guide: releases/migration.md
+
+  - Community:
+    - community/index.md
+    - Contributing: community/contributing.md
+    - Code of Conduct: community/code-of-conduct.md
+    - Support: community/support.md
+
+  - Tags: tags.md
+
+# Extra CSS/JS
+extra_css:
+  - stylesheets/extra.css
+
+extra_javascript:
+  - javascripts/extra.js
+  - https://unpkg.com/tablesort@5.3.0/dist/tablesort.min.js

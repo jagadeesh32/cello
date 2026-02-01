@@ -1,6 +1,6 @@
 # API Reference
 
-Complete API reference for Cello v0.4.0.
+Complete API reference for Cello v0.6.0.
 
 ## Core Classes
 
@@ -31,6 +31,12 @@ app = App()
 | `enable_cors(origins)` | Enable CORS middleware |
 | `enable_logging()` | Enable request logging |
 | `enable_compression(min_size)` | Enable gzip compression |
+| `enable_caching(ttl, methods)` | Enable smart caching middleware |
+| `enable_circuit_breaker(threshold)` | Enable circuit breaker middleware |
+| `enable_rate_limit(config)` | Enable rate limiting middleware |
+| `invalidate_cache(tags)` | Invalidate cache by tags |
+| `add_guard(guard)` | Register a global security guard |
+| `on_event(event_type)` | Register lifecycle hook |
 | `run(host, port, **kwargs)` | Start the server |
 
 ---
@@ -252,7 +258,65 @@ msg = WebSocketMessage.text("Hello")
 
 ---
 
+---
+
+## Decorators
+
+### cache
+
+Smart caching decorator for route handlers.
+
+```python
+from cello import cache
+
+@app.get("/heavy")
+@cache(ttl=60, tags=["heavy"])
+def handler(request):
+    return {"data": "expensive"}
+```
+
+#### Arguments
+
+| Argument | Type | Description |
+|----------|------|-------------|
+| `ttl` | int | Time-to-live in seconds (optional) |
+| `tags` | list/str | invalidation tags (optional) |
+
+### on_event
+
+Register a lifecycle event handler.
+
+```python
+@app.on_event("startup")
+async def startup_db():
+    await db.connect()
+
+@app.on_event("shutdown")
+async def shutdown_db():
+    await db.close()
+```
+
+#### Arguments
+
+| Argument | Type | Description |
+|----------|------|-------------|
+| `event_type` | str | "startup" or "shutdown" |
+
+---
+
 ## Configuration Classes
+
+
+### CircuitBreakerConfig
+
+```python
+CircuitBreakerConfig(
+    failure_threshold=5,    # Failures before opening
+    reset_timeout=30,       # Seconds to wait in Open state
+    half_open_target=3,     # Successes needed to close
+    failure_codes=[500, 503], 
+)
+```
 
 ### TimeoutConfig
 
@@ -436,4 +500,62 @@ cello/
 ├── SecurityHeadersConfig  # Security headers
 ├── CSP              # CSP builder
 └── StaticFilesConfig     # Static files
+```
+
+---
+
+## Guards System (Security)
+The Guards system provides role-based and permission-based access control.
+
+### Basic Usage
+```python
+from cello import App
+from cello.guards import Role, Permission, Authenticated
+
+app = App()
+
+# Role-based
+@app.get("/admin", guards=[Role(["admin"])])
+def admin_only(request):
+    return "Admin Only"
+
+# Permission-based
+@app.post("/users", guards=[Permission(["users:write"])])
+def create_user(request):
+    return "User Created"
+
+# Authenticated Only
+@app.get("/profile", guards=[Authenticated()])
+def profile(request):
+    return "User Profile"
+```
+
+### Composable Logic
+Combine guards using `And`, `Or`, `Not`.
+```python
+from cello.guards import And, Or, Not
+
+# Admin AND Delete Permission
+@app.delete("/users/{id}", guards=[
+    And([Role(["admin"]), Permission(["delete"])])
+])
+def delete(request): ...
+
+# Admin OR Moderator
+@app.get("/logs", guards=[
+    Or([Role(["admin"]), Role(["moderator"])])
+])
+def logs(request): ...
+```
+
+### Protocol
+Guards expect `request.context["user"]` to be populated (e.g., by authentication middleware) with `roles` and `permissions` lists.
+```json
+{
+  "user": {
+    "id": 123,
+    "roles": ["admin"],
+    "permissions": ["read", "write"]
+  }
+}
 ```
