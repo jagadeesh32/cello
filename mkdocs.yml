@@ -109,7 +109,7 @@ plugins:
   # - social:
   #     cards_layout_options:
   #       background_color: "#7e57c2"
-  - offline
+  # - offline  # Disabled - may not be needed
   - glightbox
   - mkdocstrings:
       handlers:
