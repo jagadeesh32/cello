@@ -171,7 +171,11 @@ hide:
 
 <div class="hero-section" markdown>
 
-<div class="hero-title">:material-fire: Cello Framework :material-rocket-launch:</div>
+<div style="text-align: center; margin-bottom: 1rem;">
+  <img src="https://cello-framework.vercel.app/logo-full.png" alt="Cello Framework" style="max-width: 320px; width: 100%; height: auto;">
+</div>
+
+<div class="hero-title">🔥 Cello Framework 🚀</div>
 
 <div class="hero-tagline">The World's Fastest Python Web Framework</div>
 
@@ -200,7 +204,7 @@ hide:
 
   <div class="perf-grid">
     <div class="perf-item">
-      <div class="fw-name">:material-fire: Cello</div>
+      <div class="fw-name">🔥 Cello</div>
       <div class="fw-rps cello-rps">150,000+</div>
       <div class="fw-detail">p50 &lt;1ms &middot; p99 &lt;5ms</div>
     </div>

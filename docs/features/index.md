@@ -87,7 +87,7 @@ mindmap
 
     :material-tag: `v0.1.0`{ .md-tag }
 
--   :material-middleware-outline:{ .lg .middle } **Middleware**
+-   :material-layers-triple:{ .lg .middle } **Middleware**
 
     ---
 
@@ -136,7 +136,7 @@ mindmap
 
     :material-tag: `v0.3.0`{ .md-tag }
 
--   :material-cog-transfer:{ .lg .middle } **Advanced**
+-   :material-cog:{ .lg .middle } **Advanced**
 
     ---
 
@@ -169,7 +169,7 @@ mindmap
 
     :material-tag: `v0.8.0 - v0.9.0`{ .md-tag }
 
--   :material-chart-timeline-variant-shimmer:{ .lg .middle } **Advanced Patterns**
+-   :material-history:{ .lg .middle } **Advanced Patterns**
 
     ---
 
@@ -192,7 +192,7 @@ mindmap
 
 How does Cello stack up against popular Python web frameworks?
 
-| Feature | :material-cello: **Cello** | :material-lightning-bolt: FastAPI | :material-flask: Flask | :material-web: Django |
+| Feature | 🎵 **Cello** | :material-lightning-bolt: FastAPI | :simple-flask: Flask | :simple-django: Django |
 |:--------|:---:|:---:|:---:|:---:|
 | **Rust-powered hot path** | :material-check-bold:{ style="color: #ff9100" } | :material-close: | :material-close: | :material-close: |
 | **SIMD JSON parsing** | :material-check-bold:{ style="color: #ff9100" } | :material-close: | :material-close: | :material-close: |
@@ -362,7 +362,7 @@ All features are optimized at the Rust level for minimal overhead:
 
 ??? abstract "v0.8.0 -- Data Layer"
 
-    :material-database: Async database pooling | :material-memory: Redis integration | :material-swap-vertical: Transaction management
+    :material-database: Async database pooling | :material-memory: Redis integration | :material-swap-vert: Transaction management
 
 ??? abstract "v0.9.0 -- API Protocols"
 
@@ -386,7 +386,7 @@ All features are optimized at the Rust level for minimal overhead:
 
     [:octicons-arrow-right-24: Core](core/routing.md)
 
--   :material-middleware-outline:{ .lg .middle } **Middleware**
+-   :material-layers-triple:{ .lg .middle } **Middleware**
 
     ---
 
@@ -410,7 +410,7 @@ All features are optimized at the Rust level for minimal overhead:
 
     [:octicons-arrow-right-24: Real-time](realtime/websocket.md)
 
--   :material-cog-transfer:{ .lg .middle } **Advanced**
+-   :material-cog:{ .lg .middle } **Advanced**
 
     ---
 

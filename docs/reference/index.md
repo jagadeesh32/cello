@@ -118,7 +118,7 @@ Fine-tune every aspect of your Cello server, security layer, and middleware stac
 
     [:octicons-arrow-right-24: Security Config](config/security.md)
 
--   :material-middleware:{ .lg .middle } **Middleware Configuration**
+-   :material-layers-triple:{ .lg .middle } **Middleware Configuration**
 
     ---
 

@@ -59,7 +59,7 @@ icon: material/domain
 
     [:octicons-arrow-right-24: Deployment](deployment/docker.md)
 
--   :material-chart-timeline-variant-shimmer:{ .lg .middle } **Patterns**
+-   :material-history:{ .lg .middle } **Patterns**
 
     ---
 
