@@ -2,6 +2,36 @@
 
 All notable changes to Cello are documented in this file.
 
+## [0.10.0] - February 2026
+
+### Added
+- Event Sourcing with Aggregate base class and @event_handler decorator
+- Event base class for typed domain events with automatic serialization
+- EventStore for persisting and retrieving events with configurable backends
+- EventStoreConfig for storage URL, snapshot interval, and replay settings
+- Snapshot support for optimized aggregate loading at scale
+- Event replay to rebuild aggregate state from the event log
+- CQRS with Command and Query base classes
+- CommandBus and QueryBus for dispatching operations to registered handlers
+- @command_handler and @query_handler decorators for handler registration
+- CqrsConfig for timeout settings and event synchronization
+- Saga Pattern with Saga base class and SagaStep definitions
+- SagaConfig for storage, retries, delay, and timeout settings
+- SagaResult with success status, completed steps, and error details
+- Automatic compensation (rollback) when any saga step fails
+- Persistent saga state for crash recovery
+- Event browser in development mode at /events
+- Saga dashboard in development mode at /sagas
+
+### Fixed
+- GraphQL subscription disconnects under high message throughput
+- gRPC reflection service not listing all methods after hot reload
+- Kafka consumer group rebalancing causing duplicate message processing
+- Health check endpoint returning 200 when event store is unreachable
+- Improved error message when saga compensation fails with non-retryable error
+
+---
+
 ## [0.9.0] - February 2026
 
 ### Added

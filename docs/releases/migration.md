@@ -6,6 +6,123 @@ title: Migration Guide
 
 This guide helps you migrate between major versions of Cello.
 
+## 0.9.x to 0.10.x {#09x-to-010x}
+
+### New Features
+
+Version 0.10.0 adds advanced pattern features:
+
+- Event Sourcing with Aggregate roots, event replay, and snapshots
+- CQRS with Command/Query separation, dedicated buses, and event-driven sync
+- Saga Pattern for distributed transactions with compensation logic
+
+### Breaking Changes
+
+No breaking changes from v0.9.0. All existing code continues to work.
+
+### New Imports
+
+```python
+from cello import EventStoreConfig, CqrsConfig, SagaConfig
+```
+
+### New Python Modules
+
+```python
+from cello.eventsourcing import Aggregate, Event, event_handler, EventStore, EventStoreConfig, Snapshot
+from cello.cqrs import Command, Query, CommandBus, QueryBus, command_handler, query_handler, CqrsConfig
+from cello.saga import Saga, SagaStep, SagaConfig, SagaResult
+```
+
+### New App Methods
+
+```python
+app = App()
+
+# Event Sourcing
+app.enable_event_store()
+
+# CQRS
+app.enable_cqrs()
+
+# Saga
+app.enable_sagas()
+```
+
+### External Dependencies
+
+| Feature          | External Dependency Required          |
+|------------------|---------------------------------------|
+| Event Sourcing   | PostgreSQL (or in-memory for dev)     |
+| CQRS             | None                                  |
+| Saga Pattern     | PostgreSQL (or in-memory for dev)     |
+
+### New APIs (v0.10.0)
+
+```python
+from cello import App, EventStoreConfig, CqrsConfig, SagaConfig
+from cello.eventsourcing import Aggregate, Event, event_handler
+from cello.cqrs import Command, Query, command_handler, query_handler
+from cello.saga import Saga, SagaStep
+
+app = App()
+
+# Event Sourcing
+class OrderCreated(Event):
+    order_id: str
+    customer_id: str
+
+class Order(Aggregate):
+    @event_handler(OrderCreated)
+    def on_created(self, event):
+        self.id = event.order_id
+        self.status = "created"
+
+app.enable_event_store(EventStoreConfig(
+    storage="postgresql://localhost/events",
+    snapshot_interval=100,
+))
+
+# CQRS
+class CreateOrderCommand(Command):
+    customer_id: str
+    items: list
+
+@command_handler(CreateOrderCommand)
+async def handle_create(command, db):
+    order = Order.create(command.customer_id, command.items)
+    await db.save(order)
+    return order.id
+
+class GetOrderQuery(Query):
+    order_id: str
+
+@query_handler(GetOrderQuery)
+async def handle_get(query, read_db):
+    return await read_db.get_order(query.order_id)
+
+app.enable_cqrs(CqrsConfig(enable_event_sync=True))
+
+# Saga
+async def reserve(ctx):
+    return await inventory.reserve(ctx["order_id"])
+
+async def release(ctx):
+    await inventory.release(ctx["reservation_id"])
+
+class OrderSaga(Saga):
+    steps = [
+        SagaStep("reserve_inventory", reserve, compensate=release),
+    ]
+
+app.enable_sagas(SagaConfig(
+    storage="postgresql://localhost/sagas",
+    max_retries=3,
+))
+```
+
+---
+
 ## 0.8.x to 0.9.x {#08x-to-09x}
 
 ### New Features

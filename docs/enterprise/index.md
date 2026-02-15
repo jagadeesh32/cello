@@ -91,6 +91,9 @@ Cello provides enterprise-grade capabilities for building production-ready appli
 | Database Pooling | :material-check-circle:{ .green } | Available in v0.8.0 |
 | Redis Integration | :material-check-circle:{ .green } | Available in v0.8.0 |
 | Message Queues | :material-check-circle:{ .green } | Available in v0.9.0 - Kafka, RabbitMQ, SQS |
+| Event Sourcing | :material-check-circle:{ .green } | Available in v0.10.0 - Aggregate roots, event replay, snapshots |
+| CQRS | :material-check-circle:{ .green } | Available in v0.10.0 - Command/query separation, buses |
+| Saga Pattern | :material-check-circle:{ .green } | Available in v0.10.0 - Distributed transactions, compensation |
 
 ---
 

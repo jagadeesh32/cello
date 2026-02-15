@@ -186,47 +186,98 @@ async def process_order(message: Message):
 
 ---
 
-## v0.10.0 - Advanced Patterns (Q4 2026)
+## v0.10.0 - Advanced Patterns (Q1 2026) :material-check-circle:{ .green }
 
 ### Event Sourcing
 
-Event-driven persistence.
+Event-driven persistence with aggregate roots, event replay, and snapshots.
 
 ```python
-from cello.eventsourcing import Aggregate
+from cello.eventsourcing import Aggregate, Event, event_handler, EventStoreConfig
+
+app.enable_event_store(EventStoreConfig(
+    storage="postgresql://localhost/events",
+    snapshot_interval=100,
+    enable_replay=True,
+))
+
+class OrderCreated(Event):
+    order_id: str
+    customer_id: str
 
 class Order(Aggregate):
     @event_handler(OrderCreated)
     def on_created(self, event):
+        self.id = event.order_id
         self.status = "created"
 ```
 
+**Features:**
+- Aggregate root pattern
+- Event replay to rebuild state
+- Snapshot support for performance
+- PostgreSQL, MySQL, and in-memory backends
+- Event versioning and upcasting
+
 ### CQRS
 
-Separate read/write models.
+Command/query separation with dedicated buses.
 
 ```python
-from cello.cqrs import command_handler, query_handler
+from cello.cqrs import Command, Query, command_handler, query_handler, CqrsConfig
 
-@command_handler(CreateOrder)
-async def handle(command, db):
-    order = Order.create(command.data)
+app.enable_cqrs(CqrsConfig(enable_event_sync=True))
+
+class CreateOrderCommand(Command):
+    customer_id: str
+    items: list
+
+@command_handler(CreateOrderCommand)
+async def handle_create(command, db):
+    order = Order.create(command.customer_id, command.items)
     await db.save(order)
+    return order.id
+
+class GetOrderQuery(Query):
+    order_id: str
+
+@query_handler(GetOrderQuery)
+async def handle_get(query, read_db):
+    return await read_db.get_order(query.order_id)
 ```
+
+**Features:**
+- Separate read/write models
+- CommandBus and QueryBus
+- Event-driven synchronization
+- Middleware support on buses
 
 ### Saga Pattern
 
-Distributed transaction coordination.
+Distributed transaction coordination with compensation logic.
 
 ```python
-from cello.saga import Saga, SagaStep
+from cello.saga import Saga, SagaStep, SagaConfig
+
+app.enable_sagas(SagaConfig(
+    storage="postgresql://localhost/sagas",
+    max_retries=3,
+    timeout=300,
+))
 
 class OrderSaga(Saga):
     steps = [
         SagaStep("reserve_inventory", reserve, compensate=release),
         SagaStep("charge_payment", charge, compensate=refund),
+        SagaStep("ship_order", create_shipment, compensate=cancel_shipment),
     ]
 ```
+
+**Features:**
+- Automatic compensation on failure
+- Persistent saga state for crash recovery
+- Configurable retry with exponential backoff
+- Timeout support
 
 ---
 
@@ -298,10 +349,10 @@ We prioritize features based on:
 Help us build these features! See our [Contributing Guide](../community/contributing.md).
 
 Priority areas:
-- Event Sourcing
-- CQRS
-- Saga Pattern
-- OAuth2
+- OAuth2/OIDC Provider
+- Service Mesh Integration
+- Admin Dashboard
+- Multi-tenancy
 
 ---
 

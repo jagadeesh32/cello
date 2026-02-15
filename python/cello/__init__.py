@@ -113,6 +113,13 @@ from cello._cello import (
     SqsConfig,
 )
 
+# v0.10.0 - Advanced Pattern features
+from cello._cello import (
+    EventSourcingConfig,
+    CqrsConfig,
+    SagaConfig,
+)
+
 __all__ = [
     # Core
     "App",
@@ -156,8 +163,12 @@ __all__ = [
     "KafkaConfig",
     "RabbitMQConfig",
     "SqsConfig",
+    # v0.10.0 - Advanced Pattern features
+    "EventSourcingConfig",
+    "CqrsConfig",
+    "SagaConfig",
 ]
-__version__ = "0.9.0"
+__version__ = "0.10.0"
 
 
 class Blueprint:
@@ -581,7 +592,7 @@ class App:
         """
         self._app.invalidate_cache(tags)
 
-    def enable_openapi(self, title: str = "Cello API", version: str = "0.9.0"):
+    def enable_openapi(self, title: str = "Cello API", version: str = "0.10.0"):
         """
         Enable OpenAPI documentation endpoints.
 
@@ -592,7 +603,7 @@ class App:
 
         Args:
             title: API title (default: "Cello API")
-            version: API version (default: "0.9.0")
+            version: API version (default: "0.10.0")
         """
         # Store for closure
         api_title = title
@@ -899,6 +910,96 @@ class App:
 
     # ========================================================================
     # End API Protocol Features
+    # ========================================================================
+
+    # ========================================================================
+    # Advanced Pattern Features (v0.10.0+)
+    # ========================================================================
+
+    def enable_event_sourcing(self, config=None):
+        """
+        Enable event sourcing. Config: EventSourcingConfig or None for defaults.
+
+        Configures the event sourcing subsystem with storage backend,
+        snapshot support, and event retention settings.
+
+        Args:
+            config: EventSourcingConfig instance or None for defaults.
+
+        Returns:
+            The App instance for method chaining.
+
+        Example:
+            from cello import App, EventSourcingConfig
+
+            app = App()
+            app.enable_event_sourcing(EventSourcingConfig(
+                store_type="postgresql",
+                snapshot_interval=100,
+                enable_snapshots=True,
+            ))
+        """
+        if config is None:
+            config = EventSourcingConfig()
+        self._app.enable_event_sourcing(config)
+        return self
+
+    def enable_cqrs(self, config=None):
+        """
+        Enable CQRS pattern. Config: CqrsConfig or None for defaults.
+
+        Configures the CQRS subsystem with event synchronization,
+        command/query timeouts, and retry settings.
+
+        Args:
+            config: CqrsConfig instance or None for defaults.
+
+        Returns:
+            The App instance for method chaining.
+
+        Example:
+            from cello import App, CqrsConfig
+
+            app = App()
+            app.enable_cqrs(CqrsConfig(
+                enable_event_sync=True,
+                command_timeout_ms=10000,
+            ))
+        """
+        if config is None:
+            config = CqrsConfig()
+        self._app.enable_cqrs(config)
+        return self
+
+    def enable_saga(self, config=None):
+        """
+        Enable saga orchestration. Config: SagaConfig or None for defaults.
+
+        Configures the saga orchestration subsystem with retry behaviour,
+        timeouts, and logging settings.
+
+        Args:
+            config: SagaConfig instance or None for defaults.
+
+        Returns:
+            The App instance for method chaining.
+
+        Example:
+            from cello import App, SagaConfig
+
+            app = App()
+            app.enable_saga(SagaConfig(
+                max_retries=5,
+                timeout_ms=60000,
+            ))
+        """
+        if config is None:
+            config = SagaConfig()
+        self._app.enable_saga(config)
+        return self
+
+    # ========================================================================
+    # End Advanced Pattern Features
     # ========================================================================
 
     def enable_telemetry(self, config: "OpenTelemetryConfig" = None):

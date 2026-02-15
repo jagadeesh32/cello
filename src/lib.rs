@@ -502,6 +502,79 @@ impl Cello {
     // End API Protocol Features
     // ========================================================================
 
+    // ========================================================================
+    // v0.10.0 - Advanced Pattern Features
+    // ========================================================================
+
+    /// Enable event sourcing support.
+    #[pyo3(signature = (config=None))]
+    pub fn enable_event_sourcing(&mut self, config: Option<PyEventSourcingConfig>) {
+        let config = config.unwrap_or_else(|| PyEventSourcingConfig::memory());
+
+        let es_config = middleware::eventsourcing::EventSourcingConfig {
+            store_type: config.store_type.clone(),
+            snapshot_interval: config.snapshot_interval,
+            enable_snapshots: config.enable_snapshots,
+            max_events_per_aggregate: config.max_events_per_aggregate,
+            event_ttl_secs: config.event_ttl_secs,
+            connection_url: config.connection_url.clone(),
+        };
+
+        let _store = middleware::eventsourcing::InMemoryEventStore::with_config(es_config);
+        println!("Event sourcing enabled:");
+        println!("   Store type: {}", config.store_type);
+        println!("   Snapshots: {}", if config.enable_snapshots { "enabled" } else { "disabled" });
+        println!("   Snapshot interval: {} events", config.snapshot_interval);
+        if let Some(ref url) = config.connection_url {
+            println!("   Connection: {}", url);
+        }
+    }
+
+    /// Enable CQRS (Command Query Responsibility Segregation) support.
+    #[pyo3(signature = (config=None))]
+    pub fn enable_cqrs(&mut self, config: Option<PyCqrsConfig>) {
+        let config = config.unwrap_or_else(|| PyCqrsConfig::default());
+
+        let cqrs_config = middleware::cqrs::CqrsConfig {
+            enable_event_sync: config.enable_event_sync,
+            command_timeout_ms: config.command_timeout_ms,
+            query_timeout_ms: config.query_timeout_ms,
+            max_retries: config.max_retries,
+        };
+
+        let _command_bus = middleware::cqrs::CommandBus::with_config(cqrs_config.clone());
+        let _query_bus = middleware::cqrs::QueryBus::with_config(cqrs_config);
+        println!("CQRS enabled:");
+        println!("   Event sync: {}", config.enable_event_sync);
+        println!("   Command timeout: {}ms", config.command_timeout_ms);
+        println!("   Query timeout: {}ms", config.query_timeout_ms);
+        println!("   Max retries: {}", config.max_retries);
+    }
+
+    /// Enable Saga pattern for distributed transaction orchestration.
+    #[pyo3(signature = (config=None))]
+    pub fn enable_saga(&mut self, config: Option<PySagaConfig>) {
+        let config = config.unwrap_or_else(|| PySagaConfig::default());
+
+        let saga_config = middleware::saga::SagaConfig {
+            max_retries: config.max_retries,
+            retry_delay_ms: config.retry_delay_ms,
+            timeout_ms: config.timeout_ms,
+            enable_logging: config.enable_logging,
+        };
+
+        let _orchestrator = middleware::saga::SagaOrchestrator::with_config(saga_config);
+        println!("Saga orchestration enabled:");
+        println!("   Max retries: {}", config.max_retries);
+        println!("   Retry delay: {}ms", config.retry_delay_ms);
+        println!("   Timeout: {}ms", config.timeout_ms);
+        println!("   Logging: {}", if config.enable_logging { "enabled" } else { "disabled" });
+    }
+
+    // ========================================================================
+    // End Advanced Pattern Features
+    // ========================================================================
+
     /// Enable OpenAPI documentation endpoints.
     /// This adds:
     /// - GET /docs - Swagger UI
@@ -510,7 +583,7 @@ impl Cello {
     #[pyo3(signature = (title=None, version=None))]
     pub fn enable_openapi(&mut self, py: Python<'_>, title: Option<String>, version: Option<String>) -> PyResult<()> {
         let title = title.unwrap_or_else(|| "Cello API".to_string());
-        let version = version.unwrap_or_else(|| "0.9.0".to_string());
+        let version = version.unwrap_or_else(|| "0.10.0".to_string());
 
         // Store title and version for later use
         let title_clone = title.clone();
@@ -1688,6 +1761,142 @@ impl PySqsConfig {
     }
 }
 
+// ==========================================================================
+// v0.10.0 - Advanced Pattern Configuration Classes
+// ==========================================================================
+
+/// Python-exposed Event Sourcing configuration.
+#[pyclass(name = "EventSourcingConfig")]
+#[derive(Clone)]
+pub struct PyEventSourcingConfig {
+    #[pyo3(get, set)]
+    pub store_type: String,
+    #[pyo3(get, set)]
+    pub snapshot_interval: u32,
+    #[pyo3(get, set)]
+    pub enable_snapshots: bool,
+    #[pyo3(get, set)]
+    pub max_events_per_aggregate: usize,
+    #[pyo3(get, set)]
+    pub event_ttl_secs: u64,
+    #[pyo3(get, set)]
+    pub connection_url: Option<String>,
+}
+
+#[pymethods]
+impl PyEventSourcingConfig {
+    #[new]
+    #[pyo3(signature = (store_type="memory", snapshot_interval=100, enable_snapshots=true, max_events_per_aggregate=10000, event_ttl_secs=0, connection_url=None))]
+    pub fn new(
+        store_type: &str,
+        snapshot_interval: u32,
+        enable_snapshots: bool,
+        max_events_per_aggregate: usize,
+        event_ttl_secs: u64,
+        connection_url: Option<String>,
+    ) -> Self {
+        Self {
+            store_type: store_type.to_string(),
+            snapshot_interval,
+            enable_snapshots,
+            max_events_per_aggregate,
+            event_ttl_secs,
+            connection_url,
+        }
+    }
+
+    /// Create an in-memory event sourcing configuration.
+    #[staticmethod]
+    pub fn memory() -> Self {
+        Self::new("memory", 100, true, 10000, 0, None)
+    }
+
+    /// Create a PostgreSQL-backed event sourcing configuration.
+    #[staticmethod]
+    #[pyo3(signature = (url))]
+    pub fn postgresql(url: &str) -> Self {
+        Self::new("postgresql", 100, true, 10000, 0, Some(url.to_string()))
+    }
+}
+
+/// Python-exposed CQRS configuration.
+#[pyclass(name = "CqrsConfig")]
+#[derive(Clone)]
+pub struct PyCqrsConfig {
+    #[pyo3(get, set)]
+    pub enable_event_sync: bool,
+    #[pyo3(get, set)]
+    pub command_timeout_ms: u64,
+    #[pyo3(get, set)]
+    pub query_timeout_ms: u64,
+    #[pyo3(get, set)]
+    pub max_retries: u32,
+}
+
+#[pymethods]
+impl PyCqrsConfig {
+    #[new]
+    #[pyo3(signature = (enable_event_sync=true, command_timeout_ms=5000, query_timeout_ms=3000, max_retries=3))]
+    pub fn new(
+        enable_event_sync: bool,
+        command_timeout_ms: u64,
+        query_timeout_ms: u64,
+        max_retries: u32,
+    ) -> Self {
+        Self {
+            enable_event_sync,
+            command_timeout_ms,
+            query_timeout_ms,
+            max_retries,
+        }
+    }
+
+    /// Create a default CQRS configuration.
+    #[staticmethod]
+    pub fn default() -> Self {
+        Self::new(true, 5000, 3000, 3)
+    }
+}
+
+/// Python-exposed Saga configuration.
+#[pyclass(name = "SagaConfig")]
+#[derive(Clone)]
+pub struct PySagaConfig {
+    #[pyo3(get, set)]
+    pub max_retries: u32,
+    #[pyo3(get, set)]
+    pub retry_delay_ms: u64,
+    #[pyo3(get, set)]
+    pub timeout_ms: u64,
+    #[pyo3(get, set)]
+    pub enable_logging: bool,
+}
+
+#[pymethods]
+impl PySagaConfig {
+    #[new]
+    #[pyo3(signature = (max_retries=3, retry_delay_ms=1000, timeout_ms=30000, enable_logging=true))]
+    pub fn new(
+        max_retries: u32,
+        retry_delay_ms: u64,
+        timeout_ms: u64,
+        enable_logging: bool,
+    ) -> Self {
+        Self {
+            max_retries,
+            retry_delay_ms,
+            timeout_ms,
+            enable_logging,
+        }
+    }
+
+    /// Create a default Saga configuration.
+    #[staticmethod]
+    pub fn default() -> Self {
+        Self::new(3, 1000, 30000, true)
+    }
+}
+
 /// Helper to call lifecycle handlers (sync or async).
 fn call_lifecycle_handler(py: Python<'_>, handler: &PyObject) -> PyResult<()> {
     // Call the handler. If it returns a coroutine, run it.
@@ -1763,6 +1972,11 @@ fn _cello(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_class::<PyKafkaConfig>()?;
     m.add_class::<PyRabbitMQConfig>()?;
     m.add_class::<PySqsConfig>()?;
+
+    // v0.10.0 - Advanced Pattern Configuration Classes
+    m.add_class::<PyEventSourcingConfig>()?;
+    m.add_class::<PyCqrsConfig>()?;
+    m.add_class::<PySagaConfig>()?;
 
     Ok(())
 }

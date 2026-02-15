@@ -37,9 +37,9 @@ Cello aims to be the most comprehensive, performant, and secure Python web frame
 | Lifecycle Hooks | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **Observability** | | | | | | | |
 | Prometheus Metrics | ✅ | ✅ | ✅* | ❌ | ✅ | ✅ | ✅ |
-| OpenTelemetry | 🔲 | ✅ | ✅* | ❌ | ✅ | ✅* | ✅* |
-| Distributed Tracing | 🔲 | ✅ | ❌ | ❌ | ✅ | ❌ | ❌ |
-| Health Checks | 🔲 | ✅ | ❌ | ❌ | ✅ | ✅ | ✅ |
+| OpenTelemetry | ✅ | ✅ | ✅* | ❌ | ✅ | ✅* | ✅* |
+| Distributed Tracing | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ | ❌ |
+| Health Checks | ✅ | ✅ | ❌ | ❌ | ✅ | ✅ | ✅ |
 | **API Protocols** | | | | | | | |
 | REST | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | GraphQL | ✅ | ✅ | ✅ | ✅* | ✅ | ✅ | ✅ |
@@ -47,7 +47,9 @@ Cello aims to be the most comprehensive, performant, and secure Python web frame
 | WebSocket | ✅ | ✅ | ✅ | ✅* | ✅ | ✅ | ✅ |
 | SSE | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ |
 | **Database** | | | | | | | |
-| Connection Pooling | 🔲 | ✅ | ✅* | ✅ | ✅ | ✅ | ✅ |
+| Connection Pooling | ✅ | ✅ | ✅* | ✅ | ✅ | ✅ | ✅ |
+| Event Sourcing | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ | ❌ |
+| CQRS | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ | ❌ |
 | ORM Integration | 🔲 | ✅ | ✅* | ✅ | ✅ | ✅* | ✅* |
 | Migrations | 🔲 | ✅ | ❌ | ✅ | ✅ | ❌ | ❌ |
 | **Documentation** | | | | | | | |
@@ -268,7 +270,7 @@ async def process_order(message: Message):
 
 ---
 
-### v0.10.0 - Advanced Patterns 
+### v0.10.0 - Advanced Patterns (Current Release - February 2026)
 
 #### Event Sourcing
 - Event store integration
@@ -537,10 +539,10 @@ async def get_user(request):
 
 We welcome contributions! Priority areas:
 
-1. **OpenTelemetry integration** - Help us implement distributed tracing
-2. **Database adapters** - PostgreSQL, MySQL, MongoDB drivers
-3. **Message queue support** - Kafka, RabbitMQ integrations
-4. **GraphQL** - Schema-first and code-first implementations
+1. **OAuth2/OIDC Provider** - Full OAuth2 server implementation
+2. **Service Mesh Integration** - Istio/Envoy sidecar support
+3. **Admin Dashboard** - Real-time metrics visualization
+4. **Multi-tenancy** - Tenant isolation and data partitioning
 5. **Documentation** - Tutorials, guides, and API docs
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.

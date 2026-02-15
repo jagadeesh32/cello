@@ -3953,3 +3953,1475 @@ async def test_consumer_with_sqs_config():
     messages = await consumer.poll()
     assert isinstance(messages, list)
     await consumer.close()
+
+
+# =============================================================================
+# v0.10.0 - Event Sourcing, CQRS, and Saga Pattern Tests
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# v0.10.0 Version & Export Tests
+# ---------------------------------------------------------------------------
+
+
+def test_version_v0100():
+    """Test that version is 0.10.0."""
+    import cello
+
+    assert cello.__version__ == "0.10.0"
+
+
+def test_v0100_exports_in_all():
+    """Test that v0.10.0 features are in __all__."""
+    import cello
+
+    for name in ["EventSourcingConfig", "CqrsConfig", "SagaConfig"]:
+        assert name in cello.__all__
+
+
+def test_import_v0100_advanced_pattern_configs():
+    """Test that v0.10.0 advanced pattern configuration classes can be imported."""
+    from cello import EventSourcingConfig, CqrsConfig, SagaConfig
+
+    assert EventSourcingConfig is not None
+    assert CqrsConfig is not None
+    assert SagaConfig is not None
+
+
+def test_v0100_all_exports():
+    """Test that all v0.10.0 expected exports are available."""
+    from cello.eventsourcing import Event, Aggregate, event_handler, EventStore, Snapshot
+    from cello.cqrs import (
+        Command, Query, CommandResult, QueryResult,
+        command_handler, query_handler, CommandBus, QueryBus,
+    )
+    from cello.saga import (
+        SagaStep, Saga, SagaExecution, SagaOrchestrator, SagaError, StepStatus,
+    )
+
+    assert all([
+        Event, Aggregate, event_handler, EventStore, Snapshot,
+        Command, Query, CommandResult, QueryResult,
+        command_handler, query_handler, CommandBus, QueryBus,
+        SagaStep, Saga, SagaExecution, SagaOrchestrator, SagaError, StepStatus,
+    ])
+
+
+# ---------------------------------------------------------------------------
+# v0.10.0 EventSourcingConfig (Rust-backed PyO3 class)
+# ---------------------------------------------------------------------------
+
+
+def test_eventsourcing_config_defaults():
+    """Test EventSourcingConfig creation with default values."""
+    from cello import EventSourcingConfig
+
+    config = EventSourcingConfig()
+    assert config is not None
+    assert config.store_type == "memory"
+    assert config.snapshot_interval == 100
+    assert config.enable_snapshots is True
+    assert config.max_events_per_aggregate == 10000
+
+
+def test_eventsourcing_config_custom():
+    """Test EventSourcingConfig creation with custom values."""
+    from cello import EventSourcingConfig
+
+    config = EventSourcingConfig(
+        store_type="postgresql",
+        snapshot_interval=50,
+        enable_snapshots=False,
+        max_events_per_aggregate=5000,
+    )
+    assert config.store_type == "postgresql"
+    assert config.snapshot_interval == 50
+    assert config.enable_snapshots is False
+    assert config.max_events_per_aggregate == 5000
+
+
+def test_eventsourcing_config_memory():
+    """Test EventSourcingConfig.memory() factory method."""
+    from cello import EventSourcingConfig
+
+    config = EventSourcingConfig.memory()
+    assert config is not None
+    assert config.store_type == "memory"
+    assert config.enable_snapshots is True
+    assert config.snapshot_interval == 100
+    assert config.max_events_per_aggregate == 10000
+
+
+def test_eventsourcing_config_postgresql():
+    """Test EventSourcingConfig.postgresql() factory method."""
+    from cello import EventSourcingConfig
+
+    config = EventSourcingConfig.postgresql("postgresql://localhost/events")
+    assert config is not None
+    assert config.store_type == "postgresql"
+    assert config.enable_snapshots is True
+
+
+def test_eventsourcing_config_attributes_settable():
+    """Test that EventSourcingConfig attributes can be set after creation."""
+    from cello import EventSourcingConfig
+
+    config = EventSourcingConfig()
+    config.store_type = "postgresql"
+    config.snapshot_interval = 200
+    config.enable_snapshots = False
+    config.max_events_per_aggregate = 20000
+
+    assert config.store_type == "postgresql"
+    assert config.snapshot_interval == 200
+    assert config.enable_snapshots is False
+    assert config.max_events_per_aggregate == 20000
+
+
+def test_eventsourcing_config_snapshot_disabled():
+    """Test EventSourcingConfig with snapshots disabled."""
+    from cello import EventSourcingConfig
+
+    config = EventSourcingConfig(enable_snapshots=False)
+    assert config.enable_snapshots is False
+    assert config.snapshot_interval == 100  # still has default interval
+
+
+# ---------------------------------------------------------------------------
+# v0.10.0 CqrsConfig (Rust-backed PyO3 class)
+# ---------------------------------------------------------------------------
+
+
+def test_cqrs_config_defaults():
+    """Test CqrsConfig creation with default values."""
+    from cello import CqrsConfig
+
+    config = CqrsConfig()
+    assert config is not None
+    assert config.enable_event_sync is True
+    assert config.command_timeout_ms == 5000
+    assert config.query_timeout_ms == 3000
+    assert config.max_retries == 3
+
+
+def test_cqrs_config_custom():
+    """Test CqrsConfig creation with custom values."""
+    from cello import CqrsConfig
+
+    config = CqrsConfig(
+        enable_event_sync=False,
+        command_timeout_ms=10000,
+        query_timeout_ms=8000,
+        max_retries=5,
+    )
+    assert config.enable_event_sync is False
+    assert config.command_timeout_ms == 10000
+    assert config.query_timeout_ms == 8000
+    assert config.max_retries == 5
+
+
+def test_cqrs_config_attributes_settable():
+    """Test that CqrsConfig attributes can be set after creation."""
+    from cello import CqrsConfig
+
+    config = CqrsConfig()
+    config.enable_event_sync = False
+    config.command_timeout_ms = 15000
+    config.query_timeout_ms = 12000
+    config.max_retries = 10
+
+    assert config.enable_event_sync is False
+    assert config.command_timeout_ms == 15000
+    assert config.query_timeout_ms == 12000
+    assert config.max_retries == 10
+
+
+def test_cqrs_config_high_timeout():
+    """Test CqrsConfig with very large timeout values."""
+    from cello import CqrsConfig
+
+    config = CqrsConfig(
+        command_timeout_ms=120000,
+        query_timeout_ms=60000,
+    )
+    assert config.command_timeout_ms == 120000
+    assert config.query_timeout_ms == 60000
+
+
+def test_cqrs_config_no_retries():
+    """Test CqrsConfig with retries disabled."""
+    from cello import CqrsConfig
+
+    config = CqrsConfig(max_retries=0)
+    assert config.max_retries == 0
+
+
+# ---------------------------------------------------------------------------
+# v0.10.0 SagaConfig (Rust-backed PyO3 class)
+# ---------------------------------------------------------------------------
+
+
+def test_saga_config_defaults():
+    """Test SagaConfig creation with default values."""
+    from cello import SagaConfig
+
+    config = SagaConfig()
+    assert config is not None
+    assert config.max_retries == 3
+    assert config.retry_delay_ms == 1000
+    assert config.timeout_ms == 30000
+    assert config.enable_logging is True
+
+
+def test_saga_config_custom():
+    """Test SagaConfig creation with custom values."""
+    from cello import SagaConfig
+
+    config = SagaConfig(
+        max_retries=5,
+        retry_delay_ms=2000,
+        timeout_ms=60000,
+        enable_logging=False,
+    )
+    assert config.max_retries == 5
+    assert config.retry_delay_ms == 2000
+    assert config.timeout_ms == 60000
+    assert config.enable_logging is False
+
+
+def test_saga_config_attributes_settable():
+    """Test that SagaConfig attributes can be set after creation."""
+    from cello import SagaConfig
+
+    config = SagaConfig()
+    config.max_retries = 10
+    config.retry_delay_ms = 5000
+    config.timeout_ms = 120000
+    config.enable_logging = False
+
+    assert config.max_retries == 10
+    assert config.retry_delay_ms == 5000
+    assert config.timeout_ms == 120000
+    assert config.enable_logging is False
+
+
+def test_saga_config_no_logging():
+    """Test SagaConfig with logging disabled."""
+    from cello import SagaConfig
+
+    config = SagaConfig(enable_logging=False)
+    assert config.enable_logging is False
+    assert config.max_retries == 3  # other defaults still valid
+
+
+def test_saga_config_fast_retry():
+    """Test SagaConfig with small retry delay for fast retries."""
+    from cello import SagaConfig
+
+    config = SagaConfig(retry_delay_ms=100)
+    assert config.retry_delay_ms == 100
+
+
+# ---------------------------------------------------------------------------
+# v0.10.0 App Integration Methods
+# ---------------------------------------------------------------------------
+
+
+def test_app_enable_event_sourcing():
+    """Test App.enable_event_sourcing() does not raise errors."""
+    from cello import App
+
+    app = App()
+    app.enable_event_sourcing()
+    assert True
+
+
+def test_app_enable_event_sourcing_with_config():
+    """Test App.enable_event_sourcing() with explicit config."""
+    from cello import App, EventSourcingConfig
+
+    app = App()
+    config = EventSourcingConfig(
+        store_type="memory",
+        snapshot_interval=50,
+        enable_snapshots=True,
+    )
+    app.enable_event_sourcing(config)
+    assert True
+
+
+def test_app_enable_event_sourcing_memory():
+    """Test App.enable_event_sourcing() with memory config."""
+    from cello import App, EventSourcingConfig
+
+    app = App()
+    app.enable_event_sourcing(EventSourcingConfig.memory())
+    assert True
+
+
+def test_app_enable_cqrs():
+    """Test App.enable_cqrs() does not raise errors."""
+    from cello import App
+
+    app = App()
+    app.enable_cqrs()
+    assert True
+
+
+def test_app_enable_cqrs_with_config():
+    """Test App.enable_cqrs() with explicit config."""
+    from cello import App, CqrsConfig
+
+    app = App()
+    config = CqrsConfig(
+        enable_event_sync=True,
+        command_timeout_ms=10000,
+        max_retries=5,
+    )
+    app.enable_cqrs(config)
+    assert True
+
+
+def test_app_enable_saga():
+    """Test App.enable_saga() does not raise errors."""
+    from cello import App
+
+    app = App()
+    app.enable_saga()
+    assert True
+
+
+def test_app_with_all_v0100_features():
+    """Test an App with all v0.10.0 features enabled together."""
+    from cello import App, EventSourcingConfig, CqrsConfig, SagaConfig
+
+    app = App()
+
+    # Core middleware
+    app.enable_cors()
+    app.enable_logging()
+
+    # v0.10.0 Advanced Pattern features
+    app.enable_event_sourcing(EventSourcingConfig.memory())
+    app.enable_cqrs(CqrsConfig())
+    app.enable_saga(SagaConfig())
+
+    # Register routes
+    @app.get("/")
+    def home(req):
+        return {"version": "0.10.0"}
+
+    assert True
+
+
+# ---------------------------------------------------------------------------
+# v0.10.0 Event Sourcing Python Module Tests
+# ---------------------------------------------------------------------------
+
+
+def test_event_creation():
+    """Test Event creation with type and data."""
+    from cello.eventsourcing import Event
+
+    event = Event("OrderCreated", {"id": 1})
+    assert event is not None
+    assert event.event_type == "OrderCreated"
+    assert event.data == {"id": 1}
+
+
+def test_event_properties():
+    """Test Event has all expected properties."""
+    from cello.eventsourcing import Event
+
+    event = Event("OrderCreated", {"id": 1})
+    assert event.id is not None
+    assert event.event_type == "OrderCreated"
+    assert event.data == {"id": 1}
+    assert event.aggregate_id is None
+    assert event.metadata == {}
+    assert event.version == 0
+    assert event.timestamp is not None
+
+
+def test_event_with_aggregate_id():
+    """Test Event creation with aggregate_id."""
+    from cello.eventsourcing import Event
+
+    event = Event("OrderCreated", {"id": 1}, aggregate_id="order-1")
+    assert event.aggregate_id == "order-1"
+    assert event.event_type == "OrderCreated"
+
+
+def test_event_with_metadata():
+    """Test Event creation with metadata."""
+    from cello.eventsourcing import Event
+
+    event = Event("OrderCreated", {}, metadata={"user": "admin"})
+    assert event.metadata == {"user": "admin"}
+
+
+def test_event_json():
+    """Test Event.to_dict() returns dict with all fields."""
+    from cello.eventsourcing import Event
+
+    event = Event("OrderCreated", {"id": 1}, aggregate_id="order-1")
+    data = event.to_dict()
+    assert isinstance(data, dict)
+    assert data["event_type"] == "OrderCreated"
+    assert data["data"] == {"id": 1}
+    assert data["aggregate_id"] == "order-1"
+    assert "id" in data
+    assert "timestamp" in data
+    assert "version" in data
+
+
+def test_event_repr():
+    """Test Event repr contains event_type."""
+    from cello.eventsourcing import Event
+
+    event = Event("OrderCreated", {"id": 1})
+    r = repr(event)
+    assert "OrderCreated" in r
+
+
+def test_aggregate_creation():
+    """Test Aggregate subclass creation."""
+    from cello.eventsourcing import Aggregate
+
+    class OrderAggregate(Aggregate):
+        pass
+
+    agg = OrderAggregate()
+    assert agg is not None
+    assert agg.version == 0
+
+
+def test_aggregate_default_id():
+    """Test Aggregate auto-generates a UUID id."""
+    from cello.eventsourcing import Aggregate
+
+    class OrderAggregate(Aggregate):
+        pass
+
+    agg = OrderAggregate()
+    assert agg.aggregate_id is not None
+    assert len(agg.aggregate_id) > 0
+
+
+def test_aggregate_custom_id():
+    """Test Aggregate with custom aggregate_id."""
+    from cello.eventsourcing import Aggregate
+
+    class OrderAggregate(Aggregate):
+        pass
+
+    agg = OrderAggregate(aggregate_id="order-1")
+    assert agg.aggregate_id == "order-1"
+
+
+def test_aggregate_apply_event():
+    """Test applying an event increments version."""
+    from cello.eventsourcing import Aggregate, Event
+
+    class OrderAggregate(Aggregate):
+        pass
+
+    agg = OrderAggregate(aggregate_id="order-1")
+    event = Event("OrderCreated", {"id": 1})
+    agg.apply(event)
+    assert agg.version == 1
+
+
+def test_aggregate_uncommitted_events():
+    """Test that applied events appear in uncommitted events."""
+    from cello.eventsourcing import Aggregate, Event
+
+    class OrderAggregate(Aggregate):
+        pass
+
+    agg = OrderAggregate(aggregate_id="order-1")
+    event = Event("OrderCreated", {"id": 1})
+    agg.apply(event)
+    uncommitted = agg.uncommitted_events
+    assert len(uncommitted) == 1
+    assert uncommitted[0].event_type == "OrderCreated"
+
+
+def test_aggregate_clear_uncommitted():
+    """Test clear_uncommitted() empties uncommitted events."""
+    from cello.eventsourcing import Aggregate, Event
+
+    class OrderAggregate(Aggregate):
+        pass
+
+    agg = OrderAggregate(aggregate_id="order-1")
+    agg.apply(Event("OrderCreated", {"id": 1}))
+    agg.apply(Event("OrderShipped", {"tracking": "ABC"}))
+    assert len(agg.uncommitted_events) == 2
+
+    agg.clear_uncommitted()
+    assert len(agg.uncommitted_events) == 0
+
+
+def test_aggregate_load_from_events():
+    """Test replaying a list of events onto an aggregate."""
+    from cello.eventsourcing import Aggregate, Event
+
+    class OrderAggregate(Aggregate):
+        pass
+
+    events = [
+        Event("OrderCreated", {"id": 1}),
+        Event("OrderShipped", {"tracking": "ABC"}),
+        Event("OrderDelivered", {}),
+    ]
+
+    agg = OrderAggregate(aggregate_id="order-1")
+    agg.load_from_events(events)
+    assert agg.version == 3
+
+
+def test_aggregate_event_handler_decorator():
+    """Test @event_handler decorator on aggregate method."""
+    from cello.eventsourcing import Aggregate, Event, event_handler
+
+    class OrderAggregate(Aggregate):
+        def __init__(self, **kwargs):
+            super().__init__(**kwargs)
+            self.status = "new"
+
+        @event_handler("OrderCreated")
+        def on_order_created(self, event):
+            self.status = "created"
+
+        @event_handler("OrderShipped")
+        def on_order_shipped(self, event):
+            self.status = "shipped"
+
+    agg = OrderAggregate(aggregate_id="order-1")
+    agg.apply(Event("OrderCreated", {"id": 1}))
+    assert agg.status == "created"
+
+    agg.apply(Event("OrderShipped", {"tracking": "XYZ"}))
+    assert agg.status == "shipped"
+
+
+def test_aggregate_version_tracking():
+    """Test version tracking with multiple events."""
+    from cello.eventsourcing import Aggregate, Event
+
+    class OrderAggregate(Aggregate):
+        pass
+
+    agg = OrderAggregate(aggregate_id="order-1")
+    assert agg.version == 0
+
+    for i in range(5):
+        agg.apply(Event("ItemAdded", {"item": i}))
+
+    assert agg.version == 5
+
+
+def test_aggregate_repr():
+    """Test Aggregate repr."""
+    from cello.eventsourcing import Aggregate
+
+    class OrderAggregate(Aggregate):
+        pass
+
+    agg = OrderAggregate(aggregate_id="order-1")
+    r = repr(agg)
+    assert "order-1" in r
+
+
+def test_snapshot_creation():
+    """Test Snapshot creation."""
+    from cello.eventsourcing import Snapshot
+
+    snap = Snapshot("agg-1", 5, {"status": "active"})
+    assert snap is not None
+
+
+def test_snapshot_properties():
+    """Test Snapshot has all expected properties."""
+    from cello.eventsourcing import Snapshot
+
+    snap = Snapshot("agg-1", 5, {"status": "active"})
+    assert snap.aggregate_id == "agg-1"
+    assert snap.version == 5
+    assert snap.state == {"status": "active"}
+    assert snap.timestamp is not None
+
+
+@pytest.mark.asyncio
+async def test_event_store_creation():
+    """Test EventStore creation."""
+    from cello.eventsourcing import EventStore
+
+    store = EventStore()
+    assert store is not None
+
+
+@pytest.mark.asyncio
+async def test_event_store_connect():
+    """Test EventStore.connect() class method."""
+    from cello.eventsourcing import EventStore
+
+    store = await EventStore.connect()
+    assert store is not None
+
+
+@pytest.mark.asyncio
+async def test_event_store_append_and_get():
+    """Test appending events and retrieving them."""
+    from cello.eventsourcing import EventStore, Event
+
+    store = await EventStore.connect()
+    events = [
+        Event("OrderCreated", {"id": 1}, aggregate_id="order-1"),
+        Event("OrderShipped", {"tracking": "ABC"}, aggregate_id="order-1"),
+    ]
+    await store.append("order-1", events)
+    retrieved = await store.get_events("order-1")
+    assert len(retrieved) == 2
+    assert retrieved[0].event_type == "OrderCreated"
+    assert retrieved[1].event_type == "OrderShipped"
+
+
+@pytest.mark.asyncio
+async def test_event_store_get_since_version():
+    """Test get_events with since_version filter."""
+    from cello.eventsourcing import EventStore, Event
+
+    store = await EventStore.connect()
+    events = [
+        Event("OrderCreated", {"id": 1}, aggregate_id="order-2"),
+        Event("OrderShipped", {"tracking": "DEF"}, aggregate_id="order-2"),
+        Event("OrderDelivered", {}, aggregate_id="order-2"),
+    ]
+    await store.append("order-2", events)
+    retrieved = await store.get_events("order-2", since_version=1)
+    assert len(retrieved) == 2
+    assert retrieved[0].event_type == "OrderShipped"
+    assert retrieved[1].event_type == "OrderDelivered"
+
+
+@pytest.mark.asyncio
+async def test_event_store_snapshot():
+    """Test saving and retrieving a snapshot."""
+    from cello.eventsourcing import EventStore, Snapshot
+
+    store = await EventStore.connect()
+    snap = Snapshot("order-3", 5, {"status": "shipped", "items": 3})
+    await store.save_snapshot(snap)
+
+    loaded = await store.get_snapshot("order-3")
+    assert loaded is not None
+    assert loaded.aggregate_id == "order-3"
+    assert loaded.version == 5
+    assert loaded.state == {"status": "shipped", "items": 3}
+
+
+@pytest.mark.asyncio
+async def test_event_store_close():
+    """Test EventStore.close() does not raise errors."""
+    from cello.eventsourcing import EventStore
+
+    store = await EventStore.connect()
+    await store.close()
+    assert True
+
+
+def test_eventsourcing_config_python():
+    """Test Python-side EventSourcingConfig usage."""
+    from cello import EventSourcingConfig
+
+    config = EventSourcingConfig.memory()
+    assert config.store_type == "memory"
+
+    config2 = EventSourcingConfig.postgresql("postgresql://localhost/events")
+    assert config2.store_type == "postgresql"
+
+
+# ---------------------------------------------------------------------------
+# v0.10.0 CQRS Python Module Tests
+# ---------------------------------------------------------------------------
+
+
+def test_command_creation():
+    """Test Command subclass creation with kwargs."""
+    from cello.cqrs import Command
+
+    class CreateOrder(Command):
+        pass
+
+    cmd = CreateOrder(user_id=1, product="Widget", quantity=3)
+    assert cmd is not None
+    assert cmd.user_id == 1
+    assert cmd.product == "Widget"
+    assert cmd.quantity == 3
+
+
+def test_command_properties():
+    """Test Command has id, command_type, and timestamp."""
+    from cello.cqrs import Command
+
+    class CreateOrder(Command):
+        pass
+
+    cmd = CreateOrder(user_id=1)
+    assert cmd.id is not None
+    assert cmd.command_type is not None
+    assert cmd.timestamp is not None
+
+
+def test_command_to_dict():
+    """Test Command.to_dict() returns dict of all kwargs."""
+    from cello.cqrs import Command
+
+    class CreateOrder(Command):
+        pass
+
+    cmd = CreateOrder(user_id=1, product="Widget")
+    data = cmd.to_dict()
+    assert isinstance(data, dict)
+    assert data["user_id"] == 1
+    assert data["product"] == "Widget"
+    assert "id" in data
+    assert "command_type" in data
+
+
+def test_command_type_is_class_name():
+    """Test that command_type defaults to the class name."""
+    from cello.cqrs import Command
+
+    class CreateOrder(Command):
+        pass
+
+    cmd = CreateOrder(user_id=1)
+    assert cmd.command_type == "CreateOrder"
+
+
+def test_command_repr():
+    """Test Command repr contains class name."""
+    from cello.cqrs import Command
+
+    class CreateOrder(Command):
+        pass
+
+    cmd = CreateOrder(user_id=1)
+    r = repr(cmd)
+    assert "CreateOrder" in r
+
+
+def test_query_creation():
+    """Test Query subclass creation."""
+    from cello.cqrs import Query
+
+    class GetOrder(Query):
+        pass
+
+    q = GetOrder(order_id="order-1")
+    assert q is not None
+    assert q.order_id == "order-1"
+
+
+def test_query_properties():
+    """Test Query has id, query_type, and timestamp."""
+    from cello.cqrs import Query
+
+    class GetOrder(Query):
+        pass
+
+    q = GetOrder(order_id="order-1")
+    assert q.id is not None
+    assert q.query_type is not None
+    assert q.timestamp is not None
+
+
+def test_query_to_dict():
+    """Test Query.to_dict() returns dict of all kwargs."""
+    from cello.cqrs import Query
+
+    class GetOrder(Query):
+        pass
+
+    q = GetOrder(order_id="order-1")
+    data = q.to_dict()
+    assert isinstance(data, dict)
+    assert data["order_id"] == "order-1"
+    assert "id" in data
+    assert "query_type" in data
+
+
+def test_query_type_is_class_name():
+    """Test that query_type defaults to the class name."""
+    from cello.cqrs import Query
+
+    class GetOrder(Query):
+        pass
+
+    q = GetOrder(order_id="order-1")
+    assert q.query_type == "GetOrder"
+
+
+def test_query_repr():
+    """Test Query repr contains class name."""
+    from cello.cqrs import Query
+
+    class GetOrder(Query):
+        pass
+
+    q = GetOrder(order_id="order-1")
+    r = repr(q)
+    assert "GetOrder" in r
+
+
+def test_command_result_ok():
+    """Test CommandResult.ok() factory."""
+    from cello.cqrs import CommandResult
+
+    result = CommandResult.ok({"id": 1})
+    assert result.success is True
+    assert result.data == {"id": 1}
+    assert result.error is None
+
+
+def test_command_result_fail():
+    """Test CommandResult.fail() factory."""
+    from cello.cqrs import CommandResult
+
+    result = CommandResult.fail("something went wrong")
+    assert result.success is False
+    assert result.error == "something went wrong"
+    assert result.data is None
+
+
+def test_command_result_rejected():
+    """Test CommandResult.rejected() factory."""
+    from cello.cqrs import CommandResult
+
+    result = CommandResult.rejected("invalid input")
+    assert result.success is False
+    assert result.error == "invalid input"
+    assert result.status == "rejected"
+
+
+def test_command_result_success_flag():
+    """Test CommandResult success flag for both ok and fail."""
+    from cello.cqrs import CommandResult
+
+    ok_result = CommandResult.ok({"id": 1})
+    fail_result = CommandResult.fail("error")
+
+    assert ok_result.success is True
+    assert fail_result.success is False
+
+
+def test_query_result_ok():
+    """Test QueryResult.ok() factory."""
+    from cello.cqrs import QueryResult
+
+    result = QueryResult.ok({"id": 1, "name": "Alice"})
+    assert result.found is True
+    assert result.data == {"id": 1, "name": "Alice"}
+    assert result.error is None
+
+
+def test_query_result_not_found():
+    """Test QueryResult.not_found() factory."""
+    from cello.cqrs import QueryResult
+
+    result = QueryResult.not_found()
+    assert result.found is False
+    assert result.data is None
+    assert result.error is None
+
+
+def test_query_result_fail():
+    """Test QueryResult.fail() factory."""
+    from cello.cqrs import QueryResult
+
+    result = QueryResult.fail("database error")
+    assert result.found is False
+    assert result.error == "database error"
+    assert result.data is None
+
+
+def test_query_result_found_flag():
+    """Test QueryResult found flag for ok, not_found, and fail."""
+    from cello.cqrs import QueryResult
+
+    ok_result = QueryResult.ok({"id": 1})
+    not_found_result = QueryResult.not_found()
+    fail_result = QueryResult.fail("error")
+
+    assert ok_result.found is True
+    assert not_found_result.found is False
+    assert fail_result.found is False
+
+
+def test_command_handler_decorator():
+    """Test @command_handler decorator marks a function."""
+    from cello.cqrs import Command, command_handler
+
+    class CreateOrder(Command):
+        pass
+
+    @command_handler(CreateOrder)
+    def handle_create_order(cmd):
+        return {"created": True}
+
+    assert handle_create_order._command_type is CreateOrder
+    assert handle_create_order._is_command_handler is True
+    result = handle_create_order(CreateOrder(user_id=1))
+    assert result == {"created": True}
+
+
+def test_query_handler_decorator():
+    """Test @query_handler decorator marks a function."""
+    from cello.cqrs import Query, query_handler
+
+    class GetOrder(Query):
+        pass
+
+    @query_handler(GetOrder)
+    def handle_get_order(q):
+        return {"id": "order-1", "status": "active"}
+
+    assert handle_get_order._query_type is GetOrder
+    assert handle_get_order._is_query_handler is True
+    result = handle_get_order(GetOrder(order_id="order-1"))
+    assert result == {"id": "order-1", "status": "active"}
+
+
+@pytest.mark.asyncio
+async def test_command_bus_register_and_dispatch():
+    """Test CommandBus register handler and dispatch command."""
+    from cello.cqrs import Command, CommandResult, CommandBus
+
+    class CreateOrder(Command):
+        pass
+
+    bus = CommandBus()
+
+    async def handle_create(cmd):
+        return CommandResult.ok({"order_id": "new-1", "user": cmd.user_id})
+
+    bus.register(CreateOrder, handle_create)
+
+    result = await bus.dispatch(CreateOrder(user_id=42))
+    assert result.success is True
+    assert result.data["order_id"] == "new-1"
+    assert result.data["user"] == 42
+
+
+@pytest.mark.asyncio
+async def test_command_bus_missing_handler():
+    """Test CommandBus raises on dispatch with unregistered command."""
+    from cello.cqrs import Command, CommandBus
+
+    class UnregisteredCommand(Command):
+        pass
+
+    bus = CommandBus()
+
+    with pytest.raises(Exception):
+        await bus.dispatch(UnregisteredCommand())
+
+
+@pytest.mark.asyncio
+async def test_query_bus_register_and_execute():
+    """Test QueryBus register handler and execute query."""
+    from cello.cqrs import Query, QueryResult, QueryBus
+
+    class GetOrder(Query):
+        pass
+
+    bus = QueryBus()
+
+    async def handle_get(q):
+        return QueryResult.ok({"order_id": q.order_id, "status": "active"})
+
+    bus.register(GetOrder, handle_get)
+
+    result = await bus.execute(GetOrder(order_id="order-1"))
+    assert result.found is True
+    assert result.data["order_id"] == "order-1"
+    assert result.data["status"] == "active"
+
+
+@pytest.mark.asyncio
+async def test_query_bus_missing_handler():
+    """Test QueryBus raises on execute with unregistered query."""
+    from cello.cqrs import Query, QueryBus
+
+    class UnregisteredQuery(Query):
+        pass
+
+    bus = QueryBus()
+
+    with pytest.raises(Exception):
+        await bus.execute(UnregisteredQuery())
+
+
+def test_command_bus_repr():
+    """Test CommandBus repr."""
+    from cello.cqrs import CommandBus
+
+    bus = CommandBus()
+    r = repr(bus)
+    assert "CommandBus" in r
+
+
+# ---------------------------------------------------------------------------
+# v0.10.0 Saga Python Module Tests
+# ---------------------------------------------------------------------------
+
+
+def test_saga_step_creation():
+    """Test SagaStep creation with action function."""
+    from cello.saga import SagaStep
+
+    async def my_action(context):
+        return {"done": True}
+
+    step = SagaStep("step1", action=my_action)
+    assert step is not None
+    assert step.name == "step1"
+
+
+def test_saga_step_with_compensate():
+    """Test SagaStep creation with both action and compensate."""
+    from cello.saga import SagaStep
+
+    async def my_action(context):
+        return {"done": True}
+
+    async def my_compensate(context):
+        return {"undone": True}
+
+    step = SagaStep("step1", action=my_action, compensate=my_compensate)
+    assert step.name == "step1"
+    assert step.action is not None
+    assert step.compensate is not None
+
+
+def test_saga_step_properties():
+    """Test SagaStep has name, status, action, and compensate."""
+    from cello.saga import SagaStep
+
+    async def action_fn(ctx):
+        pass
+
+    async def comp_fn(ctx):
+        pass
+
+    step = SagaStep("reserve_inventory", action=action_fn, compensate=comp_fn)
+    assert step.name == "reserve_inventory"
+    assert step.status is not None
+    assert step.action is action_fn
+    assert step.compensate is comp_fn
+
+
+def test_saga_step_default_status():
+    """Test SagaStep default status is 'pending'."""
+    from cello.saga import SagaStep
+
+    async def action_fn(ctx):
+        pass
+
+    step = SagaStep("step1", action=action_fn)
+    assert step.status == "pending"
+
+
+@pytest.mark.asyncio
+async def test_saga_step_execute():
+    """Test SagaStep execute runs the action."""
+    from cello.saga import SagaStep
+
+    executed = []
+
+    async def action_fn(ctx):
+        executed.append("action")
+        return {"result": "ok"}
+
+    step = SagaStep("step1", action=action_fn)
+    result = await step.execute({})
+    assert "action" in executed
+    assert result == {"result": "ok"}
+
+
+@pytest.mark.asyncio
+async def test_saga_step_compensate_step():
+    """Test SagaStep compensate_step runs the compensation."""
+    from cello.saga import SagaStep
+
+    compensated = []
+
+    async def action_fn(ctx):
+        return True
+
+    async def comp_fn(ctx):
+        compensated.append("compensated")
+        return True
+
+    step = SagaStep("step1", action=action_fn, compensate=comp_fn)
+    await step.compensate_step({})
+    assert "compensated" in compensated
+
+
+def test_saga_step_repr():
+    """Test SagaStep repr contains step name."""
+    from cello.saga import SagaStep
+
+    async def action_fn(ctx):
+        pass
+
+    step = SagaStep("reserve_inventory", action=action_fn)
+    r = repr(step)
+    assert "reserve_inventory" in r
+
+
+def test_step_status_constants():
+    """Test StepStatus has all expected constants."""
+    from cello.saga import StepStatus
+
+    assert StepStatus.PENDING == "pending"
+    assert StepStatus.RUNNING == "running"
+    assert StepStatus.COMPLETED == "completed"
+    assert StepStatus.FAILED == "failed"
+    assert StepStatus.COMPENSATING == "compensating"
+    assert StepStatus.COMPENSATED == "compensated"
+
+
+def test_saga_creation():
+    """Test Saga subclass creation with steps."""
+    from cello.saga import Saga, SagaStep
+
+    async def step1_action(ctx):
+        pass
+
+    async def step2_action(ctx):
+        pass
+
+    class OrderSaga(Saga):
+        steps = [
+            SagaStep("step1", action=step1_action),
+            SagaStep("step2", action=step2_action),
+        ]
+
+    saga = OrderSaga()
+    assert saga is not None
+
+
+def test_saga_default_name():
+    """Test Saga default name is class name."""
+    from cello.saga import Saga, SagaStep
+
+    async def action_fn(ctx):
+        pass
+
+    class OrderSaga(Saga):
+        steps = [SagaStep("step1", action=action_fn)]
+
+    saga = OrderSaga()
+    assert saga.name == "OrderSaga"
+
+
+def test_saga_custom_name():
+    """Test Saga with custom name."""
+    from cello.saga import Saga, SagaStep
+
+    async def action_fn(ctx):
+        pass
+
+    class OrderSaga(Saga):
+        steps = [SagaStep("step1", action=action_fn)]
+
+    saga = OrderSaga(name="my-saga")
+    assert saga.name == "my-saga"
+
+
+def test_saga_add_step():
+    """Test Saga.add_step() adds a step."""
+    from cello.saga import Saga, SagaStep
+
+    class OrderSaga(Saga):
+        steps = []
+
+    saga = OrderSaga()
+
+    async def new_action(ctx):
+        pass
+
+    saga.add_step(SagaStep("new_step", action=new_action))
+    assert len(saga.get_steps()) == 1
+    assert saga.get_steps()[0].name == "new_step"
+
+
+def test_saga_get_steps():
+    """Test Saga.get_steps() returns list of steps."""
+    from cello.saga import Saga, SagaStep
+
+    async def action1(ctx):
+        pass
+
+    async def action2(ctx):
+        pass
+
+    class OrderSaga(Saga):
+        steps = [
+            SagaStep("step1", action=action1),
+            SagaStep("step2", action=action2),
+        ]
+
+    saga = OrderSaga()
+    steps = saga.get_steps()
+    assert len(steps) == 2
+    assert steps[0].name == "step1"
+    assert steps[1].name == "step2"
+
+
+def test_saga_step_count():
+    """Test Saga step count matches added steps."""
+    from cello.saga import Saga, SagaStep
+
+    async def action_fn(ctx):
+        pass
+
+    class MySaga(Saga):
+        steps = [
+            SagaStep("a", action=action_fn),
+            SagaStep("b", action=action_fn),
+            SagaStep("c", action=action_fn),
+        ]
+
+    saga = MySaga()
+    assert len(saga.get_steps()) == 3
+
+
+def test_saga_repr():
+    """Test Saga repr contains saga name."""
+    from cello.saga import Saga, SagaStep
+
+    async def action_fn(ctx):
+        pass
+
+    class OrderSaga(Saga):
+        steps = [SagaStep("step1", action=action_fn)]
+
+    saga = OrderSaga()
+    r = repr(saga)
+    assert "OrderSaga" in r
+
+
+@pytest.mark.asyncio
+async def test_saga_execution_creation():
+    """Test SagaExecution creation from a Saga."""
+    from cello.saga import Saga, SagaStep, SagaExecution
+
+    async def action_fn(ctx):
+        pass
+
+    class OrderSaga(Saga):
+        steps = [SagaStep("step1", action=action_fn)]
+
+    saga = OrderSaga()
+    execution = SagaExecution(saga)
+    assert execution is not None
+
+
+@pytest.mark.asyncio
+async def test_saga_execution_run_success():
+    """Test SagaExecution.run() with all steps succeeding."""
+    from cello.saga import Saga, SagaStep, SagaExecution
+
+    results = []
+
+    async def step1_action(ctx):
+        results.append("step1")
+        return True
+
+    async def step2_action(ctx):
+        results.append("step2")
+        return True
+
+    async def step3_action(ctx):
+        results.append("step3")
+        return True
+
+    class SuccessSaga(Saga):
+        steps = [
+            SagaStep("step1", action=step1_action),
+            SagaStep("step2", action=step2_action),
+            SagaStep("step3", action=step3_action),
+        ]
+
+    saga = SuccessSaga()
+    execution = SagaExecution(saga)
+    result = await execution.run({})
+
+    assert result.success is True
+    assert results == ["step1", "step2", "step3"]
+
+
+@pytest.mark.asyncio
+async def test_saga_execution_run_failure_compensates():
+    """Test SagaExecution compensates completed steps on failure."""
+    from cello.saga import Saga, SagaStep, SagaExecution
+
+    actions = []
+    compensations = []
+
+    async def step1_action(ctx):
+        actions.append("step1")
+        return True
+
+    async def step1_comp(ctx):
+        compensations.append("step1_comp")
+        return True
+
+    async def step2_action(ctx):
+        actions.append("step2")
+        raise RuntimeError("step2 failed")
+
+    async def step2_comp(ctx):
+        compensations.append("step2_comp")
+        return True
+
+    async def step3_action(ctx):
+        actions.append("step3")
+        return True
+
+    class FailingSaga(Saga):
+        steps = [
+            SagaStep("step1", action=step1_action, compensate=step1_comp),
+            SagaStep("step2", action=step2_action, compensate=step2_comp),
+            SagaStep("step3", action=step3_action),
+        ]
+
+    saga = FailingSaga()
+    execution = SagaExecution(saga)
+    result = await execution.run({})
+
+    assert result.success is False
+    assert "step1" in actions
+    assert "step2" in actions
+    assert "step3" not in actions
+    # Compensation should run in reverse order for completed steps
+    assert "step1_comp" in compensations
+
+
+@pytest.mark.asyncio
+async def test_saga_execution_status_tracking():
+    """Test SagaExecution tracks execution status."""
+    from cello.saga import Saga, SagaStep, SagaExecution
+
+    async def action_fn(ctx):
+        return True
+
+    class MySaga(Saga):
+        steps = [SagaStep("step1", action=action_fn)]
+
+    saga = MySaga()
+    execution = SagaExecution(saga)
+
+    assert execution.status in ("pending", "created")
+    await execution.run({})
+    assert execution.status in ("completed", "success")
+
+
+def test_saga_execution_repr():
+    """Test SagaExecution repr."""
+    from cello.saga import Saga, SagaStep, SagaExecution
+
+    async def action_fn(ctx):
+        pass
+
+    class OrderSaga(Saga):
+        steps = [SagaStep("step1", action=action_fn)]
+
+    saga = OrderSaga()
+    execution = SagaExecution(saga)
+    r = repr(execution)
+    assert "SagaExecution" in r
+
+
+@pytest.mark.asyncio
+async def test_saga_orchestrator_creation():
+    """Test SagaOrchestrator creation."""
+    from cello.saga import SagaOrchestrator
+
+    orchestrator = SagaOrchestrator()
+    assert orchestrator is not None
+
+
+@pytest.mark.asyncio
+async def test_saga_orchestrator_register():
+    """Test SagaOrchestrator.register() adds a saga."""
+    from cello.saga import Saga, SagaStep, SagaOrchestrator
+
+    async def action_fn(ctx):
+        pass
+
+    class OrderSaga(Saga):
+        steps = [SagaStep("step1", action=action_fn)]
+
+    orchestrator = SagaOrchestrator()
+    orchestrator.register(OrderSaga)
+    assert True
+
+
+@pytest.mark.asyncio
+async def test_saga_orchestrator_execute():
+    """Test SagaOrchestrator.execute() runs a registered saga."""
+    from cello.saga import Saga, SagaStep, SagaOrchestrator
+
+    executed = []
+
+    async def action_fn(ctx):
+        executed.append("done")
+        return True
+
+    class OrderSaga(Saga):
+        steps = [SagaStep("step1", action=action_fn)]
+
+    orchestrator = SagaOrchestrator()
+    orchestrator.register(OrderSaga)
+    result = await orchestrator.execute("OrderSaga", {})
+
+    assert result.success is True
+    assert "done" in executed
+
+
+@pytest.mark.asyncio
+async def test_saga_orchestrator_list_executions():
+    """Test SagaOrchestrator.list_executions() returns execution history."""
+    from cello.saga import Saga, SagaStep, SagaOrchestrator
+
+    async def action_fn(ctx):
+        return True
+
+    class OrderSaga(Saga):
+        steps = [SagaStep("step1", action=action_fn)]
+
+    orchestrator = SagaOrchestrator()
+    orchestrator.register(OrderSaga)
+    await orchestrator.execute("OrderSaga", {"order": 1})
+    await orchestrator.execute("OrderSaga", {"order": 2})
+
+    executions = orchestrator.list_executions()
+    assert isinstance(executions, list)
+    assert len(executions) >= 2
+
+
+def test_saga_error_creation():
+    """Test SagaError creation with step_name and original_error."""
+    from cello.saga import SagaError
+
+    original = RuntimeError("connection lost")
+    error = SagaError(step_name="process_payment", original_error=original)
+    assert error.step_name == "process_payment"
+    assert error.original_error is original
+    assert "process_payment" in str(error)

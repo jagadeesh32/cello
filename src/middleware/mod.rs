@@ -42,6 +42,11 @@ pub mod messaging;
 // v0.9.0 - API Protocol modules
 pub mod grpc;
 
+// v0.10.0 - Advanced Pattern modules
+pub mod eventsourcing;
+pub mod cqrs;
+pub mod saga;
+
 // Re-export DTO types from the dto module
 pub use crate::dto::*;
 
@@ -80,6 +85,11 @@ pub use messaging::{MessageQueueConfig, KafkaConfig, RabbitMQConfig, SqsConfig, 
 
 // v0.9.0 - API Protocol re-exports
 pub use grpc::{GrpcConfig, GrpcServer, GrpcServiceDef, GrpcMethodDef, GrpcMethodType, GrpcRequest, GrpcResponse, GrpcStatus, GrpcError, GrpcStats};
+
+// v0.10.0 - Advanced Pattern re-exports
+pub use eventsourcing::{EventSourcingConfig, Event, AggregateState, Snapshot, EventStore, InMemoryEventStore, EventSourcingError, EventSourcingStats};
+pub use cqrs::{CqrsConfig, Command, CommandResult, QueryDef, QueryResult, CommandBus, QueryBus, CqrsError, CqrsStats};
+pub use saga::{SagaConfig, SagaStep, StepStatus, SagaDefinition, SagaStepDef, SagaExecution, SagaStatus, SagaOrchestrator, SagaError, SagaStats};
 
 // ============================================================================
 // Core Middleware Types
