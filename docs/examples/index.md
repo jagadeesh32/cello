@@ -217,10 +217,10 @@ graph LR
     G --> H[Middleware Pipeline]
     H --> I[Client Response]
 
-    style A fill:#ff6e40,stroke:#ff6e40,color:#fff
-    style I fill:#ff6e40,stroke:#ff6e40,color:#fff
-    style C fill:#ffab40,stroke:#ffab40,color:#000
-    style D fill:#7c4dff,stroke:#7c4dff,color:#fff
+    style A fill:#1A1A1A,stroke:#E65100,color:#FF9100
+    style I fill:#1A1A1A,stroke:#E65100,color:#FF9100
+    style C fill:#1A1A1A,stroke:#E65100,color:#FF9100
+    style D fill:#1A1A1A,stroke:#424242,color:#ab47bc
 ```
 
 ---

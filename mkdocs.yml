@@ -24,17 +24,15 @@ theme:
 
   # Color palette
   palette:
-    # Light mode
-    - media: "(prefers-color-scheme: light)"
-      scheme: default
+    # Light mode (default)
+    - scheme: default
       primary: custom
       accent: deep orange
       toggle:
         icon: material/brightness-7
         name: Switch to dark mode
     # Dark mode
-    - media: "(prefers-color-scheme: dark)"
-      scheme: slate
+    - scheme: slate
       primary: deep purple
       accent: amber
       toggle:

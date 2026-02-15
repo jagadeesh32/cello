@@ -16,25 +16,22 @@ hide:
     padding: 2rem 1rem 1rem 1rem;
   }
   .hero-section .hero-title {
-    font-size: 3.5rem;
+    font-size: 18px;
     font-weight: 800;
     letter-spacing: -0.02em;
     margin-bottom: 0.25rem;
-    background: linear-gradient(135deg, #ff6d00, #ff9100, #ffc107);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    color: #BF360C;
     line-height: 1.1;
   }
   .hero-section .hero-tagline {
-    font-size: 1.6rem;
+    font-size: 16px;
     font-weight: 700;
     margin: 0.5rem 0 0.25rem 0;
-    color: var(--md-default-fg-color);
+    color: #1A1A1A;
   }
   .hero-section .hero-subtitle {
-    font-size: 1.15rem;
-    color: var(--md-default-fg-color--light);
+    font-size: 16px;
+    color: #424242;
     margin-bottom: 1.5rem;
   }
   .hero-badges {
@@ -52,20 +49,24 @@ hide:
     font-weight: 600;
   }
   .badge-version {
-    background: linear-gradient(135deg, #ff6d00, #ff9100) !important;
-    color: #fff !important;
+    background: #1A1A1A !important;
+    color: #FF9100 !important;
+    border: 1px solid #424242 !important;
   }
   .badge-tests {
-    background: linear-gradient(135deg, #2e7d32, #4caf50) !important;
-    color: #fff !important;
+    background: #1A1A1A !important;
+    color: #4caf50 !important;
+    border: 1px solid #424242 !important;
   }
   .badge-license {
-    background: linear-gradient(135deg, #1565c0, #42a5f5) !important;
-    color: #fff !important;
+    background: #1A1A1A !important;
+    color: #42a5f5 !important;
+    border: 1px solid #424242 !important;
   }
   .badge-python {
-    background: linear-gradient(135deg, #6a1b9a, #ab47bc) !important;
-    color: #fff !important;
+    background: #1A1A1A !important;
+    color: #ab47bc !important;
+    border: 1px solid #424242 !important;
   }
 
   /* Performance banner */
@@ -78,19 +79,16 @@ hide:
     border: 1px solid rgba(255, 145, 0, 0.25);
   }
   .perf-number {
-    font-size: 3.2rem;
+    font-size: 18px;
     font-weight: 900;
-    background: linear-gradient(135deg, #ff6d00, #ffc107);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    color: #BF360C;
     line-height: 1.2;
     margin-bottom: 0.25rem;
   }
   .perf-label {
-    font-size: 1.1rem;
+    font-size: 13px;
     font-weight: 600;
-    color: var(--md-default-fg-color--light);
+    color: #424242;
   }
   .perf-grid {
     display: grid;
@@ -102,26 +100,28 @@ hide:
   .perf-item {
     padding: 1rem;
     border-radius: 8px;
-    background: var(--md-code-bg-color);
+    background: #FFFFFF;
+    border: 1px solid #E0E0E0;
   }
   .perf-item .fw-name {
     font-weight: 700;
     font-size: 1rem;
     margin-bottom: 0.25rem;
+    color: #1A1A1A;
   }
   .perf-item .fw-rps {
-    font-size: 1.5rem;
+    font-size: 18px;
     font-weight: 800;
   }
   .perf-item .fw-rps.cello-rps {
-    color: #ff9100;
+    color: #BF360C;
   }
   .perf-item .fw-rps.other-rps {
-    color: var(--md-default-fg-color--light);
+    color: #424242;
   }
   .perf-item .fw-detail {
     font-size: 0.8rem;
-    color: var(--md-default-fg-color--lighter);
+    color: #616161;
   }
 
   /* Architecture section */
@@ -129,8 +129,8 @@ hide:
     text-align: center;
     max-width: 700px;
     margin: 0 auto;
-    color: var(--md-default-fg-color--light);
-    font-size: 1.05rem;
+    color: #424242;
+    font-size: 14px;
   }
 
   /* What's new banner */
@@ -149,7 +149,8 @@ hide:
   .footer-tagline {
     text-align: center;
     padding: 2rem 0 1rem 0;
-    font-size: 1.1rem;
+    font-size: 14px;
+    color: #1A1A1A;
   }
   .footer-tagline .star-btn {
     margin-top: 1rem;
@@ -157,10 +158,10 @@ hide:
 
   /* Responsive */
   @media screen and (max-width: 600px) {
-    .hero-section .hero-title { font-size: 2.2rem; }
-    .hero-section .hero-tagline { font-size: 1.2rem; }
+    .hero-section .hero-title { font-size: 16px; }
+    .hero-section .hero-tagline { font-size: 14px; }
     .perf-grid { grid-template-columns: 1fr; }
-    .perf-number { font-size: 2.4rem; }
+    .perf-number { font-size: 16px; }
   }
 </style>
 
@@ -170,7 +171,7 @@ hide:
 
 <div class="hero-section" markdown>
 
-<div class="hero-title">:fire: Cello Framework :rocket:</div>
+<div class="hero-title">:material-fire: Cello Framework :material-rocket-launch:</div>
 
 <div class="hero-tagline">The World's Fastest Python Web Framework</div>
 
@@ -199,7 +200,7 @@ hide:
 
   <div class="perf-grid">
     <div class="perf-item">
-      <div class="fw-name">:fire: Cello</div>
+      <div class="fw-name">:material-fire: Cello</div>
       <div class="fw-rps cello-rps">150,000+</div>
       <div class="fw-detail">p50 &lt;1ms &middot; p99 &lt;5ms</div>
     </div>
@@ -220,7 +221,7 @@ hide:
 
 <!-- ===== WHY CELLO ===== -->
 
-## :zap: Why Cello?
+## :material-lightning-bolt: Why Cello?
 
 <div class="grid cards" markdown>
 
@@ -278,7 +279,7 @@ hide:
 
 <!-- ===== QUICK START ===== -->
 
-## :rocket: Quick Start
+## :material-rocket-launch: Quick Start
 
 === ":material-download: Installation"
 
@@ -383,7 +384,7 @@ hide:
 
 <!-- ===== ARCHITECTURE ===== -->
 
-## :building_construction: Architecture
+## :material-hammer-wrench: Architecture
 
 ```mermaid
 graph LR
@@ -394,13 +395,13 @@ graph LR
     E --> F["<b>Rust Response Builder</b><br/>SIMD JSON Serialization"]
     F --> G["<b>Response</b><br/>Zero-Copy Output"]
 
-    style A fill:#ff6d00,stroke:#e65100,color:#fff
-    style B fill:#ff8f00,stroke:#e65100,color:#fff
-    style C fill:#ffa000,stroke:#e65100,color:#fff
-    style D fill:#ffb300,stroke:#e65100,color:#000
-    style E fill:#3949ab,stroke:#1a237e,color:#fff
-    style F fill:#ffb300,stroke:#e65100,color:#000
-    style G fill:#ff6d00,stroke:#e65100,color:#fff
+    style A fill:#1A1A1A,stroke:#E65100,color:#FF9100
+    style B fill:#1A1A1A,stroke:#E65100,color:#FF9100
+    style C fill:#1A1A1A,stroke:#E65100,color:#FF9100
+    style D fill:#1A1A1A,stroke:#E65100,color:#FF9100
+    style E fill:#1A1A1A,stroke:#424242,color:#42a5f5
+    style F fill:#1A1A1A,stroke:#E65100,color:#FF9100
+    style G fill:#1A1A1A,stroke:#E65100,color:#FF9100
 ```
 
 <div class="arch-explain" markdown>
@@ -422,35 +423,35 @@ graph LR
 
 <!-- ===== FEATURE MATRIX ===== -->
 
-## :bar_chart: Feature Comparison
+## :material-chart-bar: Feature Comparison
 
 How Cello stacks up against popular Python web frameworks:
 
 | Feature | **Cello** | FastAPI | Flask | Django | Robyn |
 |---------|:---------:|:-------:|:-----:|:------:|:-----:|
 | **Requests/sec** | **150K+** | 30K | 5K | 8K | 100K |
-| **Async Native** | :white_check_mark: | :white_check_mark: | :x: | :white_check_mark: | :white_check_mark: |
-| **Rust Core** | :white_check_mark: | :x: | :x: | :x: | :white_check_mark: |
-| **SIMD JSON** | :white_check_mark: | :x: | :x: | :x: | :x: |
-| **WebSocket** | :white_check_mark: | :white_check_mark: | :x: | :white_check_mark: | :white_check_mark: |
-| **HTTP/2** | :white_check_mark: | :white_check_mark: | :x: | :x: | :x: |
-| **HTTP/3 (QUIC)** | :white_check_mark: | :x: | :x: | :x: | :x: |
-| **SSE** | :white_check_mark: | :white_check_mark: | :x: | :x: | :x: |
-| **GraphQL** | :white_check_mark: | :x: | :x: | :white_check_mark: | :x: |
-| **gRPC** | :white_check_mark: | :x: | :x: | :x: | :x: |
-| **Message Queues** | :white_check_mark: | :x: | :x: | :x: | :x: |
-| **Dependency Injection** | :white_check_mark: | :white_check_mark: | :x: | :x: | :x: |
-| **RBAC Guards** | :white_check_mark: | :x: | :x: | :white_check_mark: | :x: |
-| **OpenAPI Auto-Gen** | :white_check_mark: | :white_check_mark: | :x: | :x: | :x: |
-| **Event Sourcing** | :white_check_mark: | :x: | :x: | :x: | :x: |
-| **CQRS** | :white_check_mark: | :x: | :x: | :x: | :x: |
-| **Saga Pattern** | :white_check_mark: | :x: | :x: | :x: | :x: |
+| **Async Native** | :material-check-circle: | :material-check-circle: | :material-close-circle: | :material-check-circle: | :material-check-circle: |
+| **Rust Core** | :material-check-circle: | :material-close-circle: | :material-close-circle: | :material-close-circle: | :material-check-circle: |
+| **SIMD JSON** | :material-check-circle: | :material-close-circle: | :material-close-circle: | :material-close-circle: | :material-close-circle: |
+| **WebSocket** | :material-check-circle: | :material-check-circle: | :material-close-circle: | :material-check-circle: | :material-check-circle: |
+| **HTTP/2** | :material-check-circle: | :material-check-circle: | :material-close-circle: | :material-close-circle: | :material-close-circle: |
+| **HTTP/3 (QUIC)** | :material-check-circle: | :material-close-circle: | :material-close-circle: | :material-close-circle: | :material-close-circle: |
+| **SSE** | :material-check-circle: | :material-check-circle: | :material-close-circle: | :material-close-circle: | :material-close-circle: |
+| **GraphQL** | :material-check-circle: | :material-close-circle: | :material-close-circle: | :material-check-circle: | :material-close-circle: |
+| **gRPC** | :material-check-circle: | :material-close-circle: | :material-close-circle: | :material-close-circle: | :material-close-circle: |
+| **Message Queues** | :material-check-circle: | :material-close-circle: | :material-close-circle: | :material-close-circle: | :material-close-circle: |
+| **Dependency Injection** | :material-check-circle: | :material-check-circle: | :material-close-circle: | :material-close-circle: | :material-close-circle: |
+| **RBAC Guards** | :material-check-circle: | :material-close-circle: | :material-close-circle: | :material-check-circle: | :material-close-circle: |
+| **OpenAPI Auto-Gen** | :material-check-circle: | :material-check-circle: | :material-close-circle: | :material-close-circle: | :material-close-circle: |
+| **Event Sourcing** | :material-check-circle: | :material-close-circle: | :material-close-circle: | :material-close-circle: | :material-close-circle: |
+| **CQRS** | :material-check-circle: | :material-close-circle: | :material-close-circle: | :material-close-circle: | :material-close-circle: |
+| **Saga Pattern** | :material-check-circle: | :material-close-circle: | :material-close-circle: | :material-close-circle: | :material-close-circle: |
 
 ---
 
 <!-- ===== TECH STACK ===== -->
 
-## :package: Tech Stack
+## :material-package-variant: Tech Stack
 
 <div class="grid cards" markdown>
 
@@ -510,7 +511,7 @@ How Cello stacks up against popular Python web frameworks:
 
 <!-- ===== WHAT'S NEW ===== -->
 
-## :sparkles: What's New in v0.10.0
+## :material-creation: What's New in v0.10.0
 
 <div class="whats-new-box" markdown>
 
@@ -533,7 +534,7 @@ How Cello stacks up against popular Python web frameworks:
 
 <!-- ===== DOCUMENTATION SECTIONS ===== -->
 
-## :book: Documentation
+## :material-book-open-variant: Documentation
 
 <div class="grid cards" markdown>
 
@@ -591,7 +592,7 @@ How Cello stacks up against popular Python web frameworks:
 
 <!-- ===== COMMUNITY ===== -->
 
-## :handshake: Community & Contributing
+## :material-handshake: Community & Contributing
 
 We welcome contributions of all kinds. Whether it is a bug report, feature request, documentation improvement, or code contribution -- every bit helps.
 
@@ -629,7 +630,7 @@ We welcome contributions of all kinds. Whether it is a bug report, feature reque
 
 <div class="footer-tagline" markdown>
 
-**Made with :snake: Python and :crab: Rust**
+**Made with 🐍 Python and 🦀 Rust**
 
 Designed for developers who refuse to compromise between performance and productivity.
 

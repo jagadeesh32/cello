@@ -84,7 +84,7 @@ def dashboard(request):
             .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; }
             .card { background: #16213e; padding: 20px; border-radius: 8px; }
             .card h3 { margin: 0 0 10px 0; color: #0f3460; }
-            .value { font-size: 2em; font-weight: bold; }
+            .value { font-size: 18px; font-weight: bold; }
             .ok { color: #00d2ff; }
             .warn { color: #e94560; }
             #log { background: #0f3460; padding: 10px; max-height: 200px; overflow-y: auto; margin-top: 20px; }
