@@ -143,10 +143,15 @@ reqwest = { version = "0.11", features = ["blocking", "json", "multipart"] }
 tokio-test = "0.4"
 
 [profile.release]
-lto = true
+lto = "fat"
 codegen-units = 1
 opt-level = 3
+strip = true
+panic = "abort"
+# PERF: Disable overflow checks in release for maximum speed
+overflow-checks = false
 
 [profile.bench]
-lto = true
+lto = "fat"
 opt-level = 3
+codegen-units = 1

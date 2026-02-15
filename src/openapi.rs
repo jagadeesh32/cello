@@ -416,9 +416,13 @@ impl OpenAPIGenerator {
 }
 
 /// Extract path parameters from a route path.
+/// PERF: Use thread_local cached regex instead of compiling on every call.
 fn extract_path_params(path: &str) -> Vec<Parameter> {
     let mut params = Vec::new();
-    let re = regex::Regex::new(r"\{([^}]+)\}").unwrap();
+    thread_local! {
+        static PATH_PARAM_RE: regex::Regex = regex::Regex::new(r"\{([^}]+)\}").unwrap();
+    }
+    let re = PATH_PARAM_RE.with(|re| re.clone());
     
     for cap in re.captures_iter(path) {
         params.push(Parameter {

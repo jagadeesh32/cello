@@ -517,6 +517,12 @@ impl GuardsMiddleware {
         self.skip_paths.push(path.to_string());
         self
     }
+
+    /// PERF: Check if any guards are registered (fast path to skip guard middleware entirely).
+    #[inline]
+    pub fn has_guards(&self) -> bool {
+        !self.guards.read().is_empty()
+    }
 }
 
 impl Default for GuardsMiddleware {

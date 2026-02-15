@@ -10,7 +10,7 @@ icon: material/rocket-launch
 
 !!! tip ""
 
-    **Welcome to Cello!** The world's fastest Python web framework, powered by Rust. You'll go from zero to a running API in under 5 minutes. Let's build something incredible.
+    **Welcome to Cello!** An ultra-fast Python web framework, powered by Rust. You'll go from zero to a running API in under 5 minutes. Let's build something incredible.
 
 </div>
 

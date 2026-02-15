@@ -154,8 +154,8 @@ impl Middleware for CircuitBreakerMiddleware {
                     if state.failure_count >= self.config.failure_threshold {
                         state.state = State::Open;
                         state.opened_at = Some(Instant::now());
-                        // Log transition
-                        println!("Circuit Breaker OPEN for {}", state_entry.key());
+                        // PERF: Removed println from hot path - use tracing instead
+                        tracing::warn!("Circuit Breaker OPEN for {}", state_entry.key());
                     }
                 } else {
                     // Success, maybe decay failure count?
@@ -179,7 +179,7 @@ impl Middleware for CircuitBreakerMiddleware {
                     // Probe failed -> Re-Open
                     state.state = State::Open;
                     state.opened_at = Some(Instant::now());
-                    println!("Circuit Breaker RE-OPEN for {}", state_entry.key());
+                    tracing::warn!("Circuit Breaker RE-OPEN for {}", state_entry.key());
                 } else {
                     // Probe succeeded
                     state.half_open_successes += 1;
@@ -187,7 +187,7 @@ impl Middleware for CircuitBreakerMiddleware {
                         state.state = State::Closed;
                         state.failure_count = 0;
                         state.opened_at = None;
-                        println!("Circuit Breaker CLOSED for {}", state_entry.key());
+                        tracing::info!("Circuit Breaker CLOSED for {}", state_entry.key());
                     }
                 }
             }

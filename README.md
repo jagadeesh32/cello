@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <strong>The World's Fastest Python Web Framework</strong><br>
+  <strong>Ultra-Fast Python Web Framework</strong><br>
   <em>Rust-powered performance with Python simplicity</em>
 </p>
 

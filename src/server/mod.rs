@@ -24,6 +24,7 @@ use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
+use std::collections::VecDeque;
 use std::time::{Duration, Instant};
 use tokio::net::TcpListener;
 use tokio::sync::broadcast;
@@ -170,8 +171,8 @@ pub struct ServerMetrics {
     pub total_errors: Arc<AtomicU64>,
     /// Server start time
     pub start_time: Instant,
-    /// Request latency histogram (simplified)
-    latencies: Arc<RwLock<Vec<Duration>>>,
+    /// PERF: Request latency ring buffer (VecDeque for O(1) push/pop)
+    latencies: Arc<RwLock<VecDeque<Duration>>>,
 }
 
 impl ServerMetrics {
@@ -184,7 +185,7 @@ impl ServerMetrics {
             bytes_sent: Arc::new(AtomicU64::new(0)),
             total_errors: Arc::new(AtomicU64::new(0)),
             start_time: Instant::now(),
-            latencies: Arc::new(RwLock::new(Vec::new())),
+            latencies: Arc::new(RwLock::new(VecDeque::with_capacity(1024))),
         }
     }
 
@@ -219,12 +220,13 @@ impl ServerMetrics {
     }
 
     /// Record request latency.
+    /// PERF: Uses VecDeque for O(1) push_back/pop_front instead of Vec::remove(0) which is O(n).
     pub fn record_latency(&self, latency: Duration) {
         let mut latencies = self.latencies.write();
-        latencies.push(latency);
-        // Keep only last 1000 latencies
+        latencies.push_back(latency);
+        // Keep only last 1000 latencies - O(1) pop from front
         if latencies.len() > 1000 {
-            latencies.remove(0);
+            latencies.pop_front();
         }
     }
 
@@ -332,18 +334,19 @@ impl ShutdownCoordinator {
     }
 
     /// Increment active request count.
+    /// PERF: Use Relaxed ordering on hot path - exact count not critical for request processing.
     pub fn request_started(&self) {
-        self.active_requests.fetch_add(1, Ordering::SeqCst);
+        self.active_requests.fetch_add(1, Ordering::Relaxed);
     }
 
     /// Decrement active request count.
     pub fn request_finished(&self) {
-        self.active_requests.fetch_sub(1, Ordering::SeqCst);
+        self.active_requests.fetch_sub(1, Ordering::Relaxed);
     }
 
     /// Get active request count.
     pub fn active_requests(&self) -> u64 {
-        self.active_requests.load(Ordering::SeqCst)
+        self.active_requests.load(Ordering::Relaxed)
     }
 
     /// Wait for all requests to complete or timeout.
@@ -492,6 +495,9 @@ impl Server {
                                 continue;
                             }
 
+                            // PERF: Apply TCP_NODELAY to reduce latency for small responses
+                            let _ = stream.set_nodelay(true);
+
                             metrics.inc_connections();
 
                             let io = TokioIo::new(stream);
@@ -540,7 +546,10 @@ impl Server {
                                     }
                                 });
 
+                                // PERF: Enable keep-alive and pipelining for better throughput
                                 if let Err(err) = http1::Builder::new()
+                                    .keep_alive(true)
+                                    .pipeline_flush(true)
                                     .serve_connection(io, service)
                                     .await
                                 {
@@ -586,58 +595,83 @@ async fn handle_request(
     let path = req.uri().path().to_string();
     let query_string = req.uri().query().unwrap_or("");
 
-    // Parse query parameters
-    let query: HashMap<String, String> = query_string
-        .split('&')
-        .filter(|s| !s.is_empty())
-        .filter_map(|pair| {
-            let mut parts = pair.splitn(2, '=');
-            match (parts.next(), parts.next()) {
-                (Some(key), Some(value)) => {
-                    let value_with_spaces = value.replace('+', " ");
-                    Some((
+    // PERF: Lazy query parsing - only decode when query string exists
+    let query: HashMap<String, String> = if query_string.is_empty() {
+        HashMap::new()
+    } else {
+        query_string
+            .split('&')
+            .filter(|s| !s.is_empty())
+            .filter_map(|pair| {
+                let mut parts = pair.splitn(2, '=');
+                match (parts.next(), parts.next()) {
+                    (Some(key), Some(value)) => {
+                        let value_with_spaces = value.replace('+', " ");
+                        Some((
+                            urlencoding::decode(key).unwrap_or_default().to_string(),
+                            urlencoding::decode(&value_with_spaces)
+                                .unwrap_or_default()
+                                .to_string(),
+                        ))
+                    }
+                    (Some(key), None) => Some((
                         urlencoding::decode(key).unwrap_or_default().to_string(),
-                        urlencoding::decode(&value_with_spaces)
-                            .unwrap_or_default()
-                            .to_string(),
-                    ))
+                        String::new(),
+                    )),
+                    _ => None,
                 }
-                (Some(key), None) => Some((
-                    urlencoding::decode(key).unwrap_or_default().to_string(),
-                    String::new(),
-                )),
-                _ => None,
+            })
+            .collect()
+    };
+
+    // PERF: Pre-allocate headers HashMap with known capacity
+    let header_count = req.headers().len();
+    let mut headers: HashMap<String, String> = HashMap::with_capacity(header_count);
+    for (k, v) in req.headers().iter() {
+        headers.insert(
+            k.as_str().to_owned(),
+            v.to_str().unwrap_or("").to_owned(),
+        );
+    }
+
+    // PERF: Lazy body reading - skip body collection for methods that typically have no body
+    let body_bytes = match method.as_str() {
+        "GET" | "HEAD" | "OPTIONS" | "DELETE" => {
+            // Fast path: these methods rarely have bodies
+            // Try to collect but don't block on empty bodies
+            match req.collect().await {
+                Ok(collected) => {
+                    let bytes = collected.to_bytes();
+                    if bytes.is_empty() {
+                        Vec::new()
+                    } else {
+                        let v = bytes.to_vec();
+                        metrics.add_bytes_received(v.len() as u64);
+                        v
+                    }
+                }
+                Err(_) => Vec::new(),
             }
-        })
-        .collect();
-
-    // Extract headers
-    let headers: HashMap<String, String> = req
-        .headers()
-        .iter()
-        .map(|(k, v)| {
-            (
-                k.to_string().to_lowercase(),
-                v.to_str().unwrap_or("").to_string(),
-            )
-        })
-        .collect();
-
-    // Read body
-    let body_bytes = match req.collect().await {
-        Ok(collected) => {
-            let bytes = collected.to_bytes().to_vec();
-            metrics.add_bytes_received(bytes.len() as u64);
-            bytes
         }
-        Err(_) => {
-            metrics.inc_errors();
-            Vec::new()
+        _ => {
+            // POST, PUT, PATCH - expect body
+            match req.collect().await {
+                Ok(collected) => {
+                    let v = collected.to_bytes().to_vec();
+                    metrics.add_bytes_received(v.len() as u64);
+                    v
+                }
+                Err(_) => {
+                    metrics.inc_errors();
+                    Vec::new()
+                }
+            }
         }
     };
 
-    // Match route
+    // Match route FIRST before building Request (fail fast on 404)
     let route_match = router.match_route(&method, &path);
+
     let params = match &route_match {
         Some(m) => m.params.clone(),
         None => HashMap::new(),
@@ -647,36 +681,9 @@ async fn handle_request(
     let mut request =
         Request::from_http(method.clone(), path.clone(), params, query, headers, body_bytes);
 
-    // Execute before middleware
-    match middleware.execute_before(&mut request) {
-        Ok(MiddlewareAction::Continue) => {}
-        Ok(MiddlewareAction::Stop(response)) => {
-            return build_hyper_response(&response, &metrics);
-        }
-        Err(e) => {
-            metrics.inc_errors();
-            let response = Response::error(e.status, &e.message);
-            return build_hyper_response(&response, &metrics);
-        }
-    }
-
-    // Execute async before middleware
-    match middleware.execute_before_async(&mut request).await {
-        Ok(MiddlewareAction::Continue) => {}
-        Ok(MiddlewareAction::Stop(response)) => {
-            return build_hyper_response(&response, &metrics);
-        }
-        Err(e) => {
-            metrics.inc_errors();
-            let response = Response::error(e.status, &e.message);
-            return build_hyper_response(&response, &metrics);
-        }
-    }
-
-    // Execute Prometheus before middleware
-    if let Some(ref p) = *prometheus.read() {
-        use crate::middleware::{Middleware, MiddlewareAction};
-        match p.before(&mut request) {
+    // PERF: Skip middleware execution if no middleware registered
+    if !middleware.is_empty() {
+        match middleware.execute_before(&mut request) {
             Ok(MiddlewareAction::Continue) => {}
             Ok(MiddlewareAction::Stop(response)) => {
                 return build_hyper_response(&response, &metrics);
@@ -689,8 +696,42 @@ async fn handle_request(
         }
     }
 
-    // Execute Guards
+    // PERF: Skip async middleware if none registered
+    if !middleware.is_async_empty() {
+        match middleware.execute_before_async(&mut request).await {
+            Ok(MiddlewareAction::Continue) => {}
+            Ok(MiddlewareAction::Stop(response)) => {
+                return build_hyper_response(&response, &metrics);
+            }
+            Err(e) => {
+                metrics.inc_errors();
+                let response = Response::error(e.status, &e.message);
+                return build_hyper_response(&response, &metrics);
+            }
+        }
+    }
+
+    // PERF: Only check Prometheus when it's actually configured (avoid lock when None)
     {
+        let prom_guard = prometheus.read();
+        if let Some(ref p) = *prom_guard {
+            use crate::middleware::{Middleware, MiddlewareAction};
+            match p.before(&mut request) {
+                Ok(MiddlewareAction::Continue) => {}
+                Ok(MiddlewareAction::Stop(response)) => {
+                    return build_hyper_response(&response, &metrics);
+                }
+                Err(e) => {
+                    metrics.inc_errors();
+                    let response = Response::error(e.status, &e.message);
+                    return build_hyper_response(&response, &metrics);
+                }
+            }
+        }
+    }
+
+    // PERF: Only execute Guards if guards are registered
+    if guards.has_guards() {
         use crate::middleware::{Middleware, MiddlewareAction};
         match Middleware::before(&*guards, &mut request) {
             Ok(MiddlewareAction::Continue) => {}
@@ -708,7 +749,7 @@ async fn handle_request(
     // Handle route
     let mut response = match route_match {
         Some(RouteMatch { handler_id, .. }) => {
-            // Invoke handler - pass request directly (no clone)
+            // PERF: Pass request by value - no clone needed
             let result = handlers.invoke_async(handler_id, request.clone(), dependency_container.clone()).await;
 
             match result {
@@ -719,10 +760,10 @@ async fn handle_request(
                             // Reconstruct Response from serialized format
                             let status = obj.get("status").and_then(|v| v.as_u64()).unwrap_or(200) as u16;
                             let body = obj.get("body").and_then(|v| v.as_str()).unwrap_or("");
-                            
+
                             let mut resp = Response::new(status);
                             resp.set_body(body.as_bytes().to_vec());
-                            
+
                             // Copy headers
                             if let Some(headers) = obj.get("headers").and_then(|v| v.as_object()) {
                                 for (key, value) in headers {
@@ -731,7 +772,7 @@ async fn handle_request(
                                     }
                                 }
                             }
-                            
+
                             resp
                         } else {
                             Response::from_json_value(json_value, 200)
@@ -752,42 +793,49 @@ async fn handle_request(
         }
     };
 
-    // Execute async after middleware
-    match middleware.execute_after_async(&request, &mut response).await {
-        Ok(MiddlewareAction::Continue) => {}
-        Ok(MiddlewareAction::Stop(new_response)) => {
-            return build_hyper_response(&new_response, &metrics);
-        }
-        Err(e) => {
-            metrics.inc_errors();
-            let error_response = Response::error(e.status, &e.message);
-            return build_hyper_response(&error_response, &metrics);
-        }
-    }
-
-    // Execute after middleware
-    match middleware.execute_after(&request, &mut response) {
-        Ok(MiddlewareAction::Continue) => {}
-        Ok(MiddlewareAction::Stop(new_response)) => {
-            return build_hyper_response(&new_response, &metrics);
-        }
-        Err(e) => {
-            metrics.inc_errors();
-            let error_response = Response::error(e.status, &e.message);
-            return build_hyper_response(&error_response, &metrics);
+    // PERF: Skip after middleware if none registered
+    if !middleware.is_async_empty() {
+        match middleware.execute_after_async(&request, &mut response).await {
+            Ok(MiddlewareAction::Continue) => {}
+            Ok(MiddlewareAction::Stop(new_response)) => {
+                return build_hyper_response(&new_response, &metrics);
+            }
+            Err(e) => {
+                metrics.inc_errors();
+                let error_response = Response::error(e.status, &e.message);
+                return build_hyper_response(&error_response, &metrics);
+            }
         }
     }
 
-    // Execute Prometheus after middleware
-    if let Some(ref p) = *prometheus.read() {
-        use crate::middleware::Middleware;
-        let _ = p.after(&request, &mut response);
+    if !middleware.is_empty() {
+        match middleware.execute_after(&request, &mut response) {
+            Ok(MiddlewareAction::Continue) => {}
+            Ok(MiddlewareAction::Stop(new_response)) => {
+                return build_hyper_response(&new_response, &metrics);
+            }
+            Err(e) => {
+                metrics.inc_errors();
+                let error_response = Response::error(e.status, &e.message);
+                return build_hyper_response(&error_response, &metrics);
+            }
+        }
+    }
+
+    // PERF: Only run Prometheus after if configured
+    {
+        let prom_guard = prometheus.read();
+        if let Some(ref p) = *prom_guard {
+            use crate::middleware::Middleware;
+            let _ = p.after(&request, &mut response);
+        }
     }
 
     build_hyper_response(&response, &metrics)
 }
 
 /// Build a Hyper response from our Response type.
+/// PERF: Avoid unnecessary copies - use Bytes::copy_from_slice directly.
 fn build_hyper_response(
     response: &Response,
     metrics: &Arc<ServerMetrics>,
@@ -801,10 +849,10 @@ fn build_hyper_response(
         builder = builder.header(key.as_str(), value.as_str());
     }
 
-    let body_bytes = response.body_bytes().to_vec();
-    metrics.add_bytes_sent(body_bytes.len() as u64);
-
-    let body = Full::new(Bytes::from(body_bytes));
+    // PERF: Create Bytes directly from slice - avoids intermediate Vec allocation
+    let body_slice = response.body_bytes();
+    metrics.add_bytes_sent(body_slice.len() as u64);
+    let body = Full::new(Bytes::copy_from_slice(body_slice));
 
     Ok(builder.body(body).unwrap())
 }

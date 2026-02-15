@@ -1,5 +1,5 @@
 ---
-title: Cello - The World's Fastest Python Web Framework
+title: Cello - Ultra-Fast Python Web Framework
 description: Enterprise-grade, Rust-powered Python async web framework with C-level performance
 hide:
   - navigation
@@ -177,7 +177,7 @@ hide:
 
 <div class="hero-title">🔥 Cello Framework 🚀</div>
 
-<div class="hero-tagline">The World's Fastest Python Web Framework</div>
+<div class="hero-tagline">Ultra-Fast Python Web Framework</div>
 
 <div class="hero-subtitle">Rust-powered performance meets Python simplicity</div>
 

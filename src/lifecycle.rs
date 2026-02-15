@@ -312,8 +312,13 @@ impl LifecycleHooks {
     }
 
     /// Execute before request hooks.
+    /// PERF: Fast-path skip when no hooks registered (avoids RwLock + iteration).
     pub fn execute_before_request(&self, request: &mut Request) -> HookResult {
-        for hook in self.before_request.read().iter() {
+        let hooks = self.before_request.read();
+        if hooks.is_empty() {
+            return Ok(HookAction::Continue);
+        }
+        for hook in hooks.iter() {
             match hook.execute_with_request(request)? {
                 HookAction::Continue => continue,
                 HookAction::Skip => return Ok(HookAction::Skip),
@@ -324,9 +329,14 @@ impl LifecycleHooks {
     }
 
     /// Execute after request hooks.
+    /// PERF: Fast-path skip when no hooks registered.
     pub fn execute_after_request(&self, request: &Request, response: &mut Response) -> HookResult {
+        let hooks = self.after_request.read();
+        if hooks.is_empty() {
+            return Ok(HookAction::Continue);
+        }
         // Execute in reverse order for proper layering
-        for hook in self.after_request.read().iter().rev() {
+        for hook in hooks.iter().rev() {
             match hook.execute_with_response(request, response)? {
                 HookAction::Continue => continue,
                 HookAction::Skip => return Ok(HookAction::Skip),
@@ -340,8 +350,13 @@ impl LifecycleHooks {
     }
 
     /// Execute exception hooks.
+    /// PERF: Fast-path skip when no hooks registered (avoids GIL acquisition).
     pub fn execute_exception(&self, error: &AppError, request: &Request) {
-        for hook in self.on_exception.read().iter() {
+        let hooks = self.on_exception.read();
+        if hooks.is_empty() {
+            return;
+        }
+        for hook in hooks.iter() {
             Python::with_gil(|py| {
                 let error_dict = pyo3::types::PyDict::new(py);
                 let _ = error_dict.set_item("message", error.to_string());

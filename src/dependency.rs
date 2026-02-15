@@ -14,6 +14,7 @@ use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use pyo3::PyObject;
 
 use crate::request::Request;
@@ -202,6 +203,8 @@ pub struct DependencyContainer {
     overrides: Arc<RwLock<HashMap<TypeId, Box<dyn Provider>>>>,
     /// Named Python singletons
     py_singletons: Arc<RwLock<HashMap<String, PyObject>>>,
+    /// PERF: Cached flag to avoid RwLock read on every request
+    has_py_singletons_cached: Arc<AtomicBool>,
 }
 
 impl DependencyContainer {
@@ -213,6 +216,7 @@ impl DependencyContainer {
             singleton_cache: Arc::new(RwLock::new(HashMap::new())),
             overrides: Arc::new(RwLock::new(HashMap::new())),
             py_singletons: Arc::new(RwLock::new(HashMap::new())),
+            has_py_singletons_cached: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -247,6 +251,8 @@ impl DependencyContainer {
     /// Register a Python singleton.
     pub fn register_py_singleton(&self, name: &str, value: PyObject) {
         self.py_singletons.write().insert(name.to_string(), value);
+        // PERF: Update cached flag so hot path avoids RwLock
+        self.has_py_singletons_cached.store(true, Ordering::Relaxed);
     }
 
     /// Get a Python singleton by name.
@@ -255,9 +261,10 @@ impl DependencyContainer {
     }
 
     /// Check if any Python singletons are registered (for fast-path optimization).
+    /// PERF: Uses atomic flag instead of acquiring RwLock on every request.
     #[inline]
     pub fn has_py_singletons(&self) -> bool {
-        !self.py_singletons.read().is_empty()
+        self.has_py_singletons_cached.load(Ordering::Relaxed)
     }
 
     /// Override a provider (useful for testing).
