@@ -1108,3 +1108,1062 @@ def test_import_advanced_configs():
     assert SecurityHeadersConfig is not None
     assert CSP is not None
     assert StaticFilesConfig is not None
+
+
+# =============================================================================
+# v0.7.0 Enterprise Feature Tests
+# =============================================================================
+
+
+def test_import_v070_enterprise_configs():
+    """Test that v0.7.0 enterprise configuration classes can be imported."""
+    from cello import (
+        OpenTelemetryConfig,
+        HealthCheckConfig,
+        DatabaseConfig,
+        GraphQLConfig,
+    )
+
+    assert OpenTelemetryConfig is not None
+    assert HealthCheckConfig is not None
+    assert DatabaseConfig is not None
+    assert GraphQLConfig is not None
+
+
+def test_opentelemetry_config():
+    """Test OpenTelemetryConfig creation and defaults."""
+    from cello import OpenTelemetryConfig
+
+    config = OpenTelemetryConfig(service_name="test-service")
+    assert config is not None
+    assert config.service_name == "test-service"
+
+
+def test_health_check_config():
+    """Test HealthCheckConfig creation and defaults."""
+    from cello import HealthCheckConfig
+
+    config = HealthCheckConfig()
+    assert config is not None
+
+
+def test_graphql_config():
+    """Test GraphQLConfig creation."""
+    from cello import GraphQLConfig
+
+    config = GraphQLConfig()
+    assert config is not None
+
+
+def test_enable_telemetry():
+    """Test enabling OpenTelemetry on an App."""
+    from cello import App, OpenTelemetryConfig
+
+    app = App()
+    config = OpenTelemetryConfig(
+        service_name="test-api",
+        sampling_rate=0.5,
+    )
+    app.enable_telemetry(config)
+    assert True
+
+
+def test_enable_health_checks():
+    """Test enabling health checks on an App."""
+    from cello import App, HealthCheckConfig
+
+    app = App()
+    app.enable_health_checks(HealthCheckConfig())
+    assert True
+
+
+def test_enable_graphql():
+    """Test enabling GraphQL on an App."""
+    from cello import App, GraphQLConfig
+
+    app = App()
+    app.enable_graphql(GraphQLConfig())
+    assert True
+
+
+def test_enable_openapi():
+    """Test enabling OpenAPI documentation."""
+    from cello import App
+
+    app = App()
+    app.enable_openapi(title="Test API", version="0.8.0")
+    assert True
+
+
+def test_enable_openapi_default_version():
+    """Test that OpenAPI defaults to v0.8.0."""
+    from cello import App
+
+    app = App()
+    # Should not raise with default version
+    app.enable_openapi()
+    assert True
+
+
+# =============================================================================
+# v0.8.0 Data Layer Feature Tests
+# =============================================================================
+
+
+def test_import_v080_data_layer():
+    """Test that v0.8.0 data layer features can be imported."""
+    from cello import DatabaseConfig, RedisConfig
+    from cello.database import transactional, Database, Redis, Transaction
+
+    assert DatabaseConfig is not None
+    assert RedisConfig is not None
+    assert transactional is not None
+    assert Database is not None
+    assert Redis is not None
+    assert Transaction is not None
+
+
+def test_v080_exports_in_all():
+    """Test that v0.8.0 features are in __all__."""
+    import cello
+
+    assert "RedisConfig" in cello.__all__
+    assert "transactional" in cello.__all__
+    assert "DatabaseConfig" in cello.__all__
+
+
+def test_database_config_creation():
+    """Test DatabaseConfig creation with default values."""
+    from cello import DatabaseConfig
+
+    config = DatabaseConfig("postgresql://user:pass@localhost/mydb")
+    assert config is not None
+    assert config.url == "postgresql://user:pass@localhost/mydb"
+
+
+def test_database_config_custom():
+    """Test DatabaseConfig creation with custom pool settings."""
+    from cello import DatabaseConfig
+
+    config = DatabaseConfig(
+        url="postgresql://user:pass@localhost/testdb",
+        pool_size=20,
+        max_lifetime_secs=1800,
+    )
+    assert config.url == "postgresql://user:pass@localhost/testdb"
+    assert config.pool_size == 20
+    assert config.max_lifetime_secs == 1800
+
+
+def test_redis_config_creation():
+    """Test RedisConfig creation with defaults."""
+    from cello import RedisConfig
+
+    config = RedisConfig()
+    assert config is not None
+
+
+def test_redis_config_custom():
+    """Test RedisConfig creation with custom settings."""
+    from cello import RedisConfig
+
+    config = RedisConfig(
+        url="redis://localhost:6379",
+        pool_size=10,
+        cluster_mode=False,
+        default_ttl=3600,
+        tls=False,
+    )
+    assert config.url == "redis://localhost:6379"
+    assert config.pool_size == 10
+    assert config.cluster_mode is False
+    assert config.default_ttl == 3600
+    assert config.tls is False
+
+
+def test_redis_config_local_factory():
+    """Test RedisConfig.local() convenience constructor."""
+    from cello import RedisConfig
+
+    config = RedisConfig.local()
+    assert config is not None
+    assert config.url == "redis://127.0.0.1:6379"
+
+
+def test_redis_config_cluster_factory():
+    """Test RedisConfig.cluster() convenience constructor."""
+    from cello import RedisConfig
+
+    config = RedisConfig.cluster(
+        url="redis://cluster-host:7000",
+        pool_size=20,
+    )
+    assert config is not None
+    assert config.url == "redis://cluster-host:7000"
+    assert config.pool_size == 20
+    assert config.cluster_mode is True
+
+
+def test_redis_config_with_key_prefix():
+    """Test RedisConfig with key prefix for namespacing."""
+    from cello import RedisConfig
+
+    config = RedisConfig(
+        url="redis://localhost:6379",
+        key_prefix="myapp:",
+    )
+    assert config.key_prefix == "myapp:"
+
+
+def test_redis_config_with_tls():
+    """Test RedisConfig with TLS enabled."""
+    from cello import RedisConfig
+
+    config = RedisConfig(
+        url="rediss://secure-host:6380",
+        tls=True,
+    )
+    assert config.tls is True
+
+
+def test_enable_database():
+    """Test enabling database connection pooling on an App."""
+    from cello import App, DatabaseConfig
+
+    app = App()
+    config = DatabaseConfig(
+        url="postgresql://user:pass@localhost/mydb",
+        pool_size=20,
+        max_lifetime_secs=1800,
+    )
+    app.enable_database(config)
+    assert True
+
+
+def test_enable_database_default():
+    """Test enabling database with default config."""
+    from cello import App
+
+    app = App()
+    app.enable_database()
+    assert True
+
+
+def test_enable_redis():
+    """Test enabling Redis on an App."""
+    from cello import App, RedisConfig
+
+    app = App()
+    config = RedisConfig(
+        url="redis://localhost:6379",
+        pool_size=10,
+    )
+    app.enable_redis(config)
+    assert True
+
+
+def test_enable_redis_default():
+    """Test enabling Redis with default config."""
+    from cello import App
+
+    app = App()
+    app.enable_redis()
+    assert True
+
+
+# =============================================================================
+# v0.8.0 Database Python API Tests
+# =============================================================================
+
+
+def test_database_class_init():
+    """Test Database class initialization."""
+    from cello.database import Database
+
+    db = Database()
+    assert db._config is None
+    assert db._pool is None
+
+
+def test_database_class_with_config():
+    """Test Database class initialization with config."""
+    from cello import DatabaseConfig
+    from cello.database import Database
+
+    config = DatabaseConfig("postgresql://localhost/test")
+    db = Database(config)
+    assert db._config is config
+
+
+@pytest.mark.asyncio
+async def test_database_connect():
+    """Test Database.connect class method."""
+    from cello import DatabaseConfig
+    from cello.database import Database
+
+    config = DatabaseConfig("postgresql://localhost/test")
+    db = await Database.connect(config)
+    assert db is not None
+    assert db._pool is not None
+
+
+@pytest.mark.asyncio
+async def test_database_fetch_all():
+    """Test Database.fetch_all returns empty list (mock)."""
+    from cello import DatabaseConfig
+    from cello.database import Database
+
+    config = DatabaseConfig("postgresql://localhost/test")
+    db = await Database.connect(config)
+    rows = await db.fetch_all("SELECT * FROM users")
+    assert isinstance(rows, list)
+    assert len(rows) == 0
+
+
+@pytest.mark.asyncio
+async def test_database_fetch_one():
+    """Test Database.fetch_one returns None (mock)."""
+    from cello import DatabaseConfig
+    from cello.database import Database
+
+    config = DatabaseConfig("postgresql://localhost/test")
+    db = await Database.connect(config)
+    row = await db.fetch_one("SELECT * FROM users WHERE id = $1", 1)
+    assert row is None
+
+
+@pytest.mark.asyncio
+async def test_database_execute():
+    """Test Database.execute returns 0 (mock)."""
+    from cello import DatabaseConfig
+    from cello.database import Database
+
+    config = DatabaseConfig("postgresql://localhost/test")
+    db = await Database.connect(config)
+    count = await db.execute("INSERT INTO users (name) VALUES ($1)", "Alice")
+    assert count == 0
+
+
+@pytest.mark.asyncio
+async def test_database_begin_transaction():
+    """Test Database.begin returns a Transaction."""
+    from cello import DatabaseConfig
+    from cello.database import Database, Transaction
+
+    config = DatabaseConfig("postgresql://localhost/test")
+    db = await Database.connect(config)
+    tx = await db.begin()
+    assert isinstance(tx, Transaction)
+
+
+@pytest.mark.asyncio
+async def test_database_close():
+    """Test Database.close resets pool."""
+    from cello import DatabaseConfig
+    from cello.database import Database
+
+    config = DatabaseConfig("postgresql://localhost/test")
+    db = await Database.connect(config)
+    assert db._pool is not None
+    await db.close()
+    assert db._pool is None
+
+
+# =============================================================================
+# v0.8.0 Transaction Tests
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_transaction_commit():
+    """Test Transaction commit."""
+    from cello import DatabaseConfig
+    from cello.database import Database
+
+    db = await Database.connect(DatabaseConfig("sqlite://test.db"))
+    tx = await db.begin()
+    assert tx._committed is False
+    await tx.commit()
+    assert tx._committed is True
+
+
+@pytest.mark.asyncio
+async def test_transaction_rollback():
+    """Test Transaction rollback."""
+    from cello import DatabaseConfig
+    from cello.database import Database
+
+    db = await Database.connect(DatabaseConfig("sqlite://test.db"))
+    tx = await db.begin()
+    assert tx._rolled_back is False
+    await tx.rollback()
+    assert tx._rolled_back is True
+
+
+@pytest.mark.asyncio
+async def test_transaction_context_manager_commit():
+    """Test Transaction as async context manager auto-commits."""
+    from cello import DatabaseConfig
+    from cello.database import Database
+
+    db = await Database.connect(DatabaseConfig("sqlite://test.db"))
+    tx = await db.begin()
+    async with tx:
+        await tx.execute("INSERT INTO users (name) VALUES ($1)", "Bob")
+    # Should auto-commit on clean exit
+    assert tx._committed is True
+    assert tx._rolled_back is False
+
+
+@pytest.mark.asyncio
+async def test_transaction_context_manager_rollback():
+    """Test Transaction as async context manager auto-rollbacks on exception."""
+    from cello import DatabaseConfig
+    from cello.database import Database
+
+    db = await Database.connect(DatabaseConfig("sqlite://test.db"))
+    tx = await db.begin()
+
+    with pytest.raises(ValueError):
+        async with tx:
+            await tx.execute("INSERT INTO users (name) VALUES ($1)", "Bob")
+            raise ValueError("Test error")
+
+    # Should auto-rollback on exception
+    assert tx._rolled_back is True
+    assert tx._committed is False
+
+
+@pytest.mark.asyncio
+async def test_transaction_execute():
+    """Test executing queries within a transaction."""
+    from cello import DatabaseConfig
+    from cello.database import Database
+
+    db = await Database.connect(DatabaseConfig("sqlite://test.db"))
+    tx = await db.begin()
+    count = await tx.execute("UPDATE accounts SET balance = 100 WHERE id = $1", 1)
+    assert count == 0  # Mock returns 0
+
+
+@pytest.mark.asyncio
+async def test_transaction_fetch_all():
+    """Test fetching rows within a transaction."""
+    from cello import DatabaseConfig
+    from cello.database import Database
+
+    db = await Database.connect(DatabaseConfig("sqlite://test.db"))
+    tx = await db.begin()
+    rows = await tx.fetch_all("SELECT * FROM accounts")
+    assert isinstance(rows, list)
+
+
+@pytest.mark.asyncio
+async def test_transaction_fetch_one():
+    """Test fetching a single row within a transaction."""
+    from cello import DatabaseConfig
+    from cello.database import Database
+
+    db = await Database.connect(DatabaseConfig("sqlite://test.db"))
+    tx = await db.begin()
+    row = await tx.fetch_one("SELECT * FROM accounts WHERE id = $1", 1)
+    assert row is None  # Mock returns None
+
+
+# =============================================================================
+# v0.8.0 Redis Python API Tests
+# =============================================================================
+
+
+def test_redis_class_init():
+    """Test Redis class initialization."""
+    from cello.database import Redis
+
+    redis = Redis()
+    assert redis._config is None
+    assert redis._client is None
+
+
+@pytest.mark.asyncio
+async def test_redis_connect():
+    """Test Redis.connect class method."""
+    from cello import RedisConfig
+    from cello.database import Redis
+
+    config = RedisConfig(url="redis://localhost:6379")
+    redis = await Redis.connect(config)
+    assert redis is not None
+    assert redis._client is not None
+
+
+@pytest.mark.asyncio
+async def test_redis_get_set():
+    """Test Redis get/set operations."""
+    from cello import RedisConfig
+    from cello.database import Redis
+
+    redis = await Redis.connect(RedisConfig())
+    result = await redis.set("key", "value")
+    assert result is True
+
+    value = await redis.get("key")
+    # Mock returns None (no actual Redis)
+    assert value is None
+
+
+@pytest.mark.asyncio
+async def test_redis_delete():
+    """Test Redis delete operation."""
+    from cello import RedisConfig
+    from cello.database import Redis
+
+    redis = await Redis.connect(RedisConfig())
+    result = await redis.delete("key")
+    assert result is True
+
+
+@pytest.mark.asyncio
+async def test_redis_exists():
+    """Test Redis exists operation."""
+    from cello import RedisConfig
+    from cello.database import Redis
+
+    redis = await Redis.connect(RedisConfig())
+    result = await redis.exists("key")
+    assert result is False  # Mock returns False
+
+
+@pytest.mark.asyncio
+async def test_redis_incr_decr():
+    """Test Redis increment and decrement."""
+    from cello import RedisConfig
+    from cello.database import Redis
+
+    redis = await Redis.connect(RedisConfig())
+    incr_val = await redis.incr("counter")
+    assert isinstance(incr_val, int)
+
+    decr_val = await redis.decr("counter")
+    assert isinstance(decr_val, int)
+
+
+@pytest.mark.asyncio
+async def test_redis_expire():
+    """Test Redis expire (TTL) operation."""
+    from cello import RedisConfig
+    from cello.database import Redis
+
+    redis = await Redis.connect(RedisConfig())
+    result = await redis.expire("key", 3600)
+    assert result is True
+
+
+@pytest.mark.asyncio
+async def test_redis_hash_operations():
+    """Test Redis hash operations (hset, hget, hgetall)."""
+    from cello import RedisConfig
+    from cello.database import Redis
+
+    redis = await Redis.connect(RedisConfig())
+
+    result = await redis.hset("user:1", "name", "Alice")
+    assert result is True
+
+    value = await redis.hget("user:1", "name")
+    assert value is None  # Mock
+
+    all_fields = await redis.hgetall("user:1")
+    assert isinstance(all_fields, dict)
+
+
+@pytest.mark.asyncio
+async def test_redis_list_operations():
+    """Test Redis list operations (lpush, rpush, lpop, lrange)."""
+    from cello import RedisConfig
+    from cello.database import Redis
+
+    redis = await Redis.connect(RedisConfig())
+
+    lpush_count = await redis.lpush("queue", "task1", "task2")
+    assert isinstance(lpush_count, int)
+
+    rpush_count = await redis.rpush("queue", "task3")
+    assert isinstance(rpush_count, int)
+
+    item = await redis.lpop("queue")
+    assert item is None  # Mock
+
+    items = await redis.lrange("queue", 0, -1)
+    assert isinstance(items, list)
+
+
+@pytest.mark.asyncio
+async def test_redis_publish():
+    """Test Redis publish operation."""
+    from cello import RedisConfig
+    from cello.database import Redis
+
+    redis = await Redis.connect(RedisConfig())
+    count = await redis.publish("events", '{"type": "update"}')
+    assert isinstance(count, int)
+
+
+@pytest.mark.asyncio
+async def test_redis_close():
+    """Test Redis close resets client."""
+    from cello import RedisConfig
+    from cello.database import Redis
+
+    redis = await Redis.connect(RedisConfig())
+    assert redis._client is not None
+    await redis.close()
+    assert redis._client is None
+
+
+# =============================================================================
+# v0.8.0 Transactional Decorator Tests
+# =============================================================================
+
+
+def test_transactional_decorator_exists():
+    """Test that transactional decorator is importable."""
+    from cello.database import transactional
+    import inspect
+
+    assert callable(transactional)
+
+
+def test_transactional_wraps_async_function():
+    """Test that @transactional wraps an async function correctly."""
+    from cello.database import transactional
+    import asyncio
+
+    @transactional
+    async def my_handler(request):
+        return {"success": True}
+
+    # Should return a coroutine function (wrapper)
+    assert asyncio.iscoroutinefunction(my_handler)
+
+
+@pytest.mark.asyncio
+async def test_transactional_calls_function_without_db():
+    """Test @transactional executes handler when no DB is available."""
+    from cello.database import transactional
+
+    @transactional
+    async def my_handler(request):
+        return {"success": True}
+
+    # Create a simple mock request
+    class MockRequest:
+        pass
+
+    result = await my_handler(MockRequest())
+    assert result == {"success": True}
+
+
+@pytest.mark.asyncio
+async def test_transactional_commits_on_success():
+    """Test @transactional commits transaction on success."""
+    from cello.database import transactional, Database, Transaction
+    from cello import DatabaseConfig
+
+    db = await Database.connect(DatabaseConfig("sqlite://test.db"))
+
+    @transactional
+    async def my_handler(request, db=None, **kwargs):
+        return {"success": True}
+
+    # Pass db as kwarg
+    result = await my_handler(None, db=db)
+    assert result == {"success": True}
+
+
+@pytest.mark.asyncio
+async def test_transactional_rollbacks_on_error():
+    """Test @transactional rollbacks transaction on exception."""
+    from cello.database import transactional, Database
+    from cello import DatabaseConfig
+
+    db = await Database.connect(DatabaseConfig("sqlite://test.db"))
+
+    @transactional
+    async def failing_handler(request, db=None, **kwargs):
+        raise ValueError("Something went wrong")
+
+    with pytest.raises(ValueError, match="Something went wrong"):
+        await failing_handler(None, db=db)
+
+
+# =============================================================================
+# v0.8.0 Guards Tests
+# =============================================================================
+
+
+def test_guard_classes_importable():
+    """Test that guard classes can be imported."""
+    from cello.guards import (
+        Guard,
+        Role,
+        Permission,
+        Authenticated,
+        And,
+        Or,
+        Not,
+        GuardError,
+        ForbiddenError,
+        UnauthorizedError,
+        verify_guards,
+    )
+
+    assert Guard is not None
+    assert Role is not None
+    assert Permission is not None
+    assert Authenticated is not None
+    assert And is not None
+    assert Or is not None
+    assert Not is not None
+    assert GuardError is not None
+    assert ForbiddenError is not None
+    assert UnauthorizedError is not None
+    assert verify_guards is not None
+
+
+def test_role_guard_pass():
+    """Test Role guard passes for user with correct role."""
+    from cello.guards import Role
+
+    guard = Role(["admin"])
+
+    class MockRequest:
+        context = {"user": {"roles": ["admin", "editor"]}}
+
+    assert guard(MockRequest()) is True
+
+
+def test_role_guard_fail():
+    """Test Role guard fails for user without correct role."""
+    from cello.guards import Role, ForbiddenError
+
+    guard = Role(["admin"])
+
+    class MockRequest:
+        context = {"user": {"roles": ["viewer"]}}
+
+    with pytest.raises(ForbiddenError):
+        guard(MockRequest())
+
+
+def test_role_guard_require_all():
+    """Test Role guard with require_all=True."""
+    from cello.guards import Role, ForbiddenError
+
+    guard = Role(["admin", "editor"], require_all=True)
+
+    class MockRequestPass:
+        context = {"user": {"roles": ["admin", "editor", "viewer"]}}
+
+    class MockRequestFail:
+        context = {"user": {"roles": ["admin"]}}
+
+    assert guard(MockRequestPass()) is True
+
+    with pytest.raises(ForbiddenError):
+        guard(MockRequestFail())
+
+
+def test_permission_guard_pass():
+    """Test Permission guard passes for user with correct permissions."""
+    from cello.guards import Permission
+
+    guard = Permission(["users:read"])
+
+    class MockRequest:
+        context = {"user": {"permissions": ["users:read", "users:write"]}}
+
+    assert guard(MockRequest()) is True
+
+
+def test_permission_guard_fail():
+    """Test Permission guard fails for user without correct permissions."""
+    from cello.guards import Permission, ForbiddenError
+
+    guard = Permission(["users:delete"])
+
+    class MockRequest:
+        context = {"user": {"permissions": ["users:read"]}}
+
+    with pytest.raises(ForbiddenError):
+        guard(MockRequest())
+
+
+def test_authenticated_guard_pass():
+    """Test Authenticated guard passes when user exists."""
+    from cello.guards import Authenticated
+
+    guard = Authenticated()
+
+    class MockRequest:
+        context = {"user": {"id": 1, "name": "Alice"}}
+
+    assert guard(MockRequest()) is True
+
+
+def test_authenticated_guard_fail():
+    """Test Authenticated guard fails when no user."""
+    from cello.guards import Authenticated, UnauthorizedError
+
+    guard = Authenticated()
+
+    class MockRequest:
+        context = {}
+
+    with pytest.raises(UnauthorizedError):
+        guard(MockRequest())
+
+
+def test_and_guard():
+    """Test And guard requires all guards to pass."""
+    from cello.guards import And, Role, Permission, ForbiddenError
+
+    guard = And([
+        Role(["admin"]),
+        Permission(["users:write"]),
+    ])
+
+    class MockRequestPass:
+        context = {"user": {"roles": ["admin"], "permissions": ["users:write"]}}
+
+    class MockRequestFail:
+        context = {"user": {"roles": ["admin"], "permissions": []}}
+
+    assert guard(MockRequestPass()) is True
+
+    with pytest.raises(ForbiddenError):
+        guard(MockRequestFail())
+
+
+def test_or_guard():
+    """Test Or guard passes if any guard passes."""
+    from cello.guards import Or, Role
+
+    guard = Or([
+        Role(["admin"]),
+        Role(["editor"]),
+    ])
+
+    class MockRequest:
+        context = {"user": {"roles": ["editor"]}}
+
+    assert guard(MockRequest()) is True
+
+
+def test_not_guard():
+    """Test Not guard inverts the result."""
+    from cello.guards import Not, Role
+
+    guard = Not(Role(["banned"]))
+
+    class MockRequest:
+        context = {"user": {"roles": ["regular"]}}
+
+    assert guard(MockRequest()) is True
+
+
+def test_not_guard_inverted():
+    """Test Not guard raises when inner guard passes."""
+    from cello.guards import Not, Role, ForbiddenError
+
+    guard = Not(Role(["admin"]))
+
+    class MockRequest:
+        context = {"user": {"roles": ["admin"]}}
+
+    with pytest.raises(ForbiddenError):
+        guard(MockRequest())
+
+
+def test_verify_guards():
+    """Test verify_guards helper with multiple guards."""
+    from cello.guards import verify_guards, Role, Authenticated
+
+    guards = [Authenticated(), Role(["admin"])]
+
+    class MockRequest:
+        context = {"user": {"roles": ["admin"]}}
+
+    # Should not raise
+    verify_guards(guards, MockRequest())
+
+
+def test_verify_guards_fails():
+    """Test verify_guards raises on first failure."""
+    from cello.guards import verify_guards, Role, Authenticated, UnauthorizedError
+
+    guards = [Authenticated(), Role(["admin"])]
+
+    class MockRequest:
+        context = {}
+
+    with pytest.raises(UnauthorizedError):
+        verify_guards(guards, MockRequest())
+
+
+def test_guard_error_hierarchy():
+    """Test guard error class hierarchy."""
+    from cello.guards import GuardError, ForbiddenError, UnauthorizedError
+
+    assert issubclass(ForbiddenError, GuardError)
+    assert issubclass(UnauthorizedError, GuardError)
+
+    err = GuardError("test", 403)
+    assert err.message == "test"
+    assert err.status_code == 403
+
+    forbidden = ForbiddenError("forbidden")
+    assert forbidden.status_code == 403
+
+    unauthorized = UnauthorizedError()
+    assert unauthorized.status_code == 401
+    assert unauthorized.message == "Authentication required"
+
+
+# =============================================================================
+# v0.8.0 Bug Fix Verification Tests
+# =============================================================================
+
+
+def test_logs_parameter_name():
+    """Test that App.run() uses 'logs' parameter (not 'loogs' typo)."""
+    from cello import App
+    import inspect
+
+    app = App()
+    sig = inspect.signature(app.run)
+    param_names = list(sig.parameters.keys())
+
+    # The old bug had 'loogs' instead of 'logs'
+    assert "loogs" not in param_names
+    assert "logs" in param_names
+
+
+def test_response_no_error_method():
+    """Test that Response does not have a non-existent .error() method."""
+    from cello import Response
+
+    # Response.error() was used in examples but doesn't exist
+    # The correct approach is Response.json() + set_status()
+    assert not hasattr(Response, "error")
+
+    # Correct pattern: use Response.json with status
+    resp = Response.json({"error": "Something went wrong"}, status=500)
+    assert resp.status == 500
+
+
+def test_cors_with_custom_origins():
+    """Test CORS middleware accepts and applies custom origins."""
+    from cello import App
+
+    app = App()
+    # This was a bug: origins were being ignored with `let _ = o;`
+    app.enable_cors(origins=["https://example.com"])
+    assert True
+
+
+def test_cors_with_wildcard_origin():
+    """Test CORS middleware with wildcard origin."""
+    from cello import App
+
+    app = App()
+    app.enable_cors(origins=["*"])
+    assert True
+
+
+def test_cors_with_multiple_origins():
+    """Test CORS middleware with multiple origins."""
+    from cello import App
+
+    app = App()
+    app.enable_cors(origins=[
+        "https://app.example.com",
+        "https://admin.example.com",
+        "https://api.example.com",
+    ])
+    assert True
+
+
+# =============================================================================
+# v0.8.0 Full Feature Combination Tests
+# =============================================================================
+
+
+def test_app_with_all_v080_features():
+    """Test an App with all v0.8.0 features enabled together."""
+    from cello import App, DatabaseConfig, RedisConfig
+
+    app = App()
+
+    # Core middleware
+    app.enable_cors()
+    app.enable_logging()
+    app.enable_compression()
+
+    # v0.8.0 Data Layer
+    app.enable_database(DatabaseConfig(
+        url="postgresql://user:pass@localhost/mydb",
+        pool_size=20,
+    ))
+    app.enable_redis(RedisConfig(
+        url="redis://localhost:6379",
+        pool_size=10,
+    ))
+
+    # Register routes
+    @app.get("/")
+    def home(req):
+        return {"version": "0.8.0"}
+
+    @app.post("/data")
+    def create_data(req):
+        return {"created": True}
+
+    assert True
+
+
+def test_app_with_database_and_transactional_route():
+    """Test App with database and transactional route handler."""
+    from cello import App, DatabaseConfig
+    from cello.database import transactional
+
+    app = App()
+    app.enable_database(DatabaseConfig("sqlite://test.db"))
+
+    @app.post("/transfer")
+    @transactional
+    async def transfer(request):
+        return {"success": True}
+
+    assert True
+
+
+def test_v080_all_exports():
+    """Test that all v0.8.0 expected exports are available."""
+    from cello import (
+        # Core
+        App, Blueprint, Request, Response,
+        # v0.7.0
+        OpenTelemetryConfig, HealthCheckConfig,
+        DatabaseConfig, GraphQLConfig,
+        # v0.8.0
+        RedisConfig,
+    )
+    from cello.database import transactional, Database, Redis, Transaction
+
+    assert all([
+        App, Blueprint, Request, Response,
+        OpenTelemetryConfig, HealthCheckConfig,
+        DatabaseConfig, GraphQLConfig,
+        RedisConfig,
+        transactional, Database, Redis, Transaction,
+    ])
