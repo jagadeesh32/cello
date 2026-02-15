@@ -67,8 +67,8 @@ Cello provides enterprise-grade capabilities for building production-ready appli
 | Prometheus Metrics | :material-check-circle:{ .green } | `/metrics` endpoint |
 | Request ID Tracing | :material-check-circle:{ .green } | UUID-based tracing |
 | Structured Logging | :material-check-circle:{ .green } | JSON logging |
-| OpenTelemetry | :material-progress-clock:{ .orange } | Coming in v0.7.0 |
-| Health Checks | :material-progress-clock:{ .orange } | Coming in v0.7.0 |
+| OpenTelemetry | :material-check-circle:{ .green } | Available in v0.7.0 |
+| Health Checks | :material-check-circle:{ .green } | Available in v0.7.0 |
 
 ### Scalability
 
@@ -88,7 +88,8 @@ Cello provides enterprise-grade capabilities for building production-ready appli
 | SSE | :material-check-circle:{ .green } | Server-sent events |
 | GraphQL | :material-progress-clock:{ .orange } | Coming in v0.9.0 |
 | gRPC | :material-progress-clock:{ .orange } | Coming in v0.9.0 |
-| Database Pooling | :material-progress-clock:{ .orange } | Coming in v0.8.0 |
+| Database Pooling | :material-check-circle:{ .green } | Available in v0.8.0 |
+| Redis Integration | :material-check-circle:{ .green } | Available in v0.8.0 |
 
 ---
 

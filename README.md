@@ -84,7 +84,7 @@ if __name__ == "__main__":
 
 ```bash
 python app.py
-# 🐍 Cello v0.7.0 server starting at http://127.0.0.1:8000
+# 🐍 Cello v0.8.0 server starting at http://127.0.0.1:8000
 ```
 
 ---
@@ -116,7 +116,7 @@ python app.py
 | 🔒 **Security Headers** | CSP, HSTS, X-Frame-Options, Referrer-Policy |
 | 🔑 **API Key Auth** | Header and query parameter authentication |
 
-### Enterprise Features (v0.7.0)
+### Enterprise Features (v0.7.0+)
 
 | Feature | Description |
 |---------|-------------|
@@ -128,6 +128,14 @@ python app.py
 | 🛡️ **Guards (RBAC)** | Role & permission-based access control |
 | 📈 **Prometheus Metrics** | Production-ready metrics at `/metrics` |
 | 🔌 **Circuit Breaker** | Fault tolerance with automatic recovery |
+
+### Data Layer Features (v0.8.0)
+
+| Feature | Description |
+|---------|-------------|
+| 🗄️ **Enhanced DB Pooling** | Async connection pool with health monitoring & reconnection |
+| 🔴 **Redis Integration** | Async Redis client with pool, Pub/Sub, cluster mode |
+| 🔄 **Transactions** | Automatic transaction management with decorator support |
 
 ### Protocol Support
 
@@ -142,7 +150,41 @@ python app.py
 
 ## 📘 Examples
 
-### Enterprise Features (v0.7.0)
+### Data Layer Features (v0.8.0)
+
+```python
+from cello import App, DatabaseConfig, RedisConfig
+from cello.database import transactional
+
+app = App()
+
+# Enable database connection pooling
+app.enable_database(DatabaseConfig(
+    url="postgresql://user:pass@localhost/mydb",
+    pool_size=20,
+    max_lifetime_secs=1800
+))
+
+# Enable Redis connection
+app.enable_redis(RedisConfig(
+    url="redis://localhost:6379",
+    pool_size=10
+))
+
+@app.post("/transfer")
+@transactional
+async def transfer(request):
+    # Automatic transaction management
+    return {"success": True}
+
+@app.get("/")
+def home(request):
+    return {"status": "ok", "version": "0.8.0"}
+
+app.run()
+```
+
+### Enterprise Features (v0.7.0+)
 
 ```python
 from cello import App, OpenTelemetryConfig, HealthCheckConfig, GraphQLConfig
@@ -175,7 +217,7 @@ app.enable_prometheus(endpoint="/metrics")
 
 @app.get("/")
 def home(request):
-    return {"status": "ok", "version": "0.7.0"}
+    return {"status": "ok", "version": "0.8.0"}
 
 app.run()
 ```

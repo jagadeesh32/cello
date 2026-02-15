@@ -17,7 +17,9 @@ def home(request):
 def flaky(request):
     """Always returns 500 to trigger CB"""
     print("Flaky endpoint called")
-    return Response.error(500, "Simulated Failure")
+    resp = Response.json({"error": "Simulated Failure"})
+    resp.set_status(500)
+    return resp
 
 @app.get("/recover")
 def recover(request):
@@ -29,7 +31,9 @@ def recover(request):
 def test_cb(request):
     """Controllable endpoint for CB testing"""
     if "fail" in request.query_params and request.query_params["fail"] == "true":
-        return Response.error(500, "Simulated Failure")
+        resp = Response.json({"error": "Simulated Failure"})
+        resp.set_status(500)
+        return resp
     return {"status": "ok"}
 
 if __name__ == "__main__":

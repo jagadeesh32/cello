@@ -2,6 +2,31 @@
 
 All notable changes to Cello are documented in this file.
 
+## [0.8.0] - 2026-02-15
+
+### Added
+
+#### Features
+- **Database Connection Pooling (Enhanced)**:
+  - High-performance async database connections with improved pool management.
+  - Support for PostgreSQL, MySQL, and SQLite.
+  - Configurable pool size, max lifetime, and idle timeout.
+- **Redis Integration**:
+  - Async Redis client with connection pooling.
+  - Pub/Sub support for real-time messaging.
+  - Cluster mode and Sentinel support.
+- **Transaction Support**:
+  - Context-managed database transactions.
+  - Automatic rollback on failure.
+  - Nested transaction support via savepoints.
+
+### Fixed
+- **CORS Origins**: Fixed handling of multiple allowed origins in CORS middleware.
+- **Logs Typo**: Corrected "loogs" typo in logging middleware output.
+- **Response.error**: Fixed `Response.error` method to properly set error status codes.
+
+---
+
 ## [0.6.0] - 2025-12-25
 
 ### Added

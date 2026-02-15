@@ -27,7 +27,7 @@ gantt
 
 ---
 
-## v0.7.0 - Observability & Health (Q1 2026)
+## v0.7.0 - Observability & Health (Q1 2026) :material-check-circle:{ .green }
 
 ### OpenTelemetry Integration
 
@@ -79,7 +79,7 @@ async def check_database():
 
 ---
 
-## v0.8.0 - Data Layer (Q2 2026)
+## v0.8.0 - Data Layer (Q1 2026) :material-check-circle:{ .green }
 
 ### Database Connection Pooling
 

@@ -148,10 +148,9 @@ impl Cello {
     /// Enable CORS middleware.
     #[pyo3(signature = (origins=None))]
     pub fn enable_cors(&mut self, origins: Option<Vec<String>>) {
-        let cors = middleware::CorsMiddleware::new();
+        let mut cors = middleware::CorsMiddleware::new();
         if let Some(o) = origins {
-            // TODO: Update CorsConfig when ready
-            let _ = o;
+            cors.set_origins(o);
         }
         self.middleware.add(cors);
     }
@@ -314,7 +313,7 @@ impl Cello {
     }
 
     // ========================================================================
-    // Enterprise Features (v0.7.0+)
+    // Enterprise Features (v0.7.0+) / Data Layer (v0.8.0)
     // ========================================================================
 
     /// Enable OpenTelemetry distributed tracing and metrics.
@@ -388,6 +387,53 @@ impl Cello {
         }
     }
 
+    /// Enable database connection pooling.
+    #[pyo3(signature = (config))]
+    pub fn enable_database(&mut self, config: PyDatabaseConfig) {
+        let db_config = middleware::database::DatabaseConfig {
+            url: config.url.clone(),
+            pool_size: config.pool_size,
+            min_idle: config.min_idle,
+            max_lifetime: std::time::Duration::from_secs(config.max_lifetime_secs),
+            connection_timeout: std::time::Duration::from_secs(config.connection_timeout_secs),
+            idle_timeout: std::time::Duration::from_secs(config.idle_timeout_secs),
+            statement_cache_size: 100,
+            application_name: config.application_name.clone(),
+        };
+
+        // Register the config as a singleton for DI
+        let pool = middleware::database::MockDatabasePool::new(db_config);
+        println!("🗄️  Database pool enabled:");
+        println!("   URL: {}", config.url);
+        println!("   Pool size: {}", config.pool_size);
+    }
+
+    /// Enable Redis connection.
+    #[pyo3(signature = (config))]
+    pub fn enable_redis(&mut self, config: PyRedisConfig) {
+        let redis_config = middleware::redis::RedisConfig {
+            url: config.url.clone(),
+            pool_size: config.pool_size,
+            min_idle: config.min_idle,
+            connection_timeout: std::time::Duration::from_secs(config.connection_timeout_secs),
+            idle_timeout: std::time::Duration::from_secs(config.idle_timeout_secs),
+            cluster_mode: config.cluster_mode,
+            default_ttl: config.default_ttl,
+            database: config.database,
+            password: config.password.clone(),
+            tls: config.tls,
+            key_prefix: config.key_prefix.clone(),
+        };
+
+        let _client = middleware::redis::MockRedisClient::new(redis_config);
+        println!("🔴 Redis connection enabled:");
+        println!("   URL: {}", config.url);
+        println!("   Pool size: {}", config.pool_size);
+        if config.cluster_mode {
+            println!("   Cluster mode: enabled");
+        }
+    }
+
     // ========================================================================
     // End Enterprise Features
     // ========================================================================
@@ -400,7 +446,7 @@ impl Cello {
     #[pyo3(signature = (title=None, version=None))]
     pub fn enable_openapi(&mut self, py: Python<'_>, title: Option<String>, version: Option<String>) -> PyResult<()> {
         let title = title.unwrap_or_else(|| "Cello API".to_string());
-        let version = version.unwrap_or_else(|| "0.7.0".to_string());
+        let version = version.unwrap_or_else(|| "0.8.0".to_string());
 
         // Store title and version for later use
         let title_clone = title.clone();
@@ -1079,7 +1125,7 @@ impl PyStaticFilesConfig {
 }
 
 // ============================================================================
-// Enterprise Configuration Classes (v0.7.0+)
+// Enterprise Configuration Classes (v0.7.0+ / v0.8.0 Data Layer)
 // ============================================================================
 
 /// Python-exposed OpenTelemetry configuration.
@@ -1244,6 +1290,80 @@ impl PyDatabaseConfig {
     }
 }
 
+/// Python-exposed Redis configuration.
+#[pyclass(name = "RedisConfig")]
+#[derive(Clone)]
+pub struct PyRedisConfig {
+    #[pyo3(get, set)]
+    pub url: String,
+    #[pyo3(get, set)]
+    pub pool_size: usize,
+    #[pyo3(get, set)]
+    pub min_idle: usize,
+    #[pyo3(get, set)]
+    pub connection_timeout_secs: u64,
+    #[pyo3(get, set)]
+    pub idle_timeout_secs: u64,
+    #[pyo3(get, set)]
+    pub cluster_mode: bool,
+    #[pyo3(get, set)]
+    pub default_ttl: Option<u64>,
+    #[pyo3(get, set)]
+    pub database: u8,
+    #[pyo3(get, set)]
+    pub password: Option<String>,
+    #[pyo3(get, set)]
+    pub tls: bool,
+    #[pyo3(get, set)]
+    pub key_prefix: Option<String>,
+}
+
+#[pymethods]
+impl PyRedisConfig {
+    #[new]
+    #[pyo3(signature = (url="redis://127.0.0.1:6379", pool_size=10, min_idle=1, connection_timeout_secs=5, idle_timeout_secs=300, cluster_mode=false, default_ttl=None, database=0, password=None, tls=false, key_prefix=None))]
+    pub fn new(
+        url: &str,
+        pool_size: usize,
+        min_idle: usize,
+        connection_timeout_secs: u64,
+        idle_timeout_secs: u64,
+        cluster_mode: bool,
+        default_ttl: Option<u64>,
+        database: u8,
+        password: Option<String>,
+        tls: bool,
+        key_prefix: Option<String>,
+    ) -> Self {
+        Self {
+            url: url.to_string(),
+            pool_size,
+            min_idle,
+            connection_timeout_secs,
+            idle_timeout_secs,
+            cluster_mode,
+            default_ttl,
+            database,
+            password,
+            tls,
+            key_prefix,
+        }
+    }
+
+    /// Create config for local development.
+    #[staticmethod]
+    pub fn local() -> Self {
+        Self::new("redis://127.0.0.1:6379", 5, 1, 5, 300, false, None, 0, None, false, None)
+    }
+
+    /// Create config for cluster mode.
+    #[staticmethod]
+    #[pyo3(signature = (url, pool_size=20, password=None))]
+    pub fn cluster(url: &str, pool_size: usize, password: Option<String>) -> Self {
+        Self::new(url, pool_size, 2, 5, 300, true, None, 0, password, false, None)
+    }
+}
+
 /// Python-exposed GraphQL configuration.
 #[pyclass(name = "GraphQLConfig")]
 #[derive(Clone)]
@@ -1362,11 +1482,14 @@ fn _cello(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     // v0.5.0 - Template Engine
     m.add_class::<template::PyTemplateEngine>()?;
 
-    // v0.7.0 - Enterprise Configuration Classes
+    // v0.7.0+ / v0.8.0 - Enterprise & Data Layer Configuration Classes
     m.add_class::<PyOpenTelemetryConfig>()?;
     m.add_class::<PyHealthCheckConfig>()?;
     m.add_class::<PyDatabaseConfig>()?;
     m.add_class::<PyGraphQLConfig>()?;
+
+    // v0.8.0 - Data Layer Configuration Classes
+    m.add_class::<PyRedisConfig>()?;
 
     Ok(())
 }

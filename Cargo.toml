@@ -1,6 +1,6 @@
 [package]
 name = "cello-framework"
-version = "0.7.0"
+version = "0.8.0"
 edition = "2021"
 description = "Ultra-fast Rust-powered Python async web framework"
 license = "MIT"
@@ -105,7 +105,7 @@ prometheus = { version = "0.13", features = ["process"] }
 # Date/time handling for exception timestamps
 chrono = { version = "0.4", features = ["serde"] }
 
-# === Enterprise Features v0.7.0+ ===
+# === Enterprise Features v0.7.0+ / v0.8.0 Data Layer ===
 
 # OpenTelemetry - Distributed Tracing & Observability
 opentelemetry = { version = "0.21", features = ["trace", "metrics"] }

@@ -290,6 +290,16 @@ impl CorsMiddleware {
         Self { config }
     }
 
+    /// Set allowed origins from a list of strings.
+    pub fn set_origins(&mut self, origins: Vec<String>) {
+        if origins.len() == 1 && origins[0] == "*" {
+            self.config.origins = AllowedOrigins::Any;
+        } else {
+            let list: HashSet<String> = origins.into_iter().collect();
+            self.config.origins = AllowedOrigins::List(list);
+        }
+    }
+
     /// Create permissive CORS (allow all).
     pub fn permissive() -> Self {
         Self {

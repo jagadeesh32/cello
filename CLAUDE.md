@@ -4,7 +4,7 @@
 
 **Cello** is an ultra-fast, Rust-powered Python async web framework designed to achieve C-level performance on the hot path while maintaining Python's developer experience. It's the successor to frameworks like FastAPI, Robyn, and Litestar, combining their best features with pure Rust implementation for maximum performance.
 
-**Version:** 0.6.0 (Beta)
+**Version:** 0.8.0 (Beta)
 **License:** MIT
 **Python Requirement:** 3.12+
 **Author:** Jagadeesh Katla
@@ -74,7 +74,8 @@ Request → Rust HTTP Engine → Python Handler → Rust Response
 │   │   ├── request_id.rs          # UUID request tracing
 │   │   ├── prometheus.rs          # Metrics collection
 │   │   ├── circuit_breaker.rs     # Fault tolerance
-│   │   └── exception_handler.rs   # Global error handling
+│   │   ├── exception_handler.rs   # Global error handling
+│   │   └── redis.rs               # Redis integration (v0.8.0)
 │   ├── routing/                   # Route constraints
 │   ├── server/                    # Server modes (cluster, TLS)
 │   ├── blueprint.rs               # Flask-like route grouping
@@ -94,6 +95,7 @@ Request → Rust HTTP Engine → Python Handler → Rust Response
 │
 ├── python/cello/                  # Python API wrapper
 │   ├── __init__.py                # Public Python API
+│   ├── database.py                # Database & Redis wrappers (v0.8.0)
 │   ├── guards.py                  # RBAC guard classes
 │   └── validation.py              # DTO validation
 │
@@ -104,7 +106,8 @@ Request → Rust HTTP Engine → Python Handler → Rust Response
 ├── examples/                      # 20 example applications
 │   ├── hello.py                   # Basic hello world
 │   ├── simple_api.py              # REST API with OpenAPI
-│   ├── comprehensive_demo.py      # All v0.6.0 features
+│   ├── comprehensive_demo.py      # All v0.7.0 features
+│   ├── database_demo.py           # Database & Redis (v0.8.0)
 │   ├── guards.py                  # RBAC examples
 │   └── ...
 │
@@ -342,6 +345,8 @@ def handle_value_error(request, exc):
 
 ## Version History
 
+- **v0.8.0**: Database connection pooling (enhanced), Redis integration, transaction support
+- **v0.7.0**: OpenTelemetry, health checks, GraphQL support, structured logging
 - **v0.6.0**: Smart caching, adaptive rate limiting, DTO validation, circuit breaker
 - **v0.5.0**: Dependency injection, guards (RBAC), Prometheus metrics, OpenAPI
 - **v0.4.0**: JWT auth, rate limiting, sessions, security headers, cluster mode

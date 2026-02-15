@@ -126,7 +126,7 @@ app.configure_logging(
 
 ---
 
-### v0.8.0 - Data Layer (Q2 2026)
+### v0.8.0 - Data Layer 
 
 #### Database Connection Pooling
 - SQLx-based async connection pool (Rust)
@@ -193,7 +193,7 @@ async def transfer(request, db=Depends(get_db)):
 
 ---
 
-### v0.9.0 - API Protocols (Q3 2026)
+### v0.9.0 - API Protocols 
 
 #### GraphQL Support
 - Schema-first and code-first approaches
@@ -252,7 +252,7 @@ async def process_order(message):
 
 ---
 
-### v0.10.0 - Advanced Patterns (Q4 2026)
+### v0.10.0 - Advanced Patterns 
 
 #### Event Sourcing
 - Event store integration
@@ -332,7 +332,7 @@ class OrderSaga(Saga):
 
 ---
 
-### v1.0.0 - Production Ready (Q1 2027)
+### v1.0.0 - Production Ready 
 
 #### OAuth2/OIDC Provider
 - Full OAuth2 server implementation

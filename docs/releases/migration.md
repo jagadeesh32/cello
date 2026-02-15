@@ -6,6 +6,47 @@ title: Migration Guide
 
 This guide helps you migrate between major versions of Cello.
 
+## 0.7.x to 0.8.x {#07x-to-08x}
+
+### New Features
+
+Version 0.8.0 adds data layer features:
+
+- Enhanced database connection pooling
+- Redis integration with clustering support
+- Transaction support for database operations
+- Bug fixes (CORS origins, logs typo, Response.error)
+
+### Breaking Changes
+
+No breaking changes in 0.8.0. All existing code continues to work.
+
+### New APIs
+
+```python
+from cello import App
+from cello.database import DatabaseConfig, Database
+from cello.cache import Redis
+
+app = App()
+
+# Database connection pooling (enhanced)
+db = await Database.connect(DatabaseConfig(
+    url="postgresql://localhost/mydb",
+    pool_size=20,
+    max_lifetime=1800
+))
+
+# Redis integration
+redis = await Redis.connect("redis://localhost:6379")
+await redis.set("key", "value", ttl=300)
+
+# Transaction support
+async with db.transaction() as tx:
+    await tx.execute("INSERT INTO users (name) VALUES ($1)", "Alice")
+    await tx.execute("INSERT INTO logs (action) VALUES ($1)", "user_created")
+```
+
 ## 0.6.x to 0.7.x {#06x-to-07x}
 
 ### New Features

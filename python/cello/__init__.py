@@ -54,6 +54,7 @@ Example:
 """
 
 from .validation import wrap_handler_with_validation
+from .database import transactional, Database, Redis, Transaction
 from cello._cello import (
     Blueprint as _RustBlueprint,
 )
@@ -99,6 +100,11 @@ from cello._cello import (
     GraphQLConfig,
 )
 
+# v0.8.0 - Data Layer features
+from cello._cello import (
+    RedisConfig,
+)
+
 __all__ = [
     # Core
     "App",
@@ -134,8 +140,11 @@ __all__ = [
     "HealthCheckConfig",
     "DatabaseConfig",
     "GraphQLConfig",
+    # v0.8.0 - Data Layer features
+    "RedisConfig",
+    "transactional",
 ]
-__version__ = "0.7.0"
+__version__ = "0.8.0"
 
 
 class Blueprint:
@@ -559,7 +568,7 @@ class App:
         """
         self._app.invalidate_cache(tags)
 
-    def enable_openapi(self, title: str = "Cello API", version: str = "0.7.0"):
+    def enable_openapi(self, title: str = "Cello API", version: str = "0.8.0"):
         """
         Enable OpenAPI documentation endpoints.
 
@@ -570,7 +579,7 @@ class App:
 
         Args:
             title: API title (default: "Cello API")
-            version: API version (default: "0.7.0")
+            version: API version (default: "0.8.0")
         """
         # Store for closure
         api_title = title
@@ -717,6 +726,63 @@ class App:
     # Enterprise Features (v0.7.0+)
     # ========================================================================
 
+    # ========================================================================
+    # Data Layer Features (v0.8.0+)
+    # ========================================================================
+
+    def enable_database(self, config: "DatabaseConfig" = None):
+        """
+        Enable database connection pooling.
+
+        Configures an async connection pool for PostgreSQL, MySQL, or SQLite.
+        Supports connection health monitoring, automatic reconnection, and
+        query statistics.
+
+        Args:
+            config: DatabaseConfig instance
+
+        Example:
+            from cello import App, DatabaseConfig
+
+            app = App()
+            app.enable_database(DatabaseConfig(
+                url="postgresql://user:pass@localhost/mydb",
+                pool_size=20,
+                max_lifetime_secs=1800
+            ))
+        """
+        if config is None:
+            config = DatabaseConfig("sqlite://cello.db")
+        self._app.enable_database(config)
+
+    def enable_redis(self, config: "RedisConfig" = None):
+        """
+        Enable Redis connection pooling.
+
+        Configures an async Redis client with connection pooling,
+        supporting standard and cluster modes.
+
+        Args:
+            config: RedisConfig instance
+
+        Example:
+            from cello import App, RedisConfig
+
+            app = App()
+            app.enable_redis(RedisConfig(
+                url="redis://localhost:6379",
+                pool_size=10,
+                cluster_mode=False
+            ))
+        """
+        if config is None:
+            config = RedisConfig()
+        self._app.enable_redis(config)
+
+    # ========================================================================
+    # End Data Layer Features
+    # ========================================================================
+
     def enable_telemetry(self, config: "OpenTelemetryConfig" = None):
         """
         Enable OpenTelemetry distributed tracing and metrics.
@@ -809,7 +875,7 @@ class App:
     def run(self, host: str = "127.0.0.1", port: int = 8000,
             debug: bool = None, env: str = None,
             workers: int = None, reload: bool = False,
-            loogs: bool = None):
+            logs: bool = None):
         """
         Start the HTTP server.
 
@@ -866,13 +932,13 @@ class App:
                 debug = args.debug or (env == "development")
 
             # Logs logic: CLI --no-logs disables it
-            if loogs is None:
-                loogs = not args.no_logs and debug
+            if logs is None:
+                logs = not args.no_logs and debug
 
         # Set defaults if still None
         if env is None: env = "development"
         if debug is None: debug = (env == "development")
-        if loogs is None: loogs = debug
+        if logs is None: logs = debug
 
         # Reloading Logic (Development only)
         if reload and os.environ.get("CELLO_RUN_MAIN") != "true":
@@ -898,7 +964,7 @@ class App:
                 time.sleep(0.5)
 
         # Configure App
-        if loogs:
+        if logs:
             self.enable_logging()
 
         # Run Server

@@ -35,6 +35,7 @@ pub mod telemetry;
 pub mod health;
 pub mod database;
 pub mod graphql;
+pub mod redis;
 
 // Re-export DTO types from the dto module
 pub use crate::dto::*;
@@ -69,6 +70,7 @@ pub use telemetry::{OpenTelemetryMiddleware, OpenTelemetryConfig, TelemetryMetri
 pub use health::{HealthCheckMiddleware, HealthCheckConfig, HealthStatus, HealthCheckResult, HealthReport, SystemInfo};
 pub use database::{DatabaseConfig, DatabasePool, DatabaseConnection, DatabaseStats, DatabaseError, Row, SqlValue, ToSql, FromSql, MockDatabasePool};
 pub use graphql::{GraphQLMiddleware, GraphQLConfig, GraphQLRequest, GraphQLResponse, GraphQLError, GraphQLSchema, ResolverContext, ResolverFn};
+pub use redis::{RedisConfig, RedisClient, RedisStats, RedisError, RedisValue, MockRedisClient, RedisPoolMetrics};
 
 // ============================================================================
 // Core Middleware Types

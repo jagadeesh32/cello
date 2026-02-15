@@ -9,11 +9,11 @@ Track the evolution of Cello Framework through its releases.
 
 ## Current Version
 
-**Cello v0.6.0** (Latest Stable)
+**Cello v0.8.0** (Latest Stable)
 
-The latest release includes smart caching, adaptive rate limiting, DTO validation, and circuit breaker patterns.
+The latest release includes database connection pooling (enhanced), Redis integration, transaction support, and bug fixes.
 
-[:octicons-arrow-right-24: v0.6.0 Release Notes](v0.6.0.md)
+[:octicons-arrow-right-24: v0.8.0 Release Notes](v0.8.0.md)
 
 ---
 
@@ -21,6 +21,8 @@ The latest release includes smart caching, adaptive rate limiting, DTO validatio
 
 | Version | Release Date | Highlights |
 |---------|--------------|------------|
+| [v0.8.0](v0.8.0.md) | 2026-02 | Database connection pooling, Redis integration, transaction support |
+| [v0.7.0](v0.7.0.md) | 2026-01 | OpenTelemetry, health checks, enterprise features |
 | [v0.6.0](v0.6.0.md) | 2025-12 | Smart caching, adaptive rate limiting, DTO validation |
 | [v0.5.0](v0.5.0.md) | 2025-10 | Dependency injection, Guards (RBAC), Prometheus metrics |
 | [v0.4.0](v0.4.0.md) | 2025-08 | JWT auth, rate limiting, sessions, cluster mode |
@@ -40,10 +42,11 @@ Cello follows [Semantic Versioning](https://semver.org/):
 
 | Version | Status | Support Until |
 |---------|--------|---------------|
-| 0.6.x | Active | Current |
-| 0.5.x | Maintenance | 2026-04 |
-| 0.4.x | Security Only | 2026-01 |
-| < 0.4 | End of Life | - |
+| 0.8.x | Active | Current |
+| 0.7.x | Maintenance | 2026-07 |
+| 0.6.x | Maintenance | 2026-06 |
+| 0.5.x | Security Only | 2026-04 |
+| < 0.5 | End of Life | - |
 
 ---
 
@@ -52,7 +55,7 @@ Cello follows [Semantic Versioning](https://semver.org/):
 When upgrading between major versions, see our migration guides:
 
 - [Migration Guide](migration.md) - General migration instructions
-- [0.5.x to 0.6.x](migration.md#05x-to-06x) - Latest migration path
+- [0.7.x to 0.8.x](migration.md#07x-to-08x) - Latest migration path
 
 ---
 
@@ -87,7 +90,7 @@ pip install cello-framework==1.0.0rc1
 pip install --upgrade cello-framework
 
 # Install specific version
-pip install cello-framework==0.6.0
+pip install cello-framework==0.8.0
 ```
 
 ### Watch Releases
