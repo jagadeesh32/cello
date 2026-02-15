@@ -168,7 +168,7 @@ __all__ = [
     "CqrsConfig",
     "SagaConfig",
 ]
-__version__ = "0.10.0"
+__version__ = "1.0.0"
 
 
 class Blueprint:
@@ -592,7 +592,7 @@ class App:
         """
         self._app.invalidate_cache(tags)
 
-    def enable_openapi(self, title: str = "Cello API", version: str = "0.10.0"):
+    def enable_openapi(self, title: str = "Cello API", version: str = "1.0.0"):
         """
         Enable OpenAPI documentation endpoints.
 
@@ -603,7 +603,7 @@ class App:
 
         Args:
             title: API title (default: "Cello API")
-            version: API version (default: "0.10.0")
+            version: API version (default: "1.0.0")
         """
         # Store for closure
         api_title = title

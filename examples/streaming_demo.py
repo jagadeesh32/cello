@@ -35,7 +35,7 @@ def home(request):
     """Home endpoint showing streaming features."""
     return {
         "message": "Cello Streaming Demo",
-        "version": "0.9.0",
+        "version": "1.0.0",
         "features": {
             "sse": "Server-Sent Events for real-time updates",
             "streaming": "Large response streaming",

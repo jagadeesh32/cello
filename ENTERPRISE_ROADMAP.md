@@ -270,7 +270,7 @@ async def process_order(message: Message):
 
 ---
 
-### v0.10.0 - Advanced Patterns (Current Release - February 2026)
+### v0.10.0 - Advanced Patterns (February 2026)
 
 #### Event Sourcing
 - Event store integration
@@ -350,7 +350,16 @@ class OrderSaga(Saga):
 
 ---
 
-### v1.0.0 - Production Ready 
+### v1.0.0 - Production Ready (Current Release - February 2026)
+
+- First stable release with semantic versioning guarantees
+- Major performance optimizations (handler caching, lazy parsing, zero-copy responses)
+- Optimized release build (LTO fat, panic=abort, strip)
+- API stability commitment: no breaking changes until v2.0
+
+---
+
+### v1.1.0+ - Future Enhancements (Planned)
 
 #### OAuth2/OIDC Provider
 - Full OAuth2 server implementation

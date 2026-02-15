@@ -108,7 +108,7 @@ def home(request):
     """Home endpoint with cluster information."""
     return {
         "message": "Cello Cluster Mode Demo",
-        "version": "0.9.0",
+        "version": "1.0.0",
         "deployment": {
             "mode": "cluster",
             "features": [

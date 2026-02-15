@@ -190,7 +190,7 @@ def home(request):
     """Display available enterprise configurations."""
     return {
         "message": "Cello Enterprise Configuration Demo",
-        "version": "0.9.0",
+        "version": "1.0.0",
         "configurations": [
             "TimeoutConfig - Request/response timeouts",
             "LimitsConfig - Connection and body limits",

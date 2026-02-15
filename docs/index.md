@@ -186,7 +186,7 @@ hide:
 [:material-package-variant: PyPI](https://pypi.org/project/cello-framework/){ .md-button }
 
 <div class="hero-badges">
-  <code class="badge-version">v0.10.0</code>
+  <code class="badge-version">v1.0.0</code>
   <code class="badge-tests">372 tests passing</code>
   <code class="badge-license">MIT License</code>
   <code class="badge-python">Python 3.12+</code>
@@ -515,21 +515,21 @@ How Cello stacks up against popular Python web frameworks:
 
 <!-- ===== WHAT'S NEW ===== -->
 
-## :material-creation: What's New in v0.10.0
+## :material-creation: What's New in v1.0.0
 
 <div class="whats-new-box" markdown>
 
-!!! tip "v0.10.0 -- Advanced Architecture Patterns"
+!!! tip "v1.0.0 -- Production Ready"
 
-    The latest release brings enterprise-grade architecture patterns to Cello, all implemented in Rust for maximum performance:
+    Cello reaches **stable release** with a complete feature set, major performance optimizations, and a semantic versioning commitment. The API is now frozen -- no breaking changes until v2.0.
 
-    - :material-source-branch: **Event Sourcing** -- Append-only event stores with aggregate roots, snapshots, and full event replay. Build audit-complete systems with zero data loss.
+    - :material-rocket-launch: **Production Stable** -- Battle-tested API with semantic versioning guarantees. Ready for enterprise deployments.
 
-    - :material-swap-horizontal: **CQRS (Command Query Responsibility Segregation)** -- Separate read and write models with automatic projection rebuilding. Scale reads and writes independently.
+    - :material-speedometer: **Performance Optimizations** -- Handler metadata caching, lazy body parsing, zero-copy responses, TCP_NODELAY, and optimized release builds deliver peak throughput.
 
-    - :material-chart-timeline: **Saga Pattern** -- Orchestrate distributed transactions across microservices with compensating actions, timeouts, and automatic rollback on failure.
+    - :material-feature-search: **Complete Feature Set** -- Routing, middleware, auth, WebSocket, SSE, DI, guards, caching, rate limiting, OpenTelemetry, GraphQL, gRPC, Event Sourcing, CQRS, and Saga patterns -- all in one framework.
 
-    [:material-tag: Full Release Notes](releases/v0.10.0.md){ .md-button .md-button--primary }
+    [:material-tag: Full Release Notes](releases/v1.0.0.md){ .md-button .md-button--primary }
     [:material-book-open-variant: Migration Guide](releases/migration.md){ .md-button }
 
 </div>

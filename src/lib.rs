@@ -583,7 +583,7 @@ impl Cello {
     #[pyo3(signature = (title=None, version=None))]
     pub fn enable_openapi(&mut self, py: Python<'_>, title: Option<String>, version: Option<String>) -> PyResult<()> {
         let title = title.unwrap_or_else(|| "Cello API".to_string());
-        let version = version.unwrap_or_else(|| "0.10.0".to_string());
+        let version = version.unwrap_or_else(|| "1.0.0".to_string());
 
         // Store title and version for later use
         let title_clone = title.clone();

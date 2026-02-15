@@ -1022,10 +1022,10 @@ def test_dependency_injection_registration():
 
 
 def test_version():
-    """Test that version is 0.10.0."""
+    """Test that version is 1.0.0."""
     import cello
 
-    assert cello.__version__ == "0.10.0"
+    assert cello.__version__ == "1.0.0"
 
 
 def test_all_exports():
@@ -2180,10 +2180,10 @@ def test_v080_all_exports():
 
 
 def test_version_v090():
-    """Test that version is 0.10.0 (updated from 0.9.0)."""
+    """Test that version is 1.0.0 (updated from 0.9.0)."""
     import cello
 
-    assert cello.__version__ == "0.10.0"
+    assert cello.__version__ == "1.0.0"
 
 
 def test_v090_exports_in_all():
@@ -3965,10 +3965,10 @@ async def test_consumer_with_sqs_config():
 
 
 def test_version_v0100():
-    """Test that version is 0.10.0."""
+    """Test that version is 1.0.0."""
     import cello
 
-    assert cello.__version__ == "0.10.0"
+    assert cello.__version__ == "1.0.0"
 
 
 def test_v0100_exports_in_all():
@@ -4309,7 +4309,7 @@ def test_app_with_all_v0100_features():
     # Register routes
     @app.get("/")
     def home(req):
-        return {"version": "0.10.0"}
+        return {"version": "1.0.0"}
 
     assert True
 

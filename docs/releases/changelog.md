@@ -9,14 +9,30 @@ All notable changes to the Cello Framework are documented here. Each version lin
 
 ---
 
-## v0.10.0 -- Serverless and Edge Deployment
+## v1.0.0 -- Production Ready
 
-- Added serverless deployment adapters (AWS Lambda, Google Cloud Functions, Azure Functions)
-- Added edge runtime support (Cloudflare Workers, Deno Deploy, Vercel Edge)
-- Added cold start optimization with pre-warming and snapshot restore
-- Added function composition and middleware chaining for serverless handlers
-- Added automatic request/response translation between cloud provider formats and Cello
-- Added regional routing and geo-aware deployments
+- First stable release with semantic versioning guarantees
+- Major performance optimizations: handler metadata caching, lazy body parsing, zero-copy responses
+- TCP_NODELAY, HTTP keep-alive, and pipeline flush for lower latency
+- VecDeque ring buffer for O(1) latency tracking (was O(n))
+- Atomic fast-path checks for DI, guards, middleware, and lifecycle hooks
+- Optimized release build: LTO fat, panic=abort, strip, overflow-checks=false
+- API stability commitment: no breaking changes until v2.0
+- All 372 tests passing
+
+[Full release notes](v1.0.0.md)
+
+---
+
+## v0.10.0 -- Advanced Patterns
+
+- Added Event Sourcing with Aggregate base class, event replay, and snapshots
+- Added CQRS with Command/Query separation, dedicated buses, and event-driven sync
+- Added Saga Pattern for distributed transaction coordination with compensation logic
+- Added EventStoreConfig, CqrsConfig, and SagaConfig configuration classes
+- Fixed GraphQL subscription disconnects under high throughput
+- Fixed gRPC reflection not listing methods after hot reload
+- Fixed Kafka consumer group rebalancing causing duplicate processing
 - Updated version references across all modules
 
 [Full release notes](v0.10.0.md)

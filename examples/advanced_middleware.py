@@ -235,7 +235,7 @@ def documentation(request):
     """API documentation endpoint"""
     return {
         "title": "Cello Advanced Middleware API",
-        "version": "0.9.0",
+        "version": "1.0.0",
         "features": {
             "dependency_injection": {
                 "description": "FastAPI-style dependency injection",

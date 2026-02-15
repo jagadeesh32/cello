@@ -159,7 +159,7 @@ def home(request):
     """Security features overview."""
     response_data = {
         "message": "Cello Security Features Demo",
-        "version": "0.9.0",
+        "version": "1.0.0",
         "features": {
             "jwt_auth": "JWT authentication with configurable algorithms",
             "rate_limiting": "Token bucket and sliding window algorithms",

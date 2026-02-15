@@ -52,7 +52,7 @@ def home(request):
     """Home endpoint showing middleware information."""
     return {
         "message": "Cello Middleware Demo",
-        "version": "0.9.0",
+        "version": "1.0.0",
         "enabled_middleware": [
             "CORS - Cross-Origin Resource Sharing",
             "Logging - Request/response logging",

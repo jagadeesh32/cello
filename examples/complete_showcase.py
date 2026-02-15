@@ -43,7 +43,7 @@ app.enable_cors(origins=["*"])
 app.enable_logging()
 app.enable_compression()
 app.enable_prometheus(endpoint="/metrics", namespace="cello", subsystem="api")
-app.enable_openapi(title="Cello Feature Showcase", version="0.9.0")
+app.enable_openapi(title="Cello Feature Showcase", version="1.0.0")
 
 
 # =============================================================================
@@ -53,7 +53,7 @@ app.enable_openapi(title="Cello Feature Showcase", version="0.9.0")
 # Register singleton dependencies
 app.register_singleton("database", {"host": "localhost", "port": 5432, "name": "cello_db"})
 app.register_singleton("cache", {"host": "localhost", "port": 6379})
-app.register_singleton("config", {"debug": True, "version": "0.9.0"})
+app.register_singleton("config", {"debug": True, "version": "1.0.0"})
 
 
 # =============================================================================
@@ -86,7 +86,7 @@ def home(request):
     """Home endpoint - API overview."""
     return {
         "message": "Welcome to Cello Framework!",
-        "version": "0.9.0",
+        "version": "1.0.0",
         "endpoints": {
             "docs": "/docs",
             "redoc": "/redoc",
@@ -103,7 +103,7 @@ def home(request):
 @app.get("/health")
 def health_check(request):
     """Health check endpoint."""
-    return {"status": "healthy", "framework": "cello", "version": "0.9.0"}
+    return {"status": "healthy", "framework": "cello", "version": "1.0.0"}
 
 
 @app.get("/users")

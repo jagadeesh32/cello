@@ -6,6 +6,37 @@ title: Migration Guide
 
 This guide helps you migrate between major versions of Cello.
 
+## 0.10.x to 1.0.x {#010x-to-10x}
+
+### Stability
+
+v1.0.0 is the first stable release of Cello. Starting with this version, the framework follows [Semantic Versioning](https://semver.org/):
+
+- **Patch releases** (1.0.x): Bug fixes and security patches only.
+- **Minor releases** (1.x.0): New features, fully backwards-compatible.
+- **Major releases** (2.0.0+): Reserved for breaking changes with a deprecation period.
+
+### Breaking Changes
+
+No breaking changes from v0.10.0. All existing code continues to work.
+
+### Performance Improvements
+
+v1.0.0 includes significant performance optimizations in the Rust hot path. These are transparent -- no code changes required on your side. You will see improved request throughput and lower latency automatically after upgrading.
+
+### Upgrade
+
+```bash
+pip install --upgrade cello-framework
+```
+
+```python
+import cello
+assert cello.__version__ == "1.0.0"
+```
+
+---
+
 ## 0.9.x to 0.10.x {#09x-to-010x}
 
 ### New Features

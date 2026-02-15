@@ -35,7 +35,7 @@ def home(request):
     """Welcome endpoint."""
     return {
         "message": "Welcome to Cello v2!",
-        "version": "0.9.0",
+        "version": "1.0.0",
         "features": [
             "SIMD JSON",
             "Middleware",

@@ -84,7 +84,7 @@ if __name__ == "__main__":
 
 ```bash
 python app.py
-# 🐍 Cello v0.10.0 server starting at http://127.0.0.1:8000
+# 🐍 Cello v1.0.0 server starting at http://127.0.0.1:8000
 ```
 
 ---
@@ -190,7 +190,7 @@ async def transfer(request):
 
 @app.get("/")
 def home(request):
-    return {"status": "ok", "version": "0.10.0"}
+    return {"status": "ok", "version": "1.0.0"}
 
 app.run()
 ```
@@ -242,7 +242,7 @@ app.enable_rabbitmq(RabbitMQConfig(url="amqp://localhost:5672"))
 
 @app.get("/")
 def home(request):
-    return {"status": "ok", "version": "0.10.0", "protocols": ["graphql", "grpc", "kafka", "rabbitmq"]}
+    return {"status": "ok", "version": "1.0.0", "protocols": ["graphql", "grpc", "kafka", "rabbitmq"]}
 
 app.run()
 ```
@@ -280,7 +280,7 @@ app.enable_prometheus(endpoint="/metrics")
 
 @app.get("/")
 def home(request):
-    return {"status": "ok", "version": "0.10.0"}
+    return {"status": "ok", "version": "1.0.0"}
 
 app.run()
 ```

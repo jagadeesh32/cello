@@ -2,6 +2,32 @@
 
 All notable changes to Cello are documented in this file.
 
+## [1.0.0] - February 2026
+
+### Added
+- First stable release with semantic versioning commitment
+- Handler metadata caching (async detection and DI params cached per handler)
+- Lazy query parsing and body reading for bodyless HTTP methods
+- Pre-allocated headers HashMap with known capacity
+- Fast-path skip for empty middleware chains, guards, and lifecycle hooks
+- Atomic `has_py_singletons` check (replaces RwLock)
+- TCP_NODELAY on accepted connections
+- HTTP/1.1 keep-alive and pipeline flush
+- VecDeque ring buffer for O(1) latency tracking
+- Zero-copy response body building
+- Thread-local cached regex in OpenAPI generation
+- Optimized release profile: LTO fat, panic=abort, strip, overflow-checks=false
+
+### Fixed
+- Handler introspection overhead (per-request `inspect` module import eliminated)
+- O(n) latency tracking with `Vec::remove(0)` (replaced with VecDeque)
+- Async middleware chain cloning entire vector per request
+- DI container RwLock on every request for singleton check
+- GIL acquisition for empty lifecycle hook lists
+- `println!` on circuit breaker hot path (replaced with `tracing`)
+
+---
+
 ## [0.10.0] - February 2026
 
 ### Added

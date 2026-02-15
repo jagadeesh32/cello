@@ -125,7 +125,7 @@ def health(request):
     """Health check endpoint"""
     return {
         "status": "healthy",
-        "version": "0.9.0",
+        "version": "1.0.0",
         "features": ["di", "guards", "metrics", "caching", "dtos", "exceptions"],
     }
 
@@ -135,7 +135,7 @@ def documentation(request):
     """API documentation"""
     return {
         "title": "Cello Advanced Features API",
-        "version": "0.9.0",
+        "version": "1.0.0",
         "description": "Demonstrates all new middleware features",
         "features": {
             "dependency_injection": {

@@ -8,32 +8,33 @@ icon: material/tag-multiple
 
 ---
 
-## :material-new-box: Latest Release -- v0.10.0
+## :material-new-box: Latest Release -- v1.0.0
 
-!!! success "Cello v0.10.0 -- Advanced Patterns (February 2026)"
+!!! success "Cello v1.0.0 -- Production Ready (February 2026)"
 
-    The newest release brings **enterprise-grade architectural patterns** to Cello, letting you build sophisticated event-driven systems without leaving the framework.
+    The first **stable release** of Cello is here. The API is frozen under semantic versioning -- no breaking changes until v2.0.
 
     **Headline features:**
 
-    - :material-swap-horizontal: **Event Sourcing** -- append-only event store with full replay and snapshots
-    - :material-call-split: **CQRS** -- separate read and write models for high-throughput systems
-    - :material-sitemap: **Saga Pattern** -- coordinate distributed transactions across services with automatic compensation
-    - :material-cog-sync: **Advanced Patterns** -- production-ready building blocks for complex architectures
+    - :material-check-decagram: **Production Stable** -- finalized public API with semantic versioning guarantees
+    - :material-speedometer: **Performance Optimizations** -- handler caching, lazy parsing, zero-copy responses, optimized builds
+    - :material-feature-search: **Complete Feature Set** -- everything from routing to Event Sourcing, CQRS, and Saga patterns
+    - :material-shield-check: **Enterprise Ready** -- OpenTelemetry, health checks, RBAC, circuit breaker, and more
 
-    [:octicons-arrow-right-24: Full v0.10.0 Release Notes](v0.10.0.md){ .md-button .md-button--primary }
-    [:octicons-arrow-right-24: Migration Guide](migration.md#09x-to-010x){ .md-button }
+    [:octicons-arrow-right-24: Full v1.0.0 Release Notes](v1.0.0.md){ .md-button .md-button--primary }
+    [:octicons-arrow-right-24: Migration Guide](migration.md#010x-to-10x){ .md-button }
 
 ---
 
 ## :material-timeline: Version Timeline
 
-Every release of Cello, from the latest down to the initial public beta.
+Every release of Cello, from the stable 1.0 through the beta series.
 
 ```mermaid
 timeline
     title Cello Framework Releases
-    2026-02 : v0.10.0 - Event Sourcing, CQRS, Saga
+    2026-02 : v1.0.0 - Production Ready (Stable)
+           : v0.10.0 - Event Sourcing, CQRS, Saga
            : v0.9.0 - GraphQL, gRPC, Message Queues
     2026-02 : v0.8.0 - Database Pooling, Redis, Transactions
     2026-01 : v0.7.0 - OpenTelemetry, Health Checks
@@ -48,6 +49,16 @@ timeline
 ## :material-history: All Releases
 
 <div class="grid cards" markdown>
+
+-   :material-check-decagram:{ .lg .middle } **v1.0.0** -- Production Ready
+
+    ---
+
+    Stable release with performance optimizations, API stability guarantees, and the complete feature set.
+
+    :material-calendar: February 2026
+
+    [:octicons-arrow-right-24: Release Notes](v1.0.0.md)
 
 -   :material-star-shooting:{ .lg .middle } **v0.10.0** -- Advanced Patterns
 
@@ -137,16 +148,15 @@ timeline
 
 | Version | Status | Support Until |
 |:--------|:-------|:--------------|
-| **0.10.x** | :material-check-circle:{ style="color: #4caf50" } **Active** | Current |
+| **1.0.x** | :material-check-circle:{ style="color: #4caf50" } **Active** | Current |
+| 0.10.x | :material-wrench:{ style="color: #ffab40" } Maintenance | August 2026 |
 | 0.9.x | :material-wrench:{ style="color: #ffab40" } Maintenance | August 2026 |
-| 0.8.x | :material-wrench:{ style="color: #ffab40" } Maintenance | August 2026 |
-| 0.7.x | :material-wrench:{ style="color: #ffab40" } Maintenance | July 2026 |
-| 0.6.x | :material-shield-alert:{ style="color: #ff9800" } Security Only | June 2026 |
-| < 0.6 | :material-close-circle:{ style="color: #f44336" } End of Life | -- |
+| 0.8.x | :material-shield-alert:{ style="color: #ff9800" } Security Only | June 2026 |
+| < 0.8 | :material-close-circle:{ style="color: #f44336" } End of Life | -- |
 
 !!! info "Version policy"
 
-    Cello follows [Semantic Versioning](https://semver.org/). All **0.x** releases are pre-1.0 beta -- the API may change between minor versions. **Maintenance** releases receive bug fixes. **Security Only** releases receive critical security patches only.
+    Cello follows [Semantic Versioning](https://semver.org/). Starting with **v1.0.0**, the public API is stable -- no breaking changes until v2.0. **Maintenance** releases receive bug fixes. **Security Only** releases receive critical security patches only.
 
 ---
 
@@ -159,13 +169,13 @@ timeline
     pip install --upgrade cello-framework
 
     # Pin to a specific version
-    pip install cello-framework==0.10.0
+    pip install cello-framework==1.0.0
     ```
 
 === "requirements.txt"
 
     ```text
-    cello-framework>=0.10.0,<0.11.0
+    cello-framework>=1.0.0,<2.0.0
     ```
 
 === "pyproject.toml"
@@ -173,7 +183,7 @@ timeline
     ```toml
     [project]
     dependencies = [
-        "cello-framework>=0.10.0,<0.11.0",
+        "cello-framework>=1.0.0,<2.0.0",
     ]
     ```
 
