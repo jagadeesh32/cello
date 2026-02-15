@@ -463,16 +463,125 @@ See `examples/advanced_middleware.py` for comprehensive examples of all new feat
 
 ---
 
-## Roadmap
+## Additional Middleware Features
 
-### Coming Soon:
-- 🔜 DTO (Data Transfer Objects) system
-- 🔜 Advanced caching middleware with Redis support
-- 🔜 Global exception handling with custom handlers
-- 🔜 Lifecycle hooks (startup/shutdown)
-- 🔜 Enhanced validation middleware
-- 🔜 Circuit breaker & retry middleware
-- 🔜 OpenTelemetry integration
+All of the following features are available in Cello today:
+
+### DTO (Data Transfer Objects)
+
+Validate and transform request data with type-safe DTOs:
+
+```python
+from cello import App, DTO, Field
+
+class CreateUserDTO(DTO):
+    name: str = Field(min_length=2, max_length=50)
+    email: str = Field(pattern=r"^[\w.-]+@[\w.-]+\.\w+$")
+    age: int = Field(ge=18, le=120)
+
+@app.post("/users")
+def create_user(request):
+    dto = CreateUserDTO.from_request(request)
+    return {"name": dto.name, "email": dto.email}
+```
+
+### Advanced Caching Middleware
+
+Smart caching with TTL, cache invalidation, and custom key strategies:
+
+```python
+app.enable_caching(
+    max_size=10000,
+    default_ttl=300,
+    stale_while_revalidate=60,
+)
+
+@app.get("/products/{id}", cache_ttl=600)
+def get_product(request):
+    return {"id": request.params["id"], "name": "Widget"}
+```
+
+### Global Exception Handling
+
+Catch and transform exceptions into consistent RFC 7807 responses:
+
+```python
+from cello import App, ProblemDetails
+
+@app.exception_handler(ValueError)
+def handle_value_error(request, exc):
+    return ProblemDetails(
+        type_url="/errors/validation",
+        title="Validation Error",
+        status=400,
+        detail=str(exc),
+        instance=request.path,
+    )
+
+@app.exception_handler(Exception)
+def handle_generic(request, exc):
+    return ProblemDetails(
+        title="Internal Server Error",
+        status=500,
+        detail="An unexpected error occurred",
+    )
+```
+
+### Lifecycle Hooks (Startup/Shutdown)
+
+Register async hooks that run when the application starts or stops:
+
+```python
+@app.on_startup
+async def startup():
+    app.state["db"] = await create_pool()
+    print("Database pool created")
+
+@app.on_shutdown
+async def shutdown():
+    await app.state["db"].close()
+    print("Database pool closed")
+```
+
+### Enhanced Validation Middleware
+
+Built-in request validation with body size limits and content type checks:
+
+```python
+app.enable_body_limit(max_size="10mb")
+
+@app.post("/upload", body_limit="50mb")
+def upload_file(request):
+    file = request.files["document"]
+    return {"filename": file.filename, "size": file.size}
+```
+
+### Circuit Breaker & Retry Middleware
+
+Protect downstream services with automatic circuit breaking:
+
+```python
+app.enable_circuit_breaker(
+    failure_threshold=5,
+    recovery_timeout=30,
+    half_open_max_calls=3,
+)
+```
+
+### OpenTelemetry Integration
+
+Distributed tracing, metrics, and logging with OpenTelemetry:
+
+```python
+app.enable_opentelemetry(
+    service_name="my-service",
+    exporter="otlp",
+    endpoint="http://localhost:4317",
+    sample_rate=0.1,
+)
+```
+
+See the [Middleware docs](middleware/overview.md) and [Enterprise Observability docs](enterprise/observability/opentelemetry.md) for full details on each feature.
 
 ---
 

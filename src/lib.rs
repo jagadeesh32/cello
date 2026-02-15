@@ -402,7 +402,7 @@ impl Cello {
         };
 
         // Register the config as a singleton for DI
-        let pool = middleware::database::MockDatabasePool::new(db_config);
+        let _pool = middleware::database::MockDatabasePool::new(db_config);
         println!("🗄️  Database pool enabled:");
         println!("   URL: {}", config.url);
         println!("   Pool size: {}", config.pool_size);
