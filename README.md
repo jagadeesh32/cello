@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/jagadeesh32/cello/main/docs/assets/logo.svg" alt="Cello" width="400">
+  <img src="https://cello-framework.vercel.app/assets/logo.svg" alt="Cello" width="400">
 </p>
 
 <p align="center">
