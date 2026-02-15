@@ -4,7 +4,7 @@
 
 **Cello** is an ultra-fast, Rust-powered Python async web framework designed to achieve C-level performance on the hot path while maintaining Python's developer experience. It's the successor to frameworks like FastAPI, Robyn, and Litestar, combining their best features with pure Rust implementation for maximum performance.
 
-**Version:** 0.8.0 (Beta)
+**Version:** 0.9.0 (Beta)
 **License:** MIT
 **Python Requirement:** 3.12+
 **Author:** Jagadeesh Katla
@@ -345,6 +345,7 @@ def handle_value_error(request, exc):
 
 ## Version History
 
+- **v0.9.0**: API protocols (GraphQL, gRPC), message queue adapters (Kafka, RabbitMQ)
 - **v0.8.0**: Database connection pooling (enhanced), Redis integration, transaction support
 - **v0.7.0**: OpenTelemetry, health checks, GraphQL support, structured logging
 - **v0.6.0**: Smart caching, adaptive rate limiting, DTO validation, circuit breaker

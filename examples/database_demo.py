@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Database & Redis Integration Demo for Cello v0.8.0.
+Database & Redis Integration Demo for Cello v0.9.0.
 
-This example demonstrates the new Data Layer features introduced in v0.8.0:
+This example demonstrates the Data Layer features introduced in v0.8.0:
   - Database connection pooling with health monitoring
   - Redis integration with async client
   - Automatic transaction management with @transactional
@@ -77,7 +77,7 @@ next_id = 4
 def home(request):
     """Root endpoint with feature overview."""
     return {
-        "message": "Cello v0.8.0 - Data Layer Demo",
+        "message": "Cello v0.9.0 - Data Layer Demo",
         "features": {
             "database": "Connection pooling with health monitoring & reconnection",
             "redis": "Async Redis client with pool, Pub/Sub, cluster mode",
@@ -297,7 +297,7 @@ def show_config(request):
 
 
 if __name__ == "__main__":
-    print("Cello v0.8.0 - Data Layer Demo")
+    print("Cello v0.9.0 - Data Layer Demo")
     print()
     print("  Available endpoints:")
     print("  - GET  /              - Feature overview")

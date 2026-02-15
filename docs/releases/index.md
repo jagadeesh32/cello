@@ -9,11 +9,11 @@ Track the evolution of Cello Framework through its releases.
 
 ## Current Version
 
-**Cello v0.8.0** (Latest Stable)
+**Cello v0.9.0** (Latest Stable)
 
-The latest release includes database connection pooling (enhanced), Redis integration, transaction support, and bug fixes.
+The latest release includes API protocol features, GraphQL support, gRPC support, and message queue adapters.
 
-[:octicons-arrow-right-24: v0.8.0 Release Notes](v0.8.0.md)
+[:octicons-arrow-right-24: v0.9.0 Release Notes](v0.9.0.md)
 
 ---
 
@@ -21,6 +21,7 @@ The latest release includes database connection pooling (enhanced), Redis integr
 
 | Version | Release Date | Highlights |
 |---------|--------------|------------|
+| [v0.9.0](v0.9.0.md) | 2026-02 | API protocols, GraphQL, gRPC, message queue adapters |
 | [v0.8.0](v0.8.0.md) | 2026-02 | Database connection pooling, Redis integration, transaction support |
 | [v0.7.0](v0.7.0.md) | 2026-01 | OpenTelemetry, health checks, enterprise features |
 | [v0.6.0](v0.6.0.md) | 2025-12 | Smart caching, adaptive rate limiting, DTO validation |
@@ -42,7 +43,8 @@ Cello follows [Semantic Versioning](https://semver.org/):
 
 | Version | Status | Support Until |
 |---------|--------|---------------|
-| 0.8.x | Active | Current |
+| 0.9.x | Active | Current |
+| 0.8.x | Maintenance | 2026-08 |
 | 0.7.x | Maintenance | 2026-07 |
 | 0.6.x | Maintenance | 2026-06 |
 | 0.5.x | Security Only | 2026-04 |
@@ -55,7 +57,7 @@ Cello follows [Semantic Versioning](https://semver.org/):
 When upgrading between major versions, see our migration guides:
 
 - [Migration Guide](migration.md) - General migration instructions
-- [0.7.x to 0.8.x](migration.md#07x-to-08x) - Latest migration path
+- [0.8.x to 0.9.x](migration.md#08x-to-09x) - Latest migration path
 
 ---
 
@@ -90,7 +92,7 @@ pip install cello-framework==1.0.0rc1
 pip install --upgrade cello-framework
 
 # Install specific version
-pip install cello-framework==0.8.0
+pip install cello-framework==0.9.0
 ```
 
 ### Watch Releases

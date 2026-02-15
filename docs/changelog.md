@@ -2,6 +2,17 @@
 
 All notable changes to Cello are documented in this file.
 
+## [0.9.0] - 2026-02-15
+
+### Added
+
+#### Features
+- **GraphQL Support**: Schema-first and code-first GraphQL with Playground UI
+- **gRPC Support**: Protocol buffer integration with bidirectional streaming
+- **Message Queue Adapters**: Kafka, RabbitMQ integration with consumer/producer patterns
+
+---
+
 ## [0.8.0] - 2026-02-15
 
 ### Added

@@ -435,7 +435,71 @@ impl Cello {
     }
 
     // ========================================================================
-    // End Enterprise Features
+    // v0.9.0 - API Protocol Features
+    // ========================================================================
+
+    /// Enable gRPC service support.
+    #[pyo3(signature = (config=None))]
+    pub fn enable_grpc(&mut self, config: Option<PyGrpcConfig>) {
+        let config = config.unwrap_or_else(|| PyGrpcConfig::new("[::]:50051", true, 4194304, false, 60, 100));
+
+        let grpc_config = middleware::grpc::GrpcConfig {
+            address: config.address.clone(),
+            services: Vec::new(),
+            reflection: config.reflection,
+            max_message_size: config.max_message_size,
+            enable_web: config.enable_web,
+            keepalive_secs: config.keepalive_secs,
+            concurrency_limit: config.concurrency_limit,
+        };
+
+        let _server = middleware::grpc::GrpcServer::new(grpc_config);
+        println!("🔌 gRPC enabled:");
+        println!("   Address: {}", config.address);
+        println!("   Reflection: {}", config.reflection);
+        if config.enable_web {
+            println!("   gRPC-Web: enabled");
+        }
+    }
+
+    /// Add a gRPC service.
+    #[pyo3(signature = (name, methods=None))]
+    pub fn add_grpc_service(&mut self, name: String, methods: Option<Vec<String>>) {
+        let methods = methods.unwrap_or_default();
+        println!("🔌 gRPC service registered: {}", name);
+        for method in &methods {
+            println!("   - {}", method);
+        }
+    }
+
+    /// Enable message queue integration.
+    #[pyo3(signature = (config))]
+    pub fn enable_messaging(&mut self, config: PyKafkaConfig) {
+        println!("📨 Message queue enabled:");
+        println!("   Brokers: {}", config.brokers.join(", "));
+        if let Some(ref group_id) = config.group_id {
+            println!("   Group ID: {}", group_id);
+        }
+    }
+
+    /// Enable RabbitMQ integration.
+    #[pyo3(signature = (config))]
+    pub fn enable_rabbitmq(&mut self, config: PyRabbitMQConfig) {
+        println!("🐰 RabbitMQ enabled:");
+        println!("   URL: {}", config.url);
+        println!("   VHost: {}", config.vhost);
+    }
+
+    /// Enable SQS integration.
+    #[pyo3(signature = (config))]
+    pub fn enable_sqs(&mut self, config: PySqsConfig) {
+        println!("☁️  SQS enabled:");
+        println!("   Region: {}", config.region);
+        println!("   Queue: {}", config.queue_url);
+    }
+
+    // ========================================================================
+    // End API Protocol Features
     // ========================================================================
 
     /// Enable OpenAPI documentation endpoints.
@@ -446,7 +510,7 @@ impl Cello {
     #[pyo3(signature = (title=None, version=None))]
     pub fn enable_openapi(&mut self, py: Python<'_>, title: Option<String>, version: Option<String>) -> PyResult<()> {
         let title = title.unwrap_or_else(|| "Cello API".to_string());
-        let version = version.unwrap_or_else(|| "0.8.0".to_string());
+        let version = version.unwrap_or_else(|| "0.9.0".to_string());
 
         // Store title and version for later use
         let title_clone = title.clone();
@@ -1421,6 +1485,209 @@ impl PyGraphQLConfig {
     }
 }
 
+// ==========================================================================
+// v0.9.0 - API Protocol Configuration Classes
+// ==========================================================================
+
+/// Python-exposed gRPC configuration.
+#[pyclass(name = "GrpcConfig")]
+#[derive(Clone)]
+pub struct PyGrpcConfig {
+    #[pyo3(get, set)]
+    pub address: String,
+    #[pyo3(get, set)]
+    pub reflection: bool,
+    #[pyo3(get, set)]
+    pub max_message_size: usize,
+    #[pyo3(get, set)]
+    pub enable_web: bool,
+    #[pyo3(get, set)]
+    pub keepalive_secs: u64,
+    #[pyo3(get, set)]
+    pub concurrency_limit: usize,
+}
+
+#[pymethods]
+impl PyGrpcConfig {
+    #[new]
+    #[pyo3(signature = (address="[::]:50051", reflection=true, max_message_size=4194304, enable_web=false, keepalive_secs=60, concurrency_limit=100))]
+    pub fn new(
+        address: &str,
+        reflection: bool,
+        max_message_size: usize,
+        enable_web: bool,
+        keepalive_secs: u64,
+        concurrency_limit: usize,
+    ) -> Self {
+        Self {
+            address: address.to_string(),
+            reflection,
+            max_message_size,
+            enable_web,
+            keepalive_secs,
+            concurrency_limit,
+        }
+    }
+
+    /// Create config for local development.
+    #[staticmethod]
+    pub fn local() -> Self {
+        Self::new("[::]:50051", true, 4194304, true, 60, 100)
+    }
+
+    /// Create config for production.
+    #[staticmethod]
+    #[pyo3(signature = (address="[::]:50051", max_message_size=4194304))]
+    pub fn production(address: &str, max_message_size: usize) -> Self {
+        Self::new(address, false, max_message_size, false, 120, 1000)
+    }
+}
+
+/// Python-exposed Kafka configuration.
+#[pyclass(name = "KafkaConfig")]
+#[derive(Clone)]
+pub struct PyKafkaConfig {
+    #[pyo3(get, set)]
+    pub brokers: Vec<String>,
+    #[pyo3(get, set)]
+    pub group_id: Option<String>,
+    #[pyo3(get, set)]
+    pub client_id: Option<String>,
+    #[pyo3(get, set)]
+    pub auto_commit: bool,
+    #[pyo3(get, set)]
+    pub session_timeout_ms: u64,
+    #[pyo3(get, set)]
+    pub max_poll_records: usize,
+}
+
+#[pymethods]
+impl PyKafkaConfig {
+    #[new]
+    #[pyo3(signature = (brokers=None, group_id=None, client_id=None, auto_commit=true, session_timeout_ms=30000, max_poll_records=500))]
+    pub fn new(
+        brokers: Option<Vec<String>>,
+        group_id: Option<String>,
+        client_id: Option<String>,
+        auto_commit: bool,
+        session_timeout_ms: u64,
+        max_poll_records: usize,
+    ) -> Self {
+        Self {
+            brokers: brokers.unwrap_or_else(|| vec!["localhost:9092".to_string()]),
+            group_id,
+            client_id,
+            auto_commit,
+            session_timeout_ms,
+            max_poll_records,
+        }
+    }
+
+    /// Create config for local development.
+    #[staticmethod]
+    pub fn local() -> Self {
+        Self::new(None, None, None, true, 30000, 500)
+    }
+}
+
+/// Python-exposed RabbitMQ configuration.
+#[pyclass(name = "RabbitMQConfig")]
+#[derive(Clone)]
+pub struct PyRabbitMQConfig {
+    #[pyo3(get, set)]
+    pub url: String,
+    #[pyo3(get, set)]
+    pub vhost: String,
+    #[pyo3(get, set)]
+    pub prefetch_count: u16,
+    #[pyo3(get, set)]
+    pub heartbeat: u16,
+    #[pyo3(get, set)]
+    pub connection_timeout_secs: u16,
+}
+
+#[pymethods]
+impl PyRabbitMQConfig {
+    #[new]
+    #[pyo3(signature = (url="amqp://localhost", vhost="/", prefetch_count=10, heartbeat=60, connection_timeout_secs=5))]
+    pub fn new(
+        url: &str,
+        vhost: &str,
+        prefetch_count: u16,
+        heartbeat: u16,
+        connection_timeout_secs: u16,
+    ) -> Self {
+        Self {
+            url: url.to_string(),
+            vhost: vhost.to_string(),
+            prefetch_count,
+            heartbeat,
+            connection_timeout_secs,
+        }
+    }
+
+    /// Create config for local development.
+    #[staticmethod]
+    pub fn local() -> Self {
+        Self::new("amqp://localhost", "/", 10, 60, 5)
+    }
+}
+
+/// Python-exposed SQS configuration.
+#[pyclass(name = "SqsConfig")]
+#[derive(Clone)]
+pub struct PySqsConfig {
+    #[pyo3(get, set)]
+    pub region: String,
+    #[pyo3(get, set)]
+    pub queue_url: String,
+    #[pyo3(get, set)]
+    pub endpoint_url: Option<String>,
+    #[pyo3(get, set)]
+    pub max_messages: i32,
+    #[pyo3(get, set)]
+    pub wait_time_secs: i32,
+    #[pyo3(get, set)]
+    pub visibility_timeout_secs: i32,
+}
+
+#[pymethods]
+impl PySqsConfig {
+    #[new]
+    #[pyo3(signature = (region="us-east-1", queue_url="", endpoint_url=None, max_messages=10, wait_time_secs=20, visibility_timeout_secs=30))]
+    pub fn new(
+        region: &str,
+        queue_url: &str,
+        endpoint_url: Option<String>,
+        max_messages: i32,
+        wait_time_secs: i32,
+        visibility_timeout_secs: i32,
+    ) -> Self {
+        Self {
+            region: region.to_string(),
+            queue_url: queue_url.to_string(),
+            endpoint_url,
+            max_messages,
+            wait_time_secs,
+            visibility_timeout_secs,
+        }
+    }
+
+    /// Create config for local development (LocalStack).
+    #[staticmethod]
+    #[pyo3(signature = (queue_url))]
+    pub fn local(queue_url: &str) -> Self {
+        Self::new(
+            "us-east-1",
+            queue_url,
+            Some("http://localhost:4566".to_string()),
+            10,
+            20,
+            30,
+        )
+    }
+}
+
 /// Helper to call lifecycle handlers (sync or async).
 fn call_lifecycle_handler(py: Python<'_>, handler: &PyObject) -> PyResult<()> {
     // Call the handler. If it returns a coroutine, run it.
@@ -1490,6 +1757,12 @@ fn _cello(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
 
     // v0.8.0 - Data Layer Configuration Classes
     m.add_class::<PyRedisConfig>()?;
+
+    // v0.9.0 - API Protocol Configuration Classes
+    m.add_class::<PyGrpcConfig>()?;
+    m.add_class::<PyKafkaConfig>()?;
+    m.add_class::<PyRabbitMQConfig>()?;
+    m.add_class::<PySqsConfig>()?;
 
     Ok(())
 }

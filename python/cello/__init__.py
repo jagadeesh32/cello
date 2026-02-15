@@ -105,6 +105,14 @@ from cello._cello import (
     RedisConfig,
 )
 
+# v0.9.0 - API Protocol features
+from cello._cello import (
+    GrpcConfig,
+    KafkaConfig,
+    RabbitMQConfig,
+    SqsConfig,
+)
+
 __all__ = [
     # Core
     "App",
@@ -143,8 +151,13 @@ __all__ = [
     # v0.8.0 - Data Layer features
     "RedisConfig",
     "transactional",
+    # v0.9.0 - API Protocol features
+    "GrpcConfig",
+    "KafkaConfig",
+    "RabbitMQConfig",
+    "SqsConfig",
 ]
-__version__ = "0.8.0"
+__version__ = "0.9.0"
 
 
 class Blueprint:
@@ -568,7 +581,7 @@ class App:
         """
         self._app.invalidate_cache(tags)
 
-    def enable_openapi(self, title: str = "Cello API", version: str = "0.8.0"):
+    def enable_openapi(self, title: str = "Cello API", version: str = "0.9.0"):
         """
         Enable OpenAPI documentation endpoints.
 
@@ -579,7 +592,7 @@ class App:
 
         Args:
             title: API title (default: "Cello API")
-            version: API version (default: "0.8.0")
+            version: API version (default: "0.9.0")
         """
         # Store for closure
         api_title = title
@@ -781,6 +794,111 @@ class App:
 
     # ========================================================================
     # End Data Layer Features
+    # ========================================================================
+
+    # ========================================================================
+    # API Protocol Features (v0.9.0+)
+    # ========================================================================
+
+    def enable_grpc(self, config: "GrpcConfig" = None):
+        """
+        Enable gRPC service support.
+
+        Configures a gRPC server with service registration, reflection,
+        and optional gRPC-Web support.
+
+        Args:
+            config: GrpcConfig instance
+
+        Example:
+            from cello import App, GrpcConfig
+
+            app = App()
+            app.enable_grpc(GrpcConfig(
+                address="[::]:50051",
+                reflection=True,
+                enable_web=True
+            ))
+        """
+        if config is None:
+            config = GrpcConfig()
+        self._app.enable_grpc(config)
+
+    def add_grpc_service(self, name: str, methods: list = None):
+        """
+        Register a gRPC service with the application.
+
+        Args:
+            name: Service name
+            methods: Optional list of method names
+
+        Example:
+            app.add_grpc_service("UserService", ["GetUser", "ListUsers"])
+        """
+        self._app.add_grpc_service(name, methods)
+
+    def enable_messaging(self, config: "KafkaConfig" = None):
+        """
+        Enable Kafka message queue integration.
+
+        Args:
+            config: KafkaConfig instance
+
+        Example:
+            from cello import App, KafkaConfig
+
+            app = App()
+            app.enable_messaging(KafkaConfig(
+                brokers=["localhost:9092"],
+                group_id="my-group"
+            ))
+        """
+        if config is None:
+            config = KafkaConfig()
+        self._app.enable_messaging(config)
+
+    def enable_rabbitmq(self, config: "RabbitMQConfig" = None):
+        """
+        Enable RabbitMQ message queue integration.
+
+        Args:
+            config: RabbitMQConfig instance
+
+        Example:
+            from cello import App, RabbitMQConfig
+
+            app = App()
+            app.enable_rabbitmq(RabbitMQConfig(
+                url="amqp://localhost",
+                prefetch_count=20
+            ))
+        """
+        if config is None:
+            config = RabbitMQConfig()
+        self._app.enable_rabbitmq(config)
+
+    def enable_sqs(self, config: "SqsConfig" = None):
+        """
+        Enable AWS SQS message queue integration.
+
+        Args:
+            config: SqsConfig instance
+
+        Example:
+            from cello import App, SqsConfig
+
+            app = App()
+            app.enable_sqs(SqsConfig(
+                region="us-west-2",
+                queue_url="https://sqs.us-west-2.amazonaws.com/123/queue"
+            ))
+        """
+        if config is None:
+            config = SqsConfig()
+        self._app.enable_sqs(config)
+
+    # ========================================================================
+    # End API Protocol Features
     # ========================================================================
 
     def enable_telemetry(self, config: "OpenTelemetryConfig" = None):

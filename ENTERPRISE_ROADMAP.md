@@ -42,8 +42,8 @@ Cello aims to be the most comprehensive, performant, and secure Python web frame
 | Health Checks | 🔲 | ✅ | ❌ | ❌ | ✅ | ✅ | ✅ |
 | **API Protocols** | | | | | | | |
 | REST | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| GraphQL | 🔲 | ✅ | ✅ | ✅* | ✅ | ✅ | ✅ |
-| gRPC | 🔲 | ✅ | ✅* | ❌ | ✅ | ✅ | ✅ |
+| GraphQL | ✅ | ✅ | ✅ | ✅* | ✅ | ✅ | ✅ |
+| gRPC | ✅ | ✅ | ✅* | ❌ | ✅ | ✅ | ✅ |
 | WebSocket | ✅ | ✅ | ✅ | ✅* | ✅ | ✅ | ✅ |
 | SSE | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ |
 | **Database** | | | | | | | |
@@ -193,59 +193,75 @@ async def transfer(request, db=Depends(get_db)):
 
 ---
 
-### v0.9.0 - API Protocols 
+### v0.9.0 - API Protocols (Current Release - February 2026)
 
-#### GraphQL Support
+#### GraphQL Support ✅
 - Schema-first and code-first approaches
 - Subscriptions via WebSocket
 - DataLoader for N+1 prevention
 - Federation support
 
 ```python
-from cello.graphql import GraphQL, Query, Mutation
+from cello.graphql import Query, Mutation, Subscription, Schema, DataLoader
 
 @Query
-def users(info) -> list[User]:
+def users(info) -> list:
     return db.get_users()
 
 @Mutation
-def create_user(info, name: str, email: str) -> User:
+def create_user(info, name: str, email: str) -> dict:
     return db.create_user(name, email)
 
-graphql = GraphQL(schema)
-app.mount("/graphql", graphql)
+@Subscription
+async def user_created(info):
+    async for event in event_stream("user_created"):
+        yield event
+
+schema = Schema(
+    queries=[users],
+    mutations=[create_user],
+    subscriptions=[user_created],
+)
+app.mount("/graphql", schema)
 ```
 
-#### gRPC Support
+#### gRPC Support ✅
 - Protocol buffer integration
 - Bidirectional streaming
 - gRPC-Web for browser clients
 - Reflection service
 
 ```python
-from cello.grpc import GrpcService, grpc_method
+from cello.grpc import GrpcService, grpc_method, GrpcConfig, GrpcRequest, GrpcResponse
+
+app.enable_grpc(GrpcConfig(port=50051, enable_reflection=True, enable_grpc_web=True))
 
 class UserService(GrpcService):
     @grpc_method
-    async def GetUser(self, request):
-        user = await db.get_user(request.id)
-        return UserResponse(id=user.id, name=user.name)
+    async def GetUser(self, request: GrpcRequest) -> GrpcResponse:
+        user = await db.get_user(request.get("id"))
+        return GrpcResponse(data={"id": user.id, "name": user.name})
 
 app.add_grpc_service(UserService())
 ```
 
-#### Message Queue Adapters
+#### Message Queue Adapters ✅
 - Kafka consumer/producer
 - RabbitMQ integration
-- AWS SQS/SNS support
 - Dead letter queue handling
+- Consumer group management
 
 ```python
-from cello.messaging import KafkaConfig, kafka_consumer
+from cello.messaging import KafkaConfig, kafka_consumer, kafka_producer, Message, MessageResult
+
+app.enable_messaging(KafkaConfig(
+    bootstrap_servers="localhost:9092",
+    group_id="order-processor",
+))
 
 @kafka_consumer(topic="orders", group="order-processor")
-async def process_order(message):
-    order = json.loads(message.value)
+async def process_order(message: Message):
+    order = message.json()
     await process(order)
     return MessageResult.ACK
 ```

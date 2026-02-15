@@ -1022,10 +1022,10 @@ def test_dependency_injection_registration():
 
 
 def test_version():
-    """Test that version is 0.8.0."""
+    """Test that version is 0.9.0."""
     import cello
 
-    assert cello.__version__ == "0.8.0"
+    assert cello.__version__ == "0.9.0"
 
 
 def test_all_exports():
@@ -1191,12 +1191,12 @@ def test_enable_openapi():
     from cello import App
 
     app = App()
-    app.enable_openapi(title="Test API", version="0.8.0")
+    app.enable_openapi(title="Test API", version="0.9.0")
     assert True
 
 
 def test_enable_openapi_default_version():
-    """Test that OpenAPI defaults to v0.8.0."""
+    """Test that OpenAPI defaults to v0.9.0."""
     from cello import App
 
     app = App()
@@ -2122,7 +2122,7 @@ def test_app_with_all_v080_features():
     # Register routes
     @app.get("/")
     def home(req):
-        return {"version": "0.8.0"}
+        return {"version": "0.9.0"}
 
     @app.post("/data")
     def create_data(req):
@@ -2167,3 +2167,1789 @@ def test_v080_all_exports():
         RedisConfig,
         transactional, Database, Redis, Transaction,
     ])
+
+
+# =============================================================================
+# v0.9.0 API Protocol Feature Tests
+# =============================================================================
+
+
+# ---------------------------------------------------------------------------
+# v0.9.0 Version & Exports
+# ---------------------------------------------------------------------------
+
+
+def test_version_v090():
+    """Test that version is 0.9.0."""
+    import cello
+
+    assert cello.__version__ == "0.9.0"
+
+
+def test_v090_exports_in_all():
+    """Test that v0.9.0 features are in __all__."""
+    import cello
+
+    assert "GrpcConfig" in cello.__all__
+    assert "KafkaConfig" in cello.__all__
+    assert "RabbitMQConfig" in cello.__all__
+    assert "SqsConfig" in cello.__all__
+
+
+def test_import_v090_api_protocol_configs():
+    """Test that v0.9.0 API protocol configuration classes can be imported."""
+    from cello import GrpcConfig, KafkaConfig, RabbitMQConfig, SqsConfig
+
+    assert GrpcConfig is not None
+    assert KafkaConfig is not None
+    assert RabbitMQConfig is not None
+    assert SqsConfig is not None
+
+
+def test_v090_all_exports():
+    """Test that all v0.9.0 expected exports are available."""
+    from cello import (
+        # Core
+        App, Blueprint, Request, Response,
+        # v0.7.0
+        OpenTelemetryConfig, HealthCheckConfig,
+        DatabaseConfig, GraphQLConfig,
+        # v0.8.0
+        RedisConfig,
+        # v0.9.0
+        GrpcConfig, KafkaConfig, RabbitMQConfig, SqsConfig,
+    )
+    from cello.database import transactional, Database, Redis, Transaction
+    from cello.graphql import Query, Mutation, Subscription, Field, DataLoader, GraphQL, Schema
+    from cello.grpc import (
+        GrpcService, grpc_method, GrpcRequest, GrpcResponse,
+        GrpcServer, GrpcChannel, GrpcError,
+    )
+    from cello.messaging import (
+        kafka_consumer, kafka_producer, Message, MessageResult,
+        Producer, Consumer,
+    )
+
+    assert all([
+        App, Blueprint, Request, Response,
+        OpenTelemetryConfig, HealthCheckConfig,
+        DatabaseConfig, GraphQLConfig,
+        RedisConfig,
+        GrpcConfig, KafkaConfig, RabbitMQConfig, SqsConfig,
+        transactional, Database, Redis, Transaction,
+        Query, Mutation, Subscription, Field, DataLoader, GraphQL, Schema,
+        GrpcService, grpc_method, GrpcRequest, GrpcResponse,
+        GrpcServer, GrpcChannel, GrpcError,
+        kafka_consumer, kafka_producer, Message, MessageResult,
+        Producer, Consumer,
+    ])
+
+
+# ---------------------------------------------------------------------------
+# v0.9.0 GrpcConfig (Rust-backed PyO3 class)
+# ---------------------------------------------------------------------------
+
+
+def test_grpc_config_defaults():
+    """Test GrpcConfig creation with default values."""
+    from cello import GrpcConfig
+
+    config = GrpcConfig()
+    assert config is not None
+    assert config.address == "[::]:50051"
+    assert config.reflection is True
+    assert config.max_message_size == 4194304  # 4MB
+    assert config.enable_web is False
+    assert config.keepalive_secs == 60
+    assert config.concurrency_limit == 100
+
+
+def test_grpc_config_custom():
+    """Test GrpcConfig creation with custom values."""
+    from cello import GrpcConfig
+
+    config = GrpcConfig(
+        address="0.0.0.0:9090",
+        reflection=False,
+        max_message_size=8388608,
+        enable_web=True,
+        keepalive_secs=120,
+        concurrency_limit=500,
+    )
+    assert config.address == "0.0.0.0:9090"
+    assert config.reflection is False
+    assert config.max_message_size == 8388608
+    assert config.enable_web is True
+    assert config.keepalive_secs == 120
+    assert config.concurrency_limit == 500
+
+
+def test_grpc_config_local():
+    """Test GrpcConfig.local() static method."""
+    from cello import GrpcConfig
+
+    config = GrpcConfig.local()
+    assert config is not None
+    assert config.address == "[::]:50051"
+    assert config.reflection is True
+    assert config.enable_web is True
+    assert config.keepalive_secs == 60
+    assert config.concurrency_limit == 100
+
+
+def test_grpc_config_production():
+    """Test GrpcConfig.production() static method."""
+    from cello import GrpcConfig
+
+    config = GrpcConfig.production()
+    assert config is not None
+    assert config.address == "[::]:50051"
+    assert config.reflection is False
+    assert config.enable_web is False
+    assert config.keepalive_secs == 120
+    assert config.concurrency_limit == 1000
+
+
+def test_grpc_config_production_custom():
+    """Test GrpcConfig.production() with custom address and message size."""
+    from cello import GrpcConfig
+
+    config = GrpcConfig.production(address="0.0.0.0:50051", max_message_size=8388608)
+    assert config.address == "0.0.0.0:50051"
+    assert config.max_message_size == 8388608
+    assert config.reflection is False
+
+
+def test_grpc_config_attributes_settable():
+    """Test that GrpcConfig attributes can be set after creation."""
+    from cello import GrpcConfig
+
+    config = GrpcConfig()
+    config.address = "localhost:50052"
+    config.reflection = False
+    config.max_message_size = 1024
+    config.enable_web = True
+    config.keepalive_secs = 30
+    config.concurrency_limit = 50
+
+    assert config.address == "localhost:50052"
+    assert config.reflection is False
+    assert config.max_message_size == 1024
+    assert config.enable_web is True
+    assert config.keepalive_secs == 30
+    assert config.concurrency_limit == 50
+
+
+# ---------------------------------------------------------------------------
+# v0.9.0 KafkaConfig (Rust-backed PyO3 class)
+# ---------------------------------------------------------------------------
+
+
+def test_kafka_config_defaults():
+    """Test KafkaConfig creation with default values."""
+    from cello import KafkaConfig
+
+    config = KafkaConfig()
+    assert config is not None
+    assert config.brokers == ["localhost:9092"]
+    assert config.group_id is None
+    assert config.client_id is None
+    assert config.auto_commit is True
+    assert config.session_timeout_ms == 30000
+    assert config.max_poll_records == 500
+
+
+def test_kafka_config_custom():
+    """Test KafkaConfig creation with custom values."""
+    from cello import KafkaConfig
+
+    config = KafkaConfig(
+        brokers=["broker1:9092", "broker2:9092"],
+        group_id="my-group",
+        client_id="my-client",
+        auto_commit=False,
+        session_timeout_ms=60000,
+        max_poll_records=1000,
+    )
+    assert config.brokers == ["broker1:9092", "broker2:9092"]
+    assert config.group_id == "my-group"
+    assert config.client_id == "my-client"
+    assert config.auto_commit is False
+    assert config.session_timeout_ms == 60000
+    assert config.max_poll_records == 1000
+
+
+def test_kafka_config_local():
+    """Test KafkaConfig.local() static method."""
+    from cello import KafkaConfig
+
+    config = KafkaConfig.local()
+    assert config is not None
+    assert config.brokers == ["localhost:9092"]
+    assert config.auto_commit is True
+    assert config.session_timeout_ms == 30000
+    assert config.max_poll_records == 500
+
+
+def test_kafka_config_attributes_settable():
+    """Test that KafkaConfig attributes can be set after creation."""
+    from cello import KafkaConfig
+
+    config = KafkaConfig()
+    config.brokers = ["new-broker:9092"]
+    config.group_id = "updated-group"
+    config.client_id = "updated-client"
+    config.auto_commit = False
+    config.session_timeout_ms = 15000
+    config.max_poll_records = 100
+
+    assert config.brokers == ["new-broker:9092"]
+    assert config.group_id == "updated-group"
+    assert config.client_id == "updated-client"
+    assert config.auto_commit is False
+    assert config.session_timeout_ms == 15000
+    assert config.max_poll_records == 100
+
+
+# ---------------------------------------------------------------------------
+# v0.9.0 RabbitMQConfig (Rust-backed PyO3 class)
+# ---------------------------------------------------------------------------
+
+
+def test_rabbitmq_config_defaults():
+    """Test RabbitMQConfig creation with default values."""
+    from cello import RabbitMQConfig
+
+    config = RabbitMQConfig()
+    assert config is not None
+    assert config.url == "amqp://localhost"
+    assert config.vhost == "/"
+    assert config.prefetch_count == 10
+    assert config.heartbeat == 60
+    assert config.connection_timeout_secs == 5
+
+
+def test_rabbitmq_config_custom():
+    """Test RabbitMQConfig creation with custom values."""
+    from cello import RabbitMQConfig
+
+    config = RabbitMQConfig(
+        url="amqp://user:pass@rabbitmq.example.com:5672",
+        vhost="/production",
+        prefetch_count=20,
+        heartbeat=30,
+        connection_timeout_secs=10,
+    )
+    assert config.url == "amqp://user:pass@rabbitmq.example.com:5672"
+    assert config.vhost == "/production"
+    assert config.prefetch_count == 20
+    assert config.heartbeat == 30
+    assert config.connection_timeout_secs == 10
+
+
+def test_rabbitmq_config_local():
+    """Test RabbitMQConfig.local() static method."""
+    from cello import RabbitMQConfig
+
+    config = RabbitMQConfig.local()
+    assert config is not None
+    assert config.url == "amqp://localhost"
+    assert config.vhost == "/"
+    assert config.prefetch_count == 10
+    assert config.heartbeat == 60
+    assert config.connection_timeout_secs == 5
+
+
+def test_rabbitmq_config_attributes_settable():
+    """Test that RabbitMQConfig attributes can be set after creation."""
+    from cello import RabbitMQConfig
+
+    config = RabbitMQConfig()
+    config.url = "amqp://new-host"
+    config.vhost = "/staging"
+    config.prefetch_count = 50
+    config.heartbeat = 120
+    config.connection_timeout_secs = 15
+
+    assert config.url == "amqp://new-host"
+    assert config.vhost == "/staging"
+    assert config.prefetch_count == 50
+    assert config.heartbeat == 120
+    assert config.connection_timeout_secs == 15
+
+
+# ---------------------------------------------------------------------------
+# v0.9.0 SqsConfig (Rust-backed PyO3 class)
+# ---------------------------------------------------------------------------
+
+
+def test_sqs_config_defaults():
+    """Test SqsConfig creation with default values."""
+    from cello import SqsConfig
+
+    config = SqsConfig()
+    assert config is not None
+    assert config.region == "us-east-1"
+    assert config.queue_url == ""
+    assert config.endpoint_url is None
+    assert config.max_messages == 10
+    assert config.wait_time_secs == 20
+    assert config.visibility_timeout_secs == 30
+
+
+def test_sqs_config_custom():
+    """Test SqsConfig creation with custom values."""
+    from cello import SqsConfig
+
+    config = SqsConfig(
+        region="us-west-2",
+        queue_url="https://sqs.us-west-2.amazonaws.com/123/my-queue",
+        endpoint_url=None,
+        max_messages=5,
+        wait_time_secs=10,
+        visibility_timeout_secs=60,
+    )
+    assert config.region == "us-west-2"
+    assert config.queue_url == "https://sqs.us-west-2.amazonaws.com/123/my-queue"
+    assert config.endpoint_url is None
+    assert config.max_messages == 5
+    assert config.wait_time_secs == 10
+    assert config.visibility_timeout_secs == 60
+
+
+def test_sqs_config_local():
+    """Test SqsConfig.local() static method."""
+    from cello import SqsConfig
+
+    queue_url = "http://localhost:4566/000000000000/my-queue"
+    config = SqsConfig.local(queue_url)
+    assert config is not None
+    assert config.region == "us-east-1"
+    assert config.queue_url == queue_url
+    assert config.endpoint_url == "http://localhost:4566"
+    assert config.max_messages == 10
+    assert config.wait_time_secs == 20
+    assert config.visibility_timeout_secs == 30
+
+
+def test_sqs_config_attributes_settable():
+    """Test that SqsConfig attributes can be set after creation."""
+    from cello import SqsConfig
+
+    config = SqsConfig()
+    config.region = "eu-west-1"
+    config.queue_url = "https://sqs.eu-west-1.amazonaws.com/456/other-queue"
+    config.endpoint_url = "http://custom-endpoint:4566"
+    config.max_messages = 3
+    config.wait_time_secs = 5
+    config.visibility_timeout_secs = 120
+
+    assert config.region == "eu-west-1"
+    assert config.queue_url == "https://sqs.eu-west-1.amazonaws.com/456/other-queue"
+    assert config.endpoint_url == "http://custom-endpoint:4566"
+    assert config.max_messages == 3
+    assert config.wait_time_secs == 5
+    assert config.visibility_timeout_secs == 120
+
+
+# ---------------------------------------------------------------------------
+# v0.9.0 App Integration Methods
+# ---------------------------------------------------------------------------
+
+
+def test_app_enable_grpc():
+    """Test App.enable_grpc() does not raise errors."""
+    from cello import App
+
+    app = App()
+    app.enable_grpc()
+    assert True
+
+
+def test_app_enable_grpc_with_config():
+    """Test App.enable_grpc() with explicit config."""
+    from cello import App, GrpcConfig
+
+    app = App()
+    config = GrpcConfig(
+        address="0.0.0.0:50051",
+        reflection=True,
+        enable_web=True,
+    )
+    app.enable_grpc(config)
+    assert True
+
+
+def test_app_enable_grpc_local():
+    """Test App.enable_grpc() with local config."""
+    from cello import App, GrpcConfig
+
+    app = App()
+    app.enable_grpc(GrpcConfig.local())
+    assert True
+
+
+def test_app_enable_grpc_production():
+    """Test App.enable_grpc() with production config."""
+    from cello import App, GrpcConfig
+
+    app = App()
+    app.enable_grpc(GrpcConfig.production())
+    assert True
+
+
+def test_app_add_grpc_service():
+    """Test App.add_grpc_service() with name and methods."""
+    from cello import App, GrpcConfig
+
+    app = App()
+    app.enable_grpc()
+    app.add_grpc_service("UserService", ["GetUser", "ListUsers", "CreateUser"])
+    assert True
+
+
+def test_app_add_grpc_service_no_methods():
+    """Test App.add_grpc_service() with name only."""
+    from cello import App
+
+    app = App()
+    app.enable_grpc()
+    app.add_grpc_service("EmptyService")
+    assert True
+
+
+def test_app_enable_messaging():
+    """Test App.enable_messaging() with KafkaConfig."""
+    from cello import App, KafkaConfig
+
+    app = App()
+    config = KafkaConfig(
+        brokers=["localhost:9092"],
+        group_id="test-group",
+    )
+    app.enable_messaging(config)
+    assert True
+
+
+def test_app_enable_messaging_local():
+    """Test App.enable_messaging() with local KafkaConfig."""
+    from cello import App, KafkaConfig
+
+    app = App()
+    app.enable_messaging(KafkaConfig.local())
+    assert True
+
+
+def test_app_enable_rabbitmq():
+    """Test App.enable_rabbitmq() with RabbitMQConfig."""
+    from cello import App, RabbitMQConfig
+
+    app = App()
+    config = RabbitMQConfig(
+        url="amqp://guest:guest@localhost",
+        prefetch_count=20,
+    )
+    app.enable_rabbitmq(config)
+    assert True
+
+
+def test_app_enable_rabbitmq_local():
+    """Test App.enable_rabbitmq() with local RabbitMQConfig."""
+    from cello import App, RabbitMQConfig
+
+    app = App()
+    app.enable_rabbitmq(RabbitMQConfig.local())
+    assert True
+
+
+def test_app_enable_sqs():
+    """Test App.enable_sqs() with SqsConfig."""
+    from cello import App, SqsConfig
+
+    app = App()
+    config = SqsConfig(
+        region="us-west-2",
+        queue_url="https://sqs.us-west-2.amazonaws.com/123/queue",
+    )
+    app.enable_sqs(config)
+    assert True
+
+
+def test_app_enable_sqs_local():
+    """Test App.enable_sqs() with local SqsConfig."""
+    from cello import App, SqsConfig
+
+    app = App()
+    app.enable_sqs(SqsConfig.local("http://localhost:4566/000000000000/test"))
+    assert True
+
+
+def test_app_with_all_v090_features():
+    """Test an App with all v0.9.0 features enabled together."""
+    from cello import App, GrpcConfig, KafkaConfig, RabbitMQConfig, SqsConfig
+
+    app = App()
+
+    # Core middleware
+    app.enable_cors()
+    app.enable_logging()
+
+    # v0.9.0 API Protocol features
+    app.enable_grpc(GrpcConfig.local())
+    app.add_grpc_service("UserService", ["GetUser", "CreateUser"])
+    app.enable_messaging(KafkaConfig.local())
+    app.enable_rabbitmq(RabbitMQConfig.local())
+    app.enable_sqs(SqsConfig.local("http://localhost:4566/000000000000/test"))
+
+    # Register routes
+    @app.get("/")
+    def home(req):
+        return {"version": "0.9.0"}
+
+    assert True
+
+
+# ---------------------------------------------------------------------------
+# v0.9.0 GraphQL Python Module Tests
+# ---------------------------------------------------------------------------
+
+
+def test_graphql_query_decorator():
+    """Test Query decorator wraps a function."""
+    from cello.graphql import Query
+
+    @Query
+    def users(info) -> list:
+        """Fetch all users."""
+        return [{"id": 1, "name": "Alice"}]
+
+    assert users.name == "users"
+    assert users.return_type == "list"
+    assert users._doc == "Fetch all users."
+    assert repr(users) == "<Query 'users'>"
+
+
+def test_graphql_query_callable():
+    """Test Query-decorated function is callable."""
+    from cello.graphql import Query
+
+    @Query
+    def hello(info) -> str:
+        return "hello"
+
+    result = hello({})
+    assert result == "hello"
+
+
+def test_graphql_query_parameters():
+    """Test Query decorator extracts parameter type hints."""
+    from cello.graphql import Query
+
+    @Query
+    def user(info, id: int, name: str) -> dict:
+        return {"id": id, "name": name}
+
+    params = user.parameters
+    assert "id" in params
+    assert params["id"] == "int"
+    assert "name" in params
+    assert params["name"] == "str"
+
+
+def test_graphql_mutation_decorator():
+    """Test Mutation decorator wraps a function."""
+    from cello.graphql import Mutation
+
+    @Mutation
+    def create_user(info, name: str) -> dict:
+        """Create a new user."""
+        return {"id": 3, "name": name}
+
+    assert create_user.name == "create_user"
+    assert create_user.return_type == "dict"
+    assert repr(create_user) == "<Mutation 'create_user'>"
+
+
+def test_graphql_mutation_callable():
+    """Test Mutation-decorated function is callable."""
+    from cello.graphql import Mutation
+
+    @Mutation
+    def delete_user(info, id: int) -> dict:
+        return {"deleted": True}
+
+    result = delete_user({}, id=42)
+    assert result == {"deleted": True}
+
+
+def test_graphql_subscription_decorator():
+    """Test Subscription decorator wraps a function."""
+    from cello.graphql import Subscription
+
+    @Subscription
+    def on_message(info) -> dict:
+        """Subscribe to messages."""
+        return {"message": "hello"}
+
+    assert on_message.name == "on_message"
+    assert on_message.return_type == "dict"
+    assert repr(on_message) == "<Subscription 'on_message'>"
+
+
+def test_graphql_subscription_callable():
+    """Test Subscription-decorated function is callable."""
+    from cello.graphql import Subscription
+
+    @Subscription
+    def on_event(info) -> dict:
+        return {"event": "test"}
+
+    result = on_event({})
+    assert result == {"event": "test"}
+
+
+def test_graphql_subscription_async_detection():
+    """Test Subscription detects async functions."""
+    from cello.graphql import Subscription
+    import asyncio
+
+    @Subscription
+    async def on_async_event(info) -> dict:
+        return {"event": "async"}
+
+    assert on_async_event._is_async is True
+
+
+def test_graphql_field_basic():
+    """Test Field creation with name and type."""
+    from cello.graphql import Field
+
+    field = Field("name", "String")
+    assert field.name == "name"
+    assert field.type_name == "String"
+    assert field.description is None
+    assert field.resolver is None
+    assert repr(field) == "<Field 'name: String'>"
+
+
+def test_graphql_field_with_description():
+    """Test Field creation with description."""
+    from cello.graphql import Field
+
+    field = Field("email", "String", description="User's email address")
+    assert field.description == "User's email address"
+
+
+def test_graphql_field_with_resolver():
+    """Test Field with custom resolver function."""
+    from cello.graphql import Field
+
+    field = Field(
+        "full_name",
+        "String",
+        resolver=lambda obj, info: f"{obj['first']} {obj['last']}",
+    )
+    result = field.resolve({"first": "John", "last": "Doe"}, {})
+    assert result == "John Doe"
+
+
+def test_graphql_field_default_dict_resolve():
+    """Test Field default resolution from dict."""
+    from cello.graphql import Field
+
+    field = Field("name", "String")
+    result = field.resolve({"name": "Alice", "age": 30}, {})
+    assert result == "Alice"
+
+
+def test_graphql_field_default_object_resolve():
+    """Test Field default resolution from object attribute."""
+    from cello.graphql import Field
+
+    class User:
+        name = "Bob"
+
+    field = Field("name", "String")
+    result = field.resolve(User(), {})
+    assert result == "Bob"
+
+
+def test_graphql_field_missing_key():
+    """Test Field returns None for missing key."""
+    from cello.graphql import Field
+
+    field = Field("missing", "String")
+    result = field.resolve({"name": "Alice"}, {})
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_graphql_dataloader_load():
+    """Test DataLoader.load() batches and caches."""
+    from cello.graphql import DataLoader
+
+    async def batch_fn(keys):
+        return [{"id": k, "name": f"User {k}"} for k in keys]
+
+    loader = DataLoader(batch_fn)
+    result = await loader.load(1)
+    assert result == {"id": 1, "name": "User 1"}
+
+
+@pytest.mark.asyncio
+async def test_graphql_dataloader_load_cached():
+    """Test DataLoader returns cached results on second call."""
+    from cello.graphql import DataLoader
+
+    call_count = 0
+
+    async def batch_fn(keys):
+        nonlocal call_count
+        call_count += 1
+        return [f"result-{k}" for k in keys]
+
+    loader = DataLoader(batch_fn)
+    result1 = await loader.load("a")
+    result2 = await loader.load("a")
+    assert result1 == "result-a"
+    assert result2 == "result-a"
+    assert call_count == 1  # Only one batch call
+
+
+@pytest.mark.asyncio
+async def test_graphql_dataloader_load_many():
+    """Test DataLoader.load_many() batches multiple keys."""
+    from cello.graphql import DataLoader
+
+    async def batch_fn(keys):
+        return [k * 10 for k in keys]
+
+    loader = DataLoader(batch_fn)
+    results = await loader.load_many([1, 2, 3])
+    assert results == [10, 20, 30]
+
+
+@pytest.mark.asyncio
+async def test_graphql_dataloader_clear_key():
+    """Test DataLoader.clear() for a specific key."""
+    from cello.graphql import DataLoader
+
+    async def batch_fn(keys):
+        return [f"v-{k}" for k in keys]
+
+    loader = DataLoader(batch_fn)
+    await loader.load("x")
+    assert "x" in loader._cache
+
+    loader.clear("x")
+    assert "x" not in loader._cache
+
+
+@pytest.mark.asyncio
+async def test_graphql_dataloader_clear_all():
+    """Test DataLoader.clear() with no key clears entire cache."""
+    from cello.graphql import DataLoader
+
+    async def batch_fn(keys):
+        return [k for k in keys]
+
+    loader = DataLoader(batch_fn)
+    await loader.load_many([1, 2, 3])
+    assert len(loader._cache) == 3
+
+    loader.clear()
+    assert len(loader._cache) == 0
+
+
+@pytest.mark.asyncio
+async def test_graphql_dataloader_mismatched_results():
+    """Test DataLoader raises on mismatched result count."""
+    from cello.graphql import DataLoader
+
+    async def bad_batch_fn(keys):
+        return [1]  # Always returns 1 result regardless of key count
+
+    loader = DataLoader(bad_batch_fn)
+    with pytest.raises(ValueError, match="Must return exactly one result per key"):
+        await loader.load_many([1, 2, 3])
+
+
+@pytest.mark.asyncio
+async def test_graphql_engine_add_query():
+    """Test GraphQL engine add_query and execute."""
+    from cello.graphql import GraphQL, Query
+
+    gql = GraphQL()
+
+    @Query
+    def hello(info) -> str:
+        return "Hello, world!"
+
+    gql.add_query(hello)
+
+    result = await gql.execute("{ hello }")
+    assert "data" in result
+    assert result["data"]["hello"] == "Hello, world!"
+
+
+@pytest.mark.asyncio
+async def test_graphql_engine_add_mutation():
+    """Test GraphQL engine add_mutation and execute."""
+    from cello.graphql import GraphQL, Mutation
+
+    gql = GraphQL()
+
+    @Mutation
+    def create_item(info, name: str) -> dict:
+        return {"id": 1, "name": name}
+
+    gql.add_mutation(create_item)
+
+    result = await gql.execute("mutation { createItem }", variables={"name": "Widget"})
+    assert "data" in result
+    assert result["data"]["create_item"]["name"] == "Widget"
+
+
+@pytest.mark.asyncio
+async def test_graphql_engine_add_subscription():
+    """Test GraphQL engine add_subscription registers correctly."""
+    from cello.graphql import GraphQL, Subscription
+
+    gql = GraphQL()
+
+    @Subscription
+    def on_update(info) -> dict:
+        return {"updated": True}
+
+    gql.add_subscription(on_update)
+
+    schema = gql.get_schema()
+    assert len(schema["subscriptions"]) == 1
+    assert schema["subscriptions"][0]["name"] == "on_update"
+
+
+@pytest.mark.asyncio
+async def test_graphql_engine_plain_function():
+    """Test GraphQL engine accepts plain functions (not decorated)."""
+    from cello.graphql import GraphQL
+
+    gql = GraphQL()
+
+    def users(info) -> list:
+        return [{"id": 1}]
+
+    gql.add_query(users)
+
+    result = await gql.execute("{ users }")
+    assert result["data"]["users"] == [{"id": 1}]
+
+
+@pytest.mark.asyncio
+async def test_graphql_engine_error_handling():
+    """Test GraphQL engine captures resolver errors."""
+    from cello.graphql import GraphQL, Query
+
+    gql = GraphQL()
+
+    @Query
+    def failing(info) -> str:
+        raise RuntimeError("Something broke")
+
+    gql.add_query(failing)
+
+    result = await gql.execute("{ failing }")
+    assert "errors" in result
+    assert len(result["errors"]) == 1
+    assert "Something broke" in result["errors"][0]["message"]
+
+
+def test_graphql_engine_get_schema():
+    """Test GraphQL engine get_schema returns structure."""
+    from cello.graphql import GraphQL, Query, Mutation, Subscription
+
+    gql = GraphQL()
+
+    @Query
+    def q1(info) -> list:
+        return []
+
+    @Mutation
+    def m1(info, x: int) -> dict:
+        return {}
+
+    @Subscription
+    def s1(info) -> dict:
+        return {}
+
+    gql.add_query(q1)
+    gql.add_mutation(m1)
+    gql.add_subscription(s1)
+
+    schema = gql.get_schema()
+    assert len(schema["queries"]) == 1
+    assert len(schema["mutations"]) == 1
+    assert len(schema["subscriptions"]) == 1
+    assert schema["queries"][0]["name"] == "q1"
+    assert schema["mutations"][0]["name"] == "m1"
+    assert schema["subscriptions"][0]["name"] == "s1"
+
+
+def test_graphql_engine_repr():
+    """Test GraphQL engine repr."""
+    from cello.graphql import GraphQL
+
+    gql = GraphQL()
+    assert "queries=0" in repr(gql)
+    assert "mutations=0" in repr(gql)
+    assert "subscriptions=0" in repr(gql)
+
+
+def test_graphql_schema_builder():
+    """Test Schema builder creates GraphQL engine."""
+    from cello.graphql import Schema, Query, Mutation, Subscription
+
+    schema = Schema()
+
+    @Query
+    def users(info) -> list:
+        return []
+
+    @Mutation
+    def create_user(info, name: str) -> dict:
+        return {"name": name}
+
+    @Subscription
+    def on_message(info) -> dict:
+        return {}
+
+    schema.query(users)
+    schema.mutation(create_user)
+    schema.subscription(on_message)
+
+    gql = schema.build()
+    assert gql is not None
+
+    s = gql.get_schema()
+    assert len(s["queries"]) == 1
+    assert len(s["mutations"]) == 1
+    assert len(s["subscriptions"]) == 1
+
+
+def test_graphql_schema_builder_chaining():
+    """Test Schema builder supports method chaining."""
+    from cello.graphql import Schema, Query
+
+    @Query
+    def q1(info) -> str:
+        return "a"
+
+    @Query
+    def q2(info) -> str:
+        return "b"
+
+    schema = Schema()
+    result = schema.query(q1).query(q2)
+    assert result is schema  # Should return self
+
+    gql = schema.build()
+    s = gql.get_schema()
+    assert len(s["queries"]) == 2
+
+
+def test_graphql_schema_repr():
+    """Test Schema repr."""
+    from cello.graphql import Schema
+
+    schema = Schema()
+    assert "queries=0" in repr(schema)
+
+
+# ---------------------------------------------------------------------------
+# v0.9.0 gRPC Python Module Tests
+# ---------------------------------------------------------------------------
+
+
+def test_grpc_service_subclass():
+    """Test GrpcService subclassing and method discovery."""
+    from cello.grpc import GrpcService, grpc_method
+
+    class UserService(GrpcService):
+        @grpc_method
+        def get_user(self, request):
+            return {"id": 1}
+
+        @grpc_method(stream=True)
+        def list_users(self, request):
+            yield {"id": 1}
+            yield {"id": 2}
+
+    service = UserService()
+    assert service.get_name() == "UserService"
+
+    methods = service.get_methods()
+    assert len(methods) == 2
+
+    method_names = [m["name"] for m in methods]
+    assert "get_user" in method_names
+    assert "list_users" in method_names
+
+    # Check stream flags
+    method_map = {m["name"]: m for m in methods}
+    assert method_map["get_user"]["stream"] is False
+    assert method_map["list_users"]["stream"] is True
+
+
+def test_grpc_service_custom_name():
+    """Test GrpcService with explicit custom name."""
+    from cello.grpc import GrpcService
+
+    class MyService(GrpcService):
+        pass
+
+    service = MyService(name="custom.ServiceName")
+    assert service.get_name() == "custom.ServiceName"
+
+
+def test_grpc_service_repr():
+    """Test GrpcService repr."""
+    from cello.grpc import GrpcService, grpc_method
+
+    class TestService(GrpcService):
+        @grpc_method
+        def ping(self, request):
+            return {}
+
+    service = TestService()
+    r = repr(service)
+    assert "TestService" in r
+    assert "methods=1" in r
+
+
+def test_grpc_method_decorator_without_args():
+    """Test @grpc_method decorator without parentheses."""
+    from cello.grpc import grpc_method
+
+    @grpc_method
+    def my_method(self, request):
+        return {}
+
+    assert my_method._grpc_method is True
+    assert my_method._grpc_method_name == "my_method"
+    assert my_method._grpc_stream is False
+
+
+def test_grpc_method_decorator_with_stream():
+    """Test @grpc_method(stream=True) decorator."""
+    from cello.grpc import grpc_method
+
+    @grpc_method(stream=True)
+    def streaming_method(self, request):
+        yield {}
+
+    assert streaming_method._grpc_method is True
+    assert streaming_method._grpc_method_name == "streaming_method"
+    assert streaming_method._grpc_stream is True
+
+
+def test_grpc_request_creation():
+    """Test GrpcRequest creation and properties."""
+    from cello.grpc import GrpcRequest
+
+    req = GrpcRequest(
+        service="UserService",
+        method="GetUser",
+        data={"id": 42},
+        metadata={"authorization": "Bearer token123"},
+    )
+    assert req.service == "UserService"
+    assert req.method == "GetUser"
+    assert req.data == {"id": 42}
+    assert req.metadata == {"authorization": "Bearer token123"}
+    assert repr(req) == "GrpcRequest(service='UserService', method='GetUser')"
+
+
+def test_grpc_request_defaults():
+    """Test GrpcRequest default values."""
+    from cello.grpc import GrpcRequest
+
+    req = GrpcRequest(service="Svc", method="Method")
+    assert req.data == {}
+    assert req.metadata == {}
+
+
+def test_grpc_response_ok():
+    """Test GrpcResponse.ok() class method."""
+    from cello.grpc import GrpcResponse
+
+    resp = GrpcResponse.ok({"id": 1, "name": "Alice"})
+    assert resp.data == {"id": 1, "name": "Alice"}
+    assert resp.status_code == 0
+    assert resp.message == "OK"
+
+
+def test_grpc_response_error():
+    """Test GrpcResponse.error() class method."""
+    from cello.grpc import GrpcResponse
+
+    resp = GrpcResponse.error(5, "Not found")
+    assert resp.data == {}
+    assert resp.status_code == 5
+    assert resp.message == "Not found"
+
+
+def test_grpc_response_custom():
+    """Test GrpcResponse with custom constructor values."""
+    from cello.grpc import GrpcResponse
+
+    resp = GrpcResponse(
+        data={"result": "ok"},
+        status_code=0,
+        message="Success",
+    )
+    assert resp.data == {"result": "ok"}
+    assert resp.status_code == 0
+    assert resp.message == "Success"
+    assert resp.metadata == {}
+
+
+def test_grpc_response_repr():
+    """Test GrpcResponse repr."""
+    from cello.grpc import GrpcResponse
+
+    resp = GrpcResponse.ok({"x": 1})
+    r = repr(resp)
+    assert "status_code=0" in r
+    assert "OK" in r
+
+
+def test_grpc_server_creation():
+    """Test GrpcServer creation."""
+    from cello.grpc import GrpcServer
+
+    server = GrpcServer()
+    assert server is not None
+    assert server._running is False
+    assert server.get_services() == []
+
+
+def test_grpc_server_register_service():
+    """Test GrpcServer.register_service()."""
+    from cello.grpc import GrpcServer, GrpcService, grpc_method
+
+    class TestService(GrpcService):
+        @grpc_method
+        def ping(self, request):
+            return {"pong": True}
+
+    server = GrpcServer()
+    service = TestService()
+    server.register_service(service)
+
+    services = server.get_services()
+    assert len(services) == 1
+    assert "TestService" in services
+
+
+def test_grpc_server_register_multiple():
+    """Test GrpcServer with multiple services."""
+    from cello.grpc import GrpcServer, GrpcService, grpc_method
+
+    class ServiceA(GrpcService):
+        @grpc_method
+        def a_method(self, request):
+            return {}
+
+    class ServiceB(GrpcService):
+        @grpc_method
+        def b_method(self, request):
+            return {}
+
+    server = GrpcServer()
+    server.register_service(ServiceA())
+    server.register_service(ServiceB())
+
+    services = server.get_services()
+    assert len(services) == 2
+    assert "ServiceA" in services
+    assert "ServiceB" in services
+
+
+def test_grpc_server_register_type_error():
+    """Test GrpcServer raises TypeError for non-GrpcService."""
+    from cello.grpc import GrpcServer
+
+    server = GrpcServer()
+    with pytest.raises(TypeError, match="Expected GrpcService instance"):
+        server.register_service("not a service")
+
+
+def test_grpc_server_register_duplicate_error():
+    """Test GrpcServer raises ValueError for duplicate service name."""
+    from cello.grpc import GrpcServer, GrpcService
+
+    class DupService(GrpcService):
+        pass
+
+    server = GrpcServer()
+    server.register_service(DupService())
+    with pytest.raises(ValueError, match="already registered"):
+        server.register_service(DupService())
+
+
+@pytest.mark.asyncio
+async def test_grpc_server_start_stop():
+    """Test GrpcServer start and stop lifecycle."""
+    from cello.grpc import GrpcServer
+
+    server = GrpcServer()
+    assert server._running is False
+
+    await server.start("[::]:50051")
+    assert server._running is True
+
+    await server.stop()
+    assert server._running is False
+
+
+@pytest.mark.asyncio
+async def test_grpc_server_start_already_running():
+    """Test GrpcServer raises RuntimeError if started while running."""
+    from cello.grpc import GrpcServer
+
+    server = GrpcServer()
+    await server.start()
+    with pytest.raises(RuntimeError, match="already running"):
+        await server.start()
+    await server.stop()
+
+
+def test_grpc_server_repr():
+    """Test GrpcServer repr."""
+    from cello.grpc import GrpcServer
+
+    server = GrpcServer()
+    r = repr(server)
+    assert "services=0" in r
+    assert "running=False" in r
+
+
+@pytest.mark.asyncio
+async def test_grpc_channel_connect():
+    """Test GrpcChannel.connect() creates connected channel."""
+    from cello.grpc import GrpcChannel
+
+    channel = await GrpcChannel.connect("localhost:50051")
+    assert channel is not None
+    assert channel._connected is True
+    assert channel._target == "localhost:50051"
+
+
+@pytest.mark.asyncio
+async def test_grpc_channel_call():
+    """Test GrpcChannel.call() returns a dict."""
+    from cello.grpc import GrpcChannel
+
+    channel = await GrpcChannel.connect("localhost:50051")
+    result = await channel.call("UserService", "GetUser", {"id": 1})
+    assert isinstance(result, dict)
+
+
+@pytest.mark.asyncio
+async def test_grpc_channel_call_disconnected():
+    """Test GrpcChannel.call() raises GrpcError when not connected."""
+    from cello.grpc import GrpcChannel, GrpcError
+
+    channel = GrpcChannel("localhost:50051")
+    assert channel._connected is False
+    with pytest.raises(GrpcError) as exc_info:
+        await channel.call("Svc", "Method", {})
+    assert exc_info.value.code == GrpcError.UNAVAILABLE
+
+
+@pytest.mark.asyncio
+async def test_grpc_channel_close():
+    """Test GrpcChannel.close() disconnects."""
+    from cello.grpc import GrpcChannel
+
+    channel = await GrpcChannel.connect("localhost:50051")
+    assert channel._connected is True
+    await channel.close()
+    assert channel._connected is False
+
+
+def test_grpc_channel_repr():
+    """Test GrpcChannel repr."""
+    from cello.grpc import GrpcChannel
+
+    channel = GrpcChannel("localhost:50051")
+    r = repr(channel)
+    assert "localhost:50051" in r
+    assert "connected=False" in r
+
+
+def test_grpc_error_status_codes():
+    """Test GrpcError status code constants."""
+    from cello.grpc import GrpcError
+
+    assert GrpcError.OK == 0
+    assert GrpcError.CANCELLED == 1
+    assert GrpcError.UNKNOWN == 2
+    assert GrpcError.INVALID_ARGUMENT == 3
+    assert GrpcError.DEADLINE_EXCEEDED == 4
+    assert GrpcError.NOT_FOUND == 5
+    assert GrpcError.ALREADY_EXISTS == 6
+    assert GrpcError.PERMISSION_DENIED == 7
+    assert GrpcError.RESOURCE_EXHAUSTED == 8
+    assert GrpcError.FAILED_PRECONDITION == 9
+    assert GrpcError.ABORTED == 10
+    assert GrpcError.OUT_OF_RANGE == 11
+    assert GrpcError.UNIMPLEMENTED == 12
+    assert GrpcError.INTERNAL == 13
+    assert GrpcError.UNAVAILABLE == 14
+    assert GrpcError.DATA_LOSS == 15
+    assert GrpcError.UNAUTHENTICATED == 16
+
+
+def test_grpc_error_creation():
+    """Test GrpcError creation and attributes."""
+    from cello.grpc import GrpcError
+
+    err = GrpcError(
+        code=GrpcError.NOT_FOUND,
+        message="User not found",
+        details="No user with id=42",
+    )
+    assert err.code == 5
+    assert err.message == "User not found"
+    assert err.details == "No user with id=42"
+    assert "GrpcError" in str(err)
+
+
+def test_grpc_error_is_exception():
+    """Test GrpcError is an Exception subclass."""
+    from cello.grpc import GrpcError
+
+    assert issubclass(GrpcError, Exception)
+
+    try:
+        raise GrpcError(code=13, message="Internal error")
+    except GrpcError as e:
+        assert e.code == 13
+        assert e.message == "Internal error"
+
+
+def test_grpc_error_repr():
+    """Test GrpcError repr."""
+    from cello.grpc import GrpcError
+
+    err = GrpcError(code=7, message="Permission denied", details="No access")
+    r = repr(err)
+    assert "code=7" in r
+    assert "Permission denied" in r
+    assert "No access" in r
+
+
+# ---------------------------------------------------------------------------
+# v0.9.0 Messaging Python Module Tests
+# ---------------------------------------------------------------------------
+
+
+def test_kafka_consumer_decorator():
+    """Test kafka_consumer decorator attaches metadata."""
+    from cello.messaging import kafka_consumer
+
+    @kafka_consumer(topic="orders", group="order-processor", auto_commit=False)
+    async def handle_order(message):
+        return "ack"
+
+    assert handle_order._cello_consumer is True
+    assert handle_order._cello_consumer_topic == "orders"
+    assert handle_order._cello_consumer_group == "order-processor"
+    assert handle_order._cello_consumer_auto_commit is False
+
+
+def test_kafka_consumer_decorator_defaults():
+    """Test kafka_consumer decorator with defaults."""
+    from cello.messaging import kafka_consumer
+
+    @kafka_consumer(topic="events")
+    async def handle_event(message):
+        return "ack"
+
+    assert handle_event._cello_consumer_topic == "events"
+    assert handle_event._cello_consumer_group is None
+    assert handle_event._cello_consumer_auto_commit is True
+
+
+def test_kafka_producer_decorator():
+    """Test kafka_producer decorator attaches metadata."""
+    from cello.messaging import kafka_producer
+
+    @kafka_producer(topic="events")
+    async def emit_event(request):
+        return {"event": "signup"}
+
+    assert emit_event._cello_producer is True
+    assert emit_event._cello_producer_topic == "events"
+
+
+@pytest.mark.asyncio
+async def test_kafka_producer_decorator_callable():
+    """Test kafka_producer-decorated function is callable and tracks publish."""
+    from cello.messaging import kafka_producer
+
+    @kafka_producer(topic="events")
+    async def emit_event():
+        return {"event": "test"}
+
+    result = await emit_event()
+    assert result == {"event": "test"}
+    assert emit_event._cello_last_publish["topic"] == "events"
+    assert emit_event._cello_last_publish["value"] == {"event": "test"}
+
+
+def test_messaging_kafka_config_python():
+    """Test Python-side KafkaConfig class."""
+    from cello.messaging import KafkaConfig
+
+    config = KafkaConfig(
+        brokers=["broker1:9092", "broker2:9092"],
+        group_id="my-group",
+        client_id="my-client",
+        auto_commit=False,
+        session_timeout_ms=60000,
+        max_poll_records=1000,
+    )
+    assert config.brokers == ["broker1:9092", "broker2:9092"]
+    assert config.group_id == "my-group"
+    assert config.client_id == "my-client"
+    assert config.auto_commit is False
+    assert config.session_timeout_ms == 60000
+    assert config.max_poll_records == 1000
+
+
+def test_messaging_kafka_config_defaults():
+    """Test Python-side KafkaConfig default values."""
+    from cello.messaging import KafkaConfig
+
+    config = KafkaConfig()
+    assert config.brokers == ["localhost:9092"]
+    assert config.group_id is None
+    assert config.client_id is None
+    assert config.auto_commit is True
+    assert config.session_timeout_ms == 30000
+    assert config.max_poll_records == 500
+
+
+def test_messaging_kafka_config_local():
+    """Test Python-side KafkaConfig.local() factory."""
+    from cello.messaging import KafkaConfig
+
+    config = KafkaConfig.local()
+    assert config.brokers == ["localhost:9092"]
+    assert config.group_id == "cello-local"
+    assert config.client_id == "cello-dev"
+
+
+def test_messaging_rabbitmq_config_python():
+    """Test Python-side RabbitMQConfig class."""
+    from cello.messaging import RabbitMQConfig
+
+    config = RabbitMQConfig(
+        url="amqp://user:pass@host:5672",
+        vhost="/staging",
+        prefetch_count=25,
+        heartbeat=30,
+    )
+    assert config.url == "amqp://user:pass@host:5672"
+    assert config.vhost == "/staging"
+    assert config.prefetch_count == 25
+    assert config.heartbeat == 30
+
+
+def test_messaging_rabbitmq_config_local():
+    """Test Python-side RabbitMQConfig.local() factory."""
+    from cello.messaging import RabbitMQConfig
+
+    config = RabbitMQConfig.local()
+    assert config.url == "amqp://localhost"
+    assert config.vhost == "/"
+    assert config.prefetch_count == 10
+
+
+def test_messaging_sqs_config_python():
+    """Test Python-side SqsConfig class."""
+    from cello.messaging import SqsConfig
+
+    config = SqsConfig(
+        region="us-west-2",
+        queue_url="https://sqs.us-west-2.amazonaws.com/123/queue",
+        endpoint_url="http://localstack:4566",
+        max_messages=5,
+        wait_time_secs=10,
+    )
+    assert config.region == "us-west-2"
+    assert config.queue_url == "https://sqs.us-west-2.amazonaws.com/123/queue"
+    assert config.endpoint_url == "http://localstack:4566"
+    assert config.max_messages == 5
+    assert config.wait_time_secs == 10
+
+
+def test_messaging_sqs_config_local():
+    """Test Python-side SqsConfig.local() factory."""
+    from cello.messaging import SqsConfig
+
+    config = SqsConfig.local("http://localhost:4566/000000000000/my-queue")
+    assert config.region == "us-east-1"
+    assert config.queue_url == "http://localhost:4566/000000000000/my-queue"
+    assert config.endpoint_url == "http://localhost:4566"
+    assert config.wait_time_secs == 5
+
+
+def test_message_creation():
+    """Test Message class creation and defaults."""
+    from cello.messaging import Message
+
+    msg = Message(topic="orders", value='{"id": 1}')
+    assert msg.topic == "orders"
+    assert msg.value == '{"id": 1}'
+    assert msg.id is not None  # UUID auto-generated
+    assert msg.key is None
+    assert msg.headers == {}
+    assert msg.timestamp > 0
+    assert msg._acked is False
+    assert msg._nacked is False
+
+
+def test_message_text_property():
+    """Test Message.text property."""
+    from cello.messaging import Message
+
+    msg = Message(value="hello world")
+    assert msg.text == "hello world"
+
+    msg_bytes = Message(value=b"byte content")
+    assert msg_bytes.text == "byte content"
+
+    msg_none = Message(value=None)
+    assert msg_none.text == ""
+
+
+def test_message_json():
+    """Test Message.json() parsing."""
+    from cello.messaging import Message
+
+    msg = Message(value='{"name": "Alice", "age": 30}')
+    data = msg.json()
+    assert data["name"] == "Alice"
+    assert data["age"] == 30
+
+
+def test_message_json_dict():
+    """Test Message.json() returns dict value as-is."""
+    from cello.messaging import Message
+
+    msg = Message(value={"already": "parsed"})
+    data = msg.json()
+    assert data == {"already": "parsed"}
+
+
+def test_message_json_bytes():
+    """Test Message.json() from bytes."""
+    from cello.messaging import Message
+
+    msg = Message(value=b'{"key": "value"}')
+    data = msg.json()
+    assert data["key"] == "value"
+
+
+def test_message_ack():
+    """Test Message.ack() sets acked flag."""
+    from cello.messaging import Message
+
+    msg = Message(value="test")
+    assert msg._acked is False
+    msg.ack()
+    assert msg._acked is True
+
+
+def test_message_nack():
+    """Test Message.nack() sets nacked flag."""
+    from cello.messaging import Message
+
+    msg = Message(value="test")
+    assert msg._nacked is False
+    msg.nack()
+    assert msg._nacked is True
+
+
+def test_message_result_constants():
+    """Test MessageResult constants."""
+    from cello.messaging import MessageResult
+
+    assert MessageResult.ACK == "ack"
+    assert MessageResult.NACK == "nack"
+    assert MessageResult.REJECT == "reject"
+    assert MessageResult.REQUEUE == "requeue"
+    assert MessageResult.DEAD_LETTER == "dead_letter"
+
+
+@pytest.mark.asyncio
+async def test_producer_connect():
+    """Test Producer.connect() creates connected producer."""
+    from cello.messaging import Producer, KafkaConfig
+
+    producer = await Producer.connect(KafkaConfig.local())
+    assert producer is not None
+    assert producer._connected is True
+
+
+@pytest.mark.asyncio
+async def test_producer_send():
+    """Test Producer.send() returns True."""
+    from cello.messaging import Producer, KafkaConfig
+
+    producer = await Producer.connect(KafkaConfig.local())
+    result = await producer.send(
+        "events",
+        value={"event": "signup"},
+        key="user-123",
+        headers={"source": "api"},
+    )
+    assert result is True
+
+
+@pytest.mark.asyncio
+async def test_producer_send_batch():
+    """Test Producer.send_batch() returns count."""
+    from cello.messaging import Producer, KafkaConfig
+
+    producer = await Producer.connect(KafkaConfig.local())
+    messages = [
+        {"topic": "events", "value": {"type": "a"}},
+        {"topic": "events", "value": {"type": "b"}},
+        {"topic": "events", "value": {"type": "c"}},
+    ]
+    count = await producer.send_batch(messages)
+    assert count == 3
+
+
+@pytest.mark.asyncio
+async def test_producer_close():
+    """Test Producer.close() disconnects."""
+    from cello.messaging import Producer, KafkaConfig
+
+    producer = await Producer.connect(KafkaConfig.local())
+    assert producer._connected is True
+    await producer.close()
+    assert producer._connected is False
+
+
+@pytest.mark.asyncio
+async def test_consumer_connect():
+    """Test Consumer.connect() creates connected consumer."""
+    from cello.messaging import Consumer, KafkaConfig
+
+    consumer = await Consumer.connect(KafkaConfig.local())
+    assert consumer is not None
+    assert consumer._connected is True
+
+
+@pytest.mark.asyncio
+async def test_consumer_subscribe():
+    """Test Consumer.subscribe() sets topic subscriptions."""
+    from cello.messaging import Consumer, KafkaConfig
+
+    consumer = await Consumer.connect(KafkaConfig.local())
+    await consumer.subscribe(["orders", "events"])
+    assert consumer._subscriptions == ["orders", "events"]
+
+
+@pytest.mark.asyncio
+async def test_consumer_poll():
+    """Test Consumer.poll() returns list of messages."""
+    from cello.messaging import Consumer, KafkaConfig
+
+    consumer = await Consumer.connect(KafkaConfig.local())
+    await consumer.subscribe(["orders"])
+    messages = await consumer.poll(timeout_ms=100)
+    assert isinstance(messages, list)
+    assert len(messages) == 0  # Mock returns empty
+
+
+@pytest.mark.asyncio
+async def test_consumer_commit():
+    """Test Consumer.commit() acks message."""
+    from cello.messaging import Consumer, KafkaConfig, Message
+
+    consumer = await Consumer.connect(KafkaConfig.local())
+    msg = Message(topic="orders", value="test")
+    await consumer.commit(msg)
+    assert msg._acked is True
+
+
+@pytest.mark.asyncio
+async def test_consumer_close():
+    """Test Consumer.close() disconnects and clears subscriptions."""
+    from cello.messaging import Consumer, KafkaConfig
+
+    consumer = await Consumer.connect(KafkaConfig.local())
+    await consumer.subscribe(["orders"])
+    assert consumer._connected is True
+    assert len(consumer._subscriptions) == 1
+
+    await consumer.close()
+    assert consumer._connected is False
+    assert consumer._subscriptions == []
+
+
+@pytest.mark.asyncio
+async def test_producer_with_rabbitmq_config():
+    """Test Producer works with RabbitMQConfig."""
+    from cello.messaging import Producer, RabbitMQConfig
+
+    producer = await Producer.connect(RabbitMQConfig.local())
+    assert producer._connected is True
+    result = await producer.send("tasks", value={"action": "process"})
+    assert result is True
+    await producer.close()
+
+
+@pytest.mark.asyncio
+async def test_producer_with_sqs_config():
+    """Test Producer works with SqsConfig."""
+    from cello.messaging import Producer, SqsConfig
+
+    config = SqsConfig.local("http://localhost:4566/000000000000/test")
+    producer = await Producer.connect(config)
+    assert producer._connected is True
+    result = await producer.send("test", value={"event": "created"})
+    assert result is True
+    await producer.close()
+
+
+@pytest.mark.asyncio
+async def test_consumer_with_rabbitmq_config():
+    """Test Consumer works with RabbitMQConfig."""
+    from cello.messaging import Consumer, RabbitMQConfig
+
+    consumer = await Consumer.connect(RabbitMQConfig.local())
+    assert consumer._connected is True
+    await consumer.subscribe(["tasks"])
+    messages = await consumer.poll()
+    assert isinstance(messages, list)
+    await consumer.close()
+
+
+@pytest.mark.asyncio
+async def test_consumer_with_sqs_config():
+    """Test Consumer works with SqsConfig."""
+    from cello.messaging import Consumer, SqsConfig
+
+    config = SqsConfig.local("http://localhost:4566/000000000000/test")
+    consumer = await Consumer.connect(config)
+    assert consumer._connected is True
+    await consumer.subscribe(["test"])
+    messages = await consumer.poll()
+    assert isinstance(messages, list)
+    await consumer.close()

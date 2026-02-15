@@ -84,7 +84,7 @@ if __name__ == "__main__":
 
 ```bash
 python app.py
-# 🐍 Cello v0.8.0 server starting at http://127.0.0.1:8000
+# 🐍 Cello v0.9.0 server starting at http://127.0.0.1:8000
 ```
 
 ---
@@ -137,6 +137,17 @@ python app.py
 | 🔴 **Redis Integration** | Async Redis client with pool, Pub/Sub, cluster mode |
 | 🔄 **Transactions** | Automatic transaction management with decorator support |
 
+### API Protocol Features (v0.9.0)
+
+| Feature | Description |
+|---------|-------------|
+| 🔷 **GraphQL** | Query, Mutation, Subscription decorators with Schema builder |
+| 📊 **DataLoader** | N+1 prevention with automatic batching and caching |
+| 🔌 **gRPC** | Service-based gRPC with unary, streaming, and bidirectional support |
+| 📨 **Kafka** | Consumer/producer decorators with automatic message routing |
+| 🐰 **RabbitMQ** | AMQP messaging with topic exchanges and prefetch control |
+| ☁️ **SQS/SNS** | AWS message queue integration with LocalStack support |
+
 ### Protocol Support
 
 | Feature | Description |
@@ -179,7 +190,59 @@ async def transfer(request):
 
 @app.get("/")
 def home(request):
-    return {"status": "ok", "version": "0.8.0"}
+    return {"status": "ok", "version": "0.9.0"}
+
+app.run()
+```
+
+### API Protocol Features (v0.9.0)
+
+```python
+from cello import App, GrpcConfig, KafkaConfig, RabbitMQConfig
+from cello.graphql import Query, Mutation, Schema, DataLoader, GraphQL
+from cello.grpc import GrpcService, grpc_method, GrpcServer
+from cello.messaging import kafka_consumer, kafka_producer, Producer, Consumer
+
+app = App()
+
+# --- GraphQL ---
+@Query
+def users(info):
+    return [{"id": 1, "name": "Alice"}, {"id": 2, "name": "Bob"}]
+
+@Mutation
+def create_user(info, name: str, email: str):
+    return {"id": 3, "name": name, "email": email}
+
+schema = Schema().query(users).mutation(create_user).build()
+
+# --- gRPC ---
+class UserService(GrpcService):
+    @grpc_method
+    async def get_user(self, request):
+        return {"id": request.data.get("id"), "name": "Alice"}
+
+app.enable_grpc(GrpcConfig(port=50051, reflection=True))
+app.add_grpc_service("UserService", ["GetUser", "ListUsers"])
+
+# --- Kafka ---
+app.enable_messaging(KafkaConfig(brokers="localhost:9092", group_id="my-app"))
+
+@kafka_consumer(topic="user-events", group="processors")
+async def handle_user_event(message):
+    print(f"Received: {message.text}")
+
+@app.post("/users")
+@kafka_producer(topic="user-events")
+def create_user_api(request):
+    return {"id": 1, "name": request.json().get("name")}
+
+# --- RabbitMQ ---
+app.enable_rabbitmq(RabbitMQConfig(url="amqp://localhost:5672"))
+
+@app.get("/")
+def home(request):
+    return {"status": "ok", "version": "0.9.0", "protocols": ["graphql", "grpc", "kafka", "rabbitmq"]}
 
 app.run()
 ```
@@ -217,7 +280,7 @@ app.enable_prometheus(endpoint="/metrics")
 
 @app.get("/")
 def home(request):
-    return {"status": "ok", "version": "0.8.0"}
+    return {"status": "ok", "version": "0.9.0"}
 
 app.run()
 ```
@@ -333,6 +396,9 @@ return Response.no_content()
 | **Tracing** | OpenTelemetry |
 | **Metrics** | Prometheus |
 | **JWT** | jsonwebtoken |
+| **gRPC** | Custom Rust gRPC engine |
+| **GraphQL** | Python engine with Rust serialization |
+| **Messaging** | Kafka, RabbitMQ, SQS adapters |
 
 ---
 

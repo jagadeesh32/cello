@@ -6,6 +6,22 @@ title: Migration Guide
 
 This guide helps you migrate between major versions of Cello.
 
+## 0.8.x to 0.9.x {#08x-to-09x}
+
+### New Features
+
+Version 0.9.0 adds API protocol features:
+
+- GraphQL support with Playground UI
+- gRPC support with bidirectional streaming
+- Message queue adapters (Kafka, RabbitMQ)
+
+### Breaking Changes
+
+No breaking changes in 0.9.0. All existing code continues to work.
+
+---
+
 ## 0.7.x to 0.8.x {#07x-to-08x}
 
 ### New Features
@@ -21,7 +37,7 @@ Version 0.8.0 adds data layer features:
 
 No breaking changes in 0.8.0. All existing code continues to work.
 
-### New APIs
+### New APIs (v0.8.0)
 
 ```python
 from cello import App

@@ -13,6 +13,7 @@
 //! - Health checks (Enterprise)
 //! - Database connection pooling (Enterprise)
 //! - GraphQL support (Enterprise)
+//! - Message queue adapters (Enterprise)
 
 pub mod auth;
 pub mod body_limit;
@@ -36,6 +37,10 @@ pub mod health;
 pub mod database;
 pub mod graphql;
 pub mod redis;
+pub mod messaging;
+
+// v0.9.0 - API Protocol modules
+pub mod grpc;
 
 // Re-export DTO types from the dto module
 pub use crate::dto::*;
@@ -71,6 +76,10 @@ pub use health::{HealthCheckMiddleware, HealthCheckConfig, HealthStatus, HealthC
 pub use database::{DatabaseConfig, DatabasePool, DatabaseConnection, DatabaseStats, DatabaseError, Row, SqlValue, ToSql, FromSql, MockDatabasePool};
 pub use graphql::{GraphQLMiddleware, GraphQLConfig, GraphQLRequest, GraphQLResponse, GraphQLError, GraphQLSchema, ResolverContext, ResolverFn};
 pub use redis::{RedisConfig, RedisClient, RedisStats, RedisError, RedisValue, MockRedisClient, RedisPoolMetrics};
+pub use messaging::{MessageQueueConfig, KafkaConfig, RabbitMQConfig, SqsConfig, Message, MessageResult, ProducerConfig, MessageProducer, MessageConsumer, MockProducer, MockConsumer, MessagingError, MessagingStats};
+
+// v0.9.0 - API Protocol re-exports
+pub use grpc::{GrpcConfig, GrpcServer, GrpcServiceDef, GrpcMethodDef, GrpcMethodType, GrpcRequest, GrpcResponse, GrpcStatus, GrpcError, GrpcStats};
 
 // ============================================================================
 // Core Middleware Types
