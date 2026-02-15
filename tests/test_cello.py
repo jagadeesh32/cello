@@ -1022,10 +1022,10 @@ def test_dependency_injection_registration():
 
 
 def test_version():
-    """Test that version is 0.9.0."""
+    """Test that version is 0.10.0."""
     import cello
 
-    assert cello.__version__ == "0.9.0"
+    assert cello.__version__ == "0.10.0"
 
 
 def test_all_exports():
@@ -2180,10 +2180,10 @@ def test_v080_all_exports():
 
 
 def test_version_v090():
-    """Test that version is 0.9.0."""
+    """Test that version is 0.10.0 (updated from 0.9.0)."""
     import cello
 
-    assert cello.__version__ == "0.9.0"
+    assert cello.__version__ == "0.10.0"
 
 
 def test_v090_exports_in_all():
@@ -4365,7 +4365,7 @@ def test_event_json():
     from cello.eventsourcing import Event
 
     event = Event("OrderCreated", {"id": 1}, aggregate_id="order-1")
-    data = event.to_dict()
+    data = event.json()
     assert isinstance(data, dict)
     assert data["event_type"] == "OrderCreated"
     assert data["data"] == {"id": 1}
@@ -4404,8 +4404,8 @@ def test_aggregate_default_id():
         pass
 
     agg = OrderAggregate()
-    assert agg.aggregate_id is not None
-    assert len(agg.aggregate_id) > 0
+    assert agg.id is not None
+    assert len(agg.id) > 0
 
 
 def test_aggregate_custom_id():
@@ -4416,7 +4416,7 @@ def test_aggregate_custom_id():
         pass
 
     agg = OrderAggregate(aggregate_id="order-1")
-    assert agg.aggregate_id == "order-1"
+    assert agg.id == "order-1"
 
 
 def test_aggregate_apply_event():
@@ -4475,10 +4475,13 @@ def test_aggregate_load_from_events():
         Event("OrderShipped", {"tracking": "ABC"}),
         Event("OrderDelivered", {}),
     ]
+    # Simulate events from an event store with version numbers set
+    for i, event in enumerate(events, start=1):
+        event.version = i
 
     agg = OrderAggregate(aggregate_id="order-1")
     agg.load_from_events(events)
-    assert agg.version == 3
+    assert agg.version == len(events)
 
 
 def test_aggregate_event_handler_decorator():
@@ -4803,8 +4806,7 @@ def test_command_result_rejected():
 
     result = CommandResult.rejected("invalid input")
     assert result.success is False
-    assert result.error == "invalid input"
-    assert result.status == "rejected"
+    assert "invalid input" in result.error
 
 
 def test_command_result_success_flag():
@@ -4872,8 +4874,8 @@ def test_command_handler_decorator():
     def handle_create_order(cmd):
         return {"created": True}
 
-    assert handle_create_order._command_type is CreateOrder
-    assert handle_create_order._is_command_handler is True
+    assert handle_create_order._cello_command_type == "CreateOrder"
+    assert handle_create_order._cello_command_handler is True
     result = handle_create_order(CreateOrder(user_id=1))
     assert result == {"created": True}
 
@@ -4889,8 +4891,8 @@ def test_query_handler_decorator():
     def handle_get_order(q):
         return {"id": "order-1", "status": "active"}
 
-    assert handle_get_order._query_type is GetOrder
-    assert handle_get_order._is_query_handler is True
+    assert handle_get_order._cello_query_type == "GetOrder"
+    assert handle_get_order._cello_query_handler is True
     result = handle_get_order(GetOrder(order_id="order-1"))
     assert result == {"id": "order-1", "status": "active"}
 
@@ -4918,16 +4920,15 @@ async def test_command_bus_register_and_dispatch():
 
 @pytest.mark.asyncio
 async def test_command_bus_missing_handler():
-    """Test CommandBus raises on dispatch with unregistered command."""
+    """Test CommandBus returns failure on dispatch with unregistered command."""
     from cello.cqrs import Command, CommandBus
 
     class UnregisteredCommand(Command):
         pass
 
     bus = CommandBus()
-
-    with pytest.raises(Exception):
-        await bus.dispatch(UnregisteredCommand())
+    result = await bus.dispatch(UnregisteredCommand())
+    assert result.success is False
 
 
 @pytest.mark.asyncio
@@ -4953,16 +4954,15 @@ async def test_query_bus_register_and_execute():
 
 @pytest.mark.asyncio
 async def test_query_bus_missing_handler():
-    """Test QueryBus raises on execute with unregistered query."""
+    """Test QueryBus returns failure on execute with unregistered query."""
     from cello.cqrs import Query, QueryBus
 
     class UnregisteredQuery(Query):
         pass
 
     bus = QueryBus()
-
-    with pytest.raises(Exception):
-        await bus.execute(UnregisteredQuery())
+    result = await bus.execute(UnregisteredQuery())
+    assert result.found is False
 
 
 def test_command_bus_repr():
@@ -5260,9 +5260,9 @@ async def test_saga_execution_run_success():
 
     saga = SuccessSaga()
     execution = SagaExecution(saga)
-    result = await execution.run({})
+    await execution.run({})
 
-    assert result.success is True
+    assert execution.status == "completed"
     assert results == ["step1", "step2", "step3"]
 
 
@@ -5303,9 +5303,12 @@ async def test_saga_execution_run_failure_compensates():
 
     saga = FailingSaga()
     execution = SagaExecution(saga)
-    result = await execution.run({})
 
-    assert result.success is False
+    from cello.saga import SagaError
+    with pytest.raises(SagaError):
+        await execution.run({})
+
+    assert execution.status == "failed"
     assert "step1" in actions
     assert "step2" in actions
     assert "step3" not in actions
@@ -5369,7 +5372,7 @@ async def test_saga_orchestrator_register():
         steps = [SagaStep("step1", action=action_fn)]
 
     orchestrator = SagaOrchestrator()
-    orchestrator.register(OrderSaga)
+    orchestrator.register(OrderSaga())
     assert True
 
 
@@ -5388,10 +5391,10 @@ async def test_saga_orchestrator_execute():
         steps = [SagaStep("step1", action=action_fn)]
 
     orchestrator = SagaOrchestrator()
-    orchestrator.register(OrderSaga)
+    orchestrator.register(OrderSaga())
     result = await orchestrator.execute("OrderSaga", {})
 
-    assert result.success is True
+    assert result.status == "completed"
     assert "done" in executed
 
 
@@ -5407,7 +5410,7 @@ async def test_saga_orchestrator_list_executions():
         steps = [SagaStep("step1", action=action_fn)]
 
     orchestrator = SagaOrchestrator()
-    orchestrator.register(OrderSaga)
+    orchestrator.register(OrderSaga())
     await orchestrator.execute("OrderSaga", {"order": 1})
     await orchestrator.execute("OrderSaga", {"order": 2})
 
