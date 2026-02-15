@@ -1,13 +1,22 @@
 ---
 title: Enterprise
-description: Enterprise features for Cello Framework
+description: Enterprise-grade capabilities for building production-ready applications at scale
+icon: material/domain
 ---
 
-# Enterprise Features
+# :material-domain: Enterprise
 
-Cello provides enterprise-grade capabilities for building production-ready applications at scale.
+<div class="grid" markdown>
 
-## Enterprise Capabilities
+!!! abstract ""
+
+    **Build production-ready systems with confidence.** Cello's enterprise features deliver observability, integration, deployment tooling, and architectural patterns -- all implemented in Rust for maximum throughput and reliability at scale.
+
+</div>
+
+---
+
+## :material-view-grid: Enterprise Capabilities
 
 <div class="grid cards" markdown>
 
@@ -15,7 +24,12 @@ Cello provides enterprise-grade capabilities for building production-ready appli
 
     ---
 
-    Distributed tracing, metrics, logging, and health checks
+    Full-stack visibility into your running services with distributed tracing, metrics collection, structured logging, and automated health checks.
+
+    - :material-transit-connection-horizontal: OpenTelemetry integration
+    - :material-chart-areaspline: Prometheus metrics endpoint
+    - :material-identifier: UUID request ID tracing
+    - :material-heart-pulse: Liveness, readiness & startup probes
 
     [:octicons-arrow-right-24: Observability](observability/opentelemetry.md)
 
@@ -23,7 +37,12 @@ Cello provides enterprise-grade capabilities for building production-ready appli
 
     ---
 
-    Database, message queues, GraphQL, and gRPC support
+    Connect to databases, caches, message brokers, and multi-protocol APIs with async-first, pooled clients built in Rust.
+
+    - :material-database: Async database connection pooling
+    - :material-memory: Redis with Pub/Sub & cluster
+    - :octicons-graph-16: GraphQL & gRPC support
+    - :material-email-fast: Kafka, RabbitMQ & SQS adapters
 
     [:octicons-arrow-right-24: Integration](integration/database.md)
 
@@ -31,233 +50,367 @@ Cello provides enterprise-grade capabilities for building production-ready appli
 
     ---
 
-    Docker, Kubernetes, and service mesh deployment
+    Deploy anywhere with first-class support for containers, orchestrators, and service mesh architectures.
+
+    - :material-docker: Optimized Docker images
+    - :material-kubernetes: Kubernetes manifests & Helm charts
+    - :material-hexagon-multiple: Service mesh (Istio/Linkerd)
+    - :material-server-network: Cluster mode with multi-worker
 
     [:octicons-arrow-right-24: Deployment](deployment/docker.md)
 
--   :material-map:{ .lg .middle } **Roadmap**
+-   :material-chart-timeline-variant-shimmer:{ .lg .middle } **Patterns**
 
     ---
 
-    Upcoming enterprise features and timeline
+    Battle-tested architectural patterns for building resilient, scalable distributed systems.
 
-    [:octicons-arrow-right-24: Roadmap](roadmap.md)
+    - :material-history: Event Sourcing with snapshots
+    - :material-call-split: CQRS command/query buses
+    - :material-transit-connection-variant: Saga orchestration
+    - :material-electric-switch: Circuit breaker fault tolerance
+
+    [:octicons-arrow-right-24: Patterns](../learn/patterns/cqrs.md)
 
 </div>
 
 ---
 
-## Current Enterprise Features
+## :material-sitemap: Architecture Overview
 
-### Security
+```mermaid
+graph TB
+    subgraph Clients["Clients"]
+        Browser["Browser / Mobile"]
+        Service["Service-to-Service"]
+        Queue["Message Queue"]
+    end
 
-| Feature | Status | Description |
-|---------|--------|-------------|
-| JWT Authentication | :material-check-circle:{ .green } | Token-based authentication |
-| RBAC Guards | :material-check-circle:{ .green } | Role-based access control |
-| Rate Limiting | :material-check-circle:{ .green } | Adaptive rate limiting |
-| Security Headers | :material-check-circle:{ .green } | CSP, HSTS, etc. |
-| CSRF Protection | :material-check-circle:{ .green } | Double-submit cookies |
-| Session Management | :material-check-circle:{ .green } | Secure cookie sessions |
+    subgraph LB["Load Balancer / Ingress"]
+        Ingress["Kubernetes Ingress<br/>or Reverse Proxy"]
+    end
 
-### Observability
+    subgraph Cello["Cello Application Cluster"]
+        direction TB
 
-| Feature | Status | Description |
-|---------|--------|-------------|
-| Prometheus Metrics | :material-check-circle:{ .green } | `/metrics` endpoint |
-| Request ID Tracing | :material-check-circle:{ .green } | UUID-based tracing |
-| Structured Logging | :material-check-circle:{ .green } | JSON logging |
-| OpenTelemetry | :material-check-circle:{ .green } | Available in v0.7.0 |
-| Health Checks | :material-check-circle:{ .green } | Available in v0.7.0 |
+        subgraph Worker1["Worker 1"]
+            MW1["Middleware Pipeline"]
+            RT1["Radix Router"]
+            HN1["Handlers"]
+        end
 
-### Scalability
+        subgraph Worker2["Worker 2"]
+            MW2["Middleware Pipeline"]
+            RT2["Radix Router"]
+            HN2["Handlers"]
+        end
 
-| Feature | Status | Description |
-|---------|--------|-------------|
-| Cluster Mode | :material-check-circle:{ .green } | Multi-worker deployment |
-| HTTP/2 | :material-check-circle:{ .green } | Modern protocol |
-| HTTP/3 (QUIC) | :material-check-circle:{ .green } | Next-gen protocol |
-| TLS/SSL | :material-check-circle:{ .green } | Native HTTPS |
-| Circuit Breaker | :material-check-circle:{ .green } | Fault tolerance |
+        subgraph WorkerN["Worker N"]
+            MWN["Middleware Pipeline"]
+            RTN["Radix Router"]
+            HNN["Handlers"]
+        end
 
-### Integration
+        subgraph Shared["Shared Components"]
+            OTEL["OpenTelemetry<br/>Tracing & Metrics"]
+            Health["Health Checks<br/>/health /ready /live"]
+            Prom["Prometheus<br/>/metrics"]
+        end
+    end
 
-| Feature | Status | Description |
-|---------|--------|-------------|
-| WebSocket | :material-check-circle:{ .green } | Real-time communication |
-| SSE | :material-check-circle:{ .green } | Server-sent events |
-| GraphQL | :material-check-circle:{ .green } | Available in v0.9.0 |
-| gRPC | :material-check-circle:{ .green } | Available in v0.9.0 |
-| Database Pooling | :material-check-circle:{ .green } | Available in v0.8.0 |
-| Redis Integration | :material-check-circle:{ .green } | Available in v0.8.0 |
-| Message Queues | :material-check-circle:{ .green } | Available in v0.9.0 - Kafka, RabbitMQ, SQS |
-| Event Sourcing | :material-check-circle:{ .green } | Available in v0.10.0 - Aggregate roots, event replay, snapshots |
-| CQRS | :material-check-circle:{ .green } | Available in v0.10.0 - Command/query separation, buses |
-| Saga Pattern | :material-check-circle:{ .green } | Available in v0.10.0 - Distributed transactions, compensation |
+    subgraph Data["Data Layer"]
+        DB[("PostgreSQL<br/>Connection Pool")]
+        Redis[("Redis<br/>Cache & Pub/Sub")]
+        Kafka["Kafka / RabbitMQ<br/>Message Broker"]
+    end
+
+    subgraph Observability["Observability Stack"]
+        Jaeger["Jaeger / Zipkin"]
+        Grafana["Grafana"]
+        AlertManager["AlertManager"]
+    end
+
+    Browser --> Ingress
+    Service --> Ingress
+    Queue --> Kafka
+
+    Ingress --> Worker1
+    Ingress --> Worker2
+    Ingress --> WorkerN
+
+    HN1 --> DB
+    HN1 --> Redis
+    HN1 --> Kafka
+    HN2 --> DB
+    HN2 --> Redis
+    HNN --> DB
+    HNN --> Redis
+
+    OTEL --> Jaeger
+    Prom --> Grafana
+    Grafana --> AlertManager
+
+    style Cello fill:#1a1a2e,stroke:#ff9100,stroke-width:2px
+    style Data fill:#16213e,stroke:#ff9100,stroke-width:1px
+    style Observability fill:#0f3460,stroke:#ff9100,stroke-width:1px
+```
 
 ---
 
-## Enterprise Configuration
+## :material-code-tags: Feature Highlights
 
-### Production Setup
+=== ":material-transit-connection-horizontal: OpenTelemetry"
 
-```python
-from cello import App
-from cello.middleware import (
-    JwtConfig, JwtAuth,
-    AdaptiveRateLimitConfig,
-    SecurityHeadersConfig, CSP,
-    PrometheusConfig
-)
+    ```python title="Distributed tracing with OpenTelemetry"
+    from cello import App
+    from cello.enterprise import OpenTelemetryConfig
 
-# Initialize with production settings
-app = App(
-    name="my-service",
-    env="production",
-    debug=False
-)
+    app = App(name="order-service")
 
-# Security Headers
-app.enable_security_headers(SecurityHeadersConfig(
-    csp=CSP(
-        default_src=["'self'"],
-        script_src=["'self'", "https://cdn.example.com"],
-        style_src=["'self'", "'unsafe-inline'"],
-        img_src=["'self'", "data:", "https:"],
-        connect_src=["'self'", "https://api.example.com"],
-        frame_ancestors=["'none'"]
-    ),
-    hsts_max_age=31536000,
-    hsts_include_subdomains=True,
-    hsts_preload=True,
-    x_frame_options="DENY",
-    x_content_type_options="nosniff",
-    referrer_policy="strict-origin-when-cross-origin"
-))
+    # Auto-instrument all routes with distributed tracing
+    app.enable_telemetry(OpenTelemetryConfig(
+        service_name="order-service",
+        exporter="otlp",
+        endpoint="http://jaeger:4317",
+        sample_rate=0.1,  # Sample 10% of traces in production
+        propagators=["tracecontext", "baggage"]
+    ))
 
-# JWT Authentication
-jwt_config = JwtConfig(
-    secret=os.environ["JWT_SECRET"].encode(),
-    algorithm="HS256",
-    expiration=3600,
-    refresh_expiration=86400
-)
-jwt_auth = JwtAuth(jwt_config)
-jwt_auth.skip_path("/health")
-jwt_auth.skip_path("/metrics")
-app.use(jwt_auth)
+    @app.get("/orders/{id}")
+    async def get_order(request):
+        # Spans are auto-created for each request
+        # Trace context propagates across service boundaries
+        order = await db.fetch_one("SELECT * FROM orders WHERE id = $1",
+                                   request.params["id"])
+        return order
+    ```
 
-# Adaptive Rate Limiting
-app.enable_rate_limit(AdaptiveRateLimitConfig(
-    base_requests=1000,
-    window=60,
-    cpu_threshold=0.8,
-    memory_threshold=0.9,
-    latency_threshold=100,
-    min_requests=100
-))
+=== ":material-heart-pulse: Health Checks"
 
-# Prometheus Metrics
-app.enable_metrics(PrometheusConfig(
-    path="/metrics",
-    include_process_metrics=True,
-    include_latency_histogram=True
-))
+    ```python title="Kubernetes-ready health probes"
+    from cello import App
+    from cello.enterprise import HealthCheck
 
-# CORS for specific origins
-app.enable_cors(
-    origins=["https://app.example.com"],
-    methods=["GET", "POST", "PUT", "DELETE"],
-    allow_credentials=True,
-    max_age=3600
-)
+    app = App()
 
-# Compression
-app.enable_compression(min_size=1024)
+    # Register health checks for dependencies
+    health = HealthCheck()
+    health.add_check("database", check_database_connection)
+    health.add_check("redis", check_redis_connection)
+    health.add_check("kafka", check_kafka_connection)
 
-# Run with optimal settings
-if __name__ == "__main__":
-    app.run(
-        host="0.0.0.0",
-        port=8000,
-        workers=os.cpu_count(),
-        env="production"
+    app.enable_health_checks(health)
+    # GET /health  -> overall status
+    # GET /ready   -> readiness (all checks pass)
+    # GET /live    -> liveness (process is running)
+    ```
+
+=== ":material-database: Database Pooling"
+
+    ```python title="Async connection pool with transactions"
+    from cello import App
+    from cello.enterprise import Database
+
+    app = App()
+    db = Database(
+        url="postgresql://localhost/mydb",
+        pool_size=20,
+        max_overflow=10,
+        pool_timeout=30,
+        health_check_interval=60
     )
+
+    @app.post("/orders")
+    async def create_order(request):
+        data = request.json()
+        async with db.transaction() as tx:
+            order = await tx.fetch_one(
+                "INSERT INTO orders (user_id, total) VALUES ($1, $2) RETURNING *",
+                data["user_id"], data["total"]
+            )
+            for item in data["items"]:
+                await tx.execute(
+                    "INSERT INTO order_items (order_id, product_id, qty) VALUES ($1, $2, $3)",
+                    order["id"], item["product_id"], item["quantity"]
+                )
+        return {"order_id": order["id"], "status": "created"}
+    ```
+
+=== ":octicons-graph-16: GraphQL"
+
+    ```python title="GraphQL with DataLoader"
+    from cello import App
+    from cello.enterprise import GraphQL, Schema
+
+    app = App()
+
+    schema = Schema()
+
+    @schema.query("user")
+    async def resolve_user(info, id: str):
+        return await db.fetch_one("SELECT * FROM users WHERE id = $1", id)
+
+    @schema.query("users")
+    async def resolve_users(info, limit: int = 10):
+        return await db.fetch_all("SELECT * FROM users LIMIT $1", limit)
+
+    @schema.mutation("createUser")
+    async def create_user(info, name: str, email: str):
+        return await db.fetch_one(
+            "INSERT INTO users (name, email) VALUES ($1, $2) RETURNING *",
+            name, email
+        )
+
+    app.mount_graphql("/graphql", schema)
+    ```
+
+=== ":material-email-fast: Message Queues"
+
+    ```python title="Kafka consumer with message routing"
+    from cello import App
+    from cello.enterprise import Kafka
+
+    app = App()
+    kafka = Kafka(brokers=["localhost:9092"])
+
+    @kafka.consumer("orders.created", group="order-processor")
+    async def handle_order_created(message):
+        order = message.value
+        # Process the order
+        await send_confirmation_email(order["user_id"])
+        await update_inventory(order["items"])
+
+    @kafka.producer
+    async def publish_event(topic, event):
+        await kafka.send(topic, event)
+
+    @app.post("/orders")
+    async def create_order(request):
+        order = request.json()
+        saved = await db.save_order(order)
+        await publish_event("orders.created", saved)
+        return {"order_id": saved["id"]}
+    ```
+
+---
+
+## :material-timeline: Enterprise Features by Version
+
+```mermaid
+timeline
+    title Cello Enterprise Feature Timeline
+    section Foundation
+        v0.4.0 : Cluster Mode
+               : TLS/SSL (rustls)
+               : HTTP/2 & HTTP/3
+               : Security Headers
+               : Session Management
+    section Monitoring
+        v0.5.0 : Prometheus Metrics
+               : Request ID Tracing
+               : OpenAPI/Swagger
+               : RFC 7807 Errors
+    section Resilience
+        v0.6.0 : Circuit Breaker
+               : Smart Caching
+               : Adaptive Rate Limiting
+    section Observability
+        v0.7.0 : OpenTelemetry
+               : Health Checks
+               : Distributed Tracing
+               : Structured Logging
+    section Data Layer
+        v0.8.0 : Database Pooling
+               : Redis Integration
+               : Transaction Management
+    section Protocols
+        v0.9.0 : GraphQL
+               : gRPC
+               : Kafka & RabbitMQ
+               : SQS/SNS
+    section Patterns
+        v0.10.0 : Event Sourcing
+                : CQRS
+                : Saga Pattern
 ```
 
 ---
 
-## Deployment Options
+## :material-check-all: Enterprise Feature Status
 
-### Docker
-
-```dockerfile
-FROM python:3.12-slim
-
-WORKDIR /app
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-COPY . .
-
-EXPOSE 8000
-CMD ["python", "app.py", "--host", "0.0.0.0", "--workers", "4"]
-```
-
-### Kubernetes
-
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: cello-app
-spec:
-  replicas: 3
-  selector:
-    matchLabels:
-      app: cello-app
-  template:
-    metadata:
-      labels:
-        app: cello-app
-    spec:
-      containers:
-      - name: cello-app
-        image: your-registry/cello-app:latest
-        ports:
-        - containerPort: 8000
-        resources:
-          requests:
-            memory: "256Mi"
-            cpu: "250m"
-          limits:
-            memory: "512Mi"
-            cpu: "500m"
-        livenessProbe:
-          httpGet:
-            path: /health
-            port: 8000
-          initialDelaySeconds: 5
-          periodSeconds: 10
-        readinessProbe:
-          httpGet:
-            path: /health
-            port: 8000
-          initialDelaySeconds: 5
-          periodSeconds: 5
-```
+| Category | Feature | Status | Version |
+|:---------|:--------|:------:|:--------|
+| **Security** | JWT Authentication | :material-check-circle:{ style="color: #4caf50" } | v0.4.0 |
+| | RBAC Guards | :material-check-circle:{ style="color: #4caf50" } | v0.5.0 |
+| | Adaptive Rate Limiting | :material-check-circle:{ style="color: #4caf50" } | v0.6.0 |
+| | Security Headers (CSP, HSTS) | :material-check-circle:{ style="color: #4caf50" } | v0.4.0 |
+| | CSRF Protection | :material-check-circle:{ style="color: #4caf50" } | v0.4.0 |
+| | Session Management | :material-check-circle:{ style="color: #4caf50" } | v0.4.0 |
+| **Observability** | Prometheus Metrics | :material-check-circle:{ style="color: #4caf50" } | v0.5.0 |
+| | Request ID Tracing | :material-check-circle:{ style="color: #4caf50" } | v0.4.0 |
+| | OpenTelemetry | :material-check-circle:{ style="color: #4caf50" } | v0.7.0 |
+| | Health Checks | :material-check-circle:{ style="color: #4caf50" } | v0.7.0 |
+| **Scalability** | Cluster Mode | :material-check-circle:{ style="color: #4caf50" } | v0.4.0 |
+| | HTTP/2 & HTTP/3 (QUIC) | :material-check-circle:{ style="color: #4caf50" } | v0.4.0 |
+| | TLS/SSL (rustls) | :material-check-circle:{ style="color: #4caf50" } | v0.4.0 |
+| | Circuit Breaker | :material-check-circle:{ style="color: #4caf50" } | v0.6.0 |
+| **Integration** | Database Pooling | :material-check-circle:{ style="color: #4caf50" } | v0.8.0 |
+| | Redis | :material-check-circle:{ style="color: #4caf50" } | v0.8.0 |
+| | GraphQL | :material-check-circle:{ style="color: #4caf50" } | v0.9.0 |
+| | gRPC | :material-check-circle:{ style="color: #4caf50" } | v0.9.0 |
+| | Kafka, RabbitMQ, SQS | :material-check-circle:{ style="color: #4caf50" } | v0.9.0 |
+| **Patterns** | Event Sourcing | :material-check-circle:{ style="color: #4caf50" } | v0.10.0 |
+| | CQRS | :material-check-circle:{ style="color: #4caf50" } | v0.10.0 |
+| | Saga Pattern | :material-check-circle:{ style="color: #4caf50" } | v0.10.0 |
 
 ---
 
-## Enterprise Support
+## :material-book-open-variant: Enterprise Documentation
 
-For enterprise support and consulting, contact us at:
+<div class="grid cards" markdown>
 
-- :material-email: enterprise@cello-framework.dev
-- :material-calendar: [Schedule a Demo](https://calendly.com/cello-framework)
+-   :material-chart-line:{ .lg .middle } **Observability**
+
+    ---
+
+    - [OpenTelemetry](observability/opentelemetry.md)
+    - [Distributed Tracing](observability/tracing.md)
+    - [Metrics](observability/metrics.md)
+    - [Health Checks](observability/health-checks.md)
+
+-   :material-connection:{ .lg .middle } **Integration**
+
+    ---
+
+    - [Database](integration/database.md)
+    - [Message Queues](integration/message-queues.md)
+    - [GraphQL](integration/graphql.md)
+    - [gRPC](integration/grpc.md)
+
+-   :material-cloud-upload:{ .lg .middle } **Deployment**
+
+    ---
+
+    - [Docker](deployment/docker.md)
+    - [Kubernetes](deployment/kubernetes.md)
+    - [Service Mesh](deployment/service-mesh.md)
+
+-   :material-map:{ .lg .middle } **Roadmap**
+
+    ---
+
+    - [Enterprise Roadmap](roadmap.md)
+
+</div>
 
 ---
 
-## Feature Roadmap
+## :material-handshake: Enterprise Support
 
-See the complete [Enterprise Roadmap](roadmap.md) for upcoming features and timeline.
+!!! note "Enterprise Support & Consulting"
+
+    For enterprise support, custom integrations, and consulting:
+
+    - :material-email: **enterprise@cello-framework.dev**
+    - :material-calendar: **[Schedule a Demo](https://calendly.com/cello-framework)**
+    - :material-file-document: **[Enterprise Licensing](https://cello-framework.dev/enterprise)**

@@ -27,8 +27,8 @@ theme:
     # Light mode
     - media: "(prefers-color-scheme: light)"
       scheme: default
-      primary: deep purple
-      accent: amber
+      primary: custom
+      accent: deep orange
       toggle:
         icon: material/brightness-7
         name: Switch to dark mode

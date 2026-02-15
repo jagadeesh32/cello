@@ -1,29 +1,150 @@
 ---
 title: Getting Started
 description: Get up and running with Cello Framework in minutes
+icon: material/rocket-launch
 ---
 
-# Getting Started with Cello
+# :material-rocket-launch: Getting Started
 
-Welcome to Cello! This guide will help you get up and running with the world's fastest Python web framework.
+<div class="grid" markdown>
 
-## Overview
+!!! tip ""
 
-Cello is a Rust-powered Python async web framework that combines:
+    **Welcome to Cello!** The world's fastest Python web framework, powered by Rust. You'll go from zero to a running API in under 5 minutes. Let's build something incredible.
 
-- **Python's Developer Experience** - Clean, intuitive API
-- **Rust's Performance** - Native speed without the complexity
-- **Enterprise Features** - Security, scalability, observability
+</div>
 
-## Prerequisites
+---
 
-Before you begin, ensure you have:
+## :material-eye: What You'll Build
 
-- **Python 3.12+** - Cello requires Python 3.12 or later
-- **pip** - Python package manager
-- **Optional**: Rust toolchain (only for building from source)
+By the end of this guide, you'll have a fully functional REST API running at blazing speed:
 
-## Quick Navigation
+```python title="app.py" linenums="1"
+from cello import App, Response
+
+app = App()
+
+@app.get("/")
+def hello(request):
+    return {"message": "Hello, World!", "framework": "Cello"}
+
+@app.get("/users/{id}")
+def get_user(request):
+    user_id = request.params["id"]
+    return {"id": user_id, "name": "Jane Doe", "active": True}
+
+@app.post("/users")
+def create_user(request):
+    data = request.json()
+    return Response.json({"created": True, **data}, status=201)
+
+if __name__ == "__main__":
+    app.run()
+```
+
+```bash title="Terminal output"
+$ python app.py
+  ___ ___| | | ___
+ / __/ _ \ | |/ _ \   Cello v0.7.0
+| (_|  __/ | | (_) |  Rust-powered Python Web Framework
+ \___\___|_|_|\___/
+
+Cello running at http://127.0.0.1:8000
+```
+
+---
+
+## :material-clipboard-check: Prerequisites
+
+!!! info "Before you begin"
+
+    Make sure you have the following installed on your system:
+
+    | Requirement | Version | Check Command |
+    |:------------|:--------|:--------------|
+    | :material-language-python: **Python** | 3.12+ | `python --version` |
+    | :material-package-variant: **pip** | Latest | `pip --version` |
+    | :material-cog: **Rust toolchain** | Latest *(source builds only)* | `rustc --version` |
+
+    !!! warning "Python 3.12 Required"
+
+        Cello uses PyO3 with the `abi3-py312` flag. Python 3.11 and earlier are **not** supported.
+
+---
+
+## :material-list-status: Setup in 4 Steps
+
+<div class="grid cards" markdown>
+
+-   :material-numeric-1-circle:{ .lg .middle } **Install Cello**
+
+    ---
+
+    Install the framework with a single command.
+
+    === "pip (Recommended)"
+
+        ```bash
+        pip install cello-framework
+        ```
+
+    === "From Source"
+
+        ```bash
+        git clone https://github.com/jagadeesh32/cello.git
+        cd cello && pip install maturin && maturin develop
+        ```
+
+-   :material-numeric-2-circle:{ .lg .middle } **Create Your App**
+
+    ---
+
+    Create a new file and initialize Cello.
+
+    ```python title="app.py"
+    from cello import App
+
+    app = App()
+    ```
+
+-   :material-numeric-3-circle:{ .lg .middle } **Add Routes**
+
+    ---
+
+    Define your endpoints with clean decorators.
+
+    ```python title="app.py"
+    @app.get("/")
+    def hello(request):
+        return {"message": "Hello, World!"}
+
+    @app.get("/users/{id}")
+    def get_user(request):
+        return {"id": request.params["id"]}
+    ```
+
+-   :material-numeric-4-circle:{ .lg .middle } **Run It**
+
+    ---
+
+    Start the server and visit your API.
+
+    ```python title="app.py"
+    if __name__ == "__main__":
+        app.run()
+    ```
+
+    ```bash
+    python app.py
+    # Visit http://127.0.0.1:8000
+    ```
+
+</div>
+
+---
+
+## :material-compass: Quick Navigation
 
 <div class="grid cards" markdown>
 
@@ -31,92 +152,86 @@ Before you begin, ensure you have:
 
     ---
 
-    Install Cello via pip or from source
+    Detailed installation instructions for all platforms, including virtual environments and troubleshooting.
 
     [:octicons-arrow-right-24: Install Guide](installation.md)
 
--   :material-rocket-launch:{ .lg .middle } **Quick Start**
+-   :material-flash:{ .lg .middle } **Quick Start**
 
     ---
 
-    Create your first Cello application in 5 minutes
+    A 5-minute walkthrough that covers routes, requests, responses, and your first working API.
 
     [:octicons-arrow-right-24: Quick Start](quickstart.md)
 
--   :material-application:{ .lg .middle } **First Application**
+-   :material-application-braces:{ .lg .middle } **First Application**
 
     ---
 
-    Build a complete REST API step by step
+    Build a complete REST API step by step with CRUD operations, error handling, and validation.
 
     [:octicons-arrow-right-24: First App](first-app.md)
 
--   :material-folder-outline:{ .lg .middle } **Project Structure**
+-   :material-folder-cog:{ .lg .middle } **Project Structure**
 
     ---
 
-    Learn how to organize your Cello project
+    Learn how to organize your Cello project for small scripts, medium apps, and large-scale services.
 
     [:octicons-arrow-right-24: Structure](project-structure.md)
 
--   :material-cog:{ .lg .middle } **Configuration**
+-   :material-tune-vertical:{ .lg .middle } **Configuration**
 
     ---
 
-    Configure your application for different environments
+    Configure your application for development, testing, and production environments.
 
     [:octicons-arrow-right-24: Configuration](configuration.md)
 
 </div>
 
-## Installation Overview
+---
 
-=== "pip (Recommended)"
+## :material-arrow-right-bold: Next Steps
 
-    ```bash
-    pip install cello-framework
-    ```
+Once you've built your first app, explore these areas to level up:
 
-=== "From Source"
+<div class="grid cards" markdown>
 
-    ```bash
-    git clone https://github.com/jagadeesh32/cello.git
-    cd cello
-    pip install maturin
-    maturin develop
-    ```
+-   :material-star-shooting:{ .lg .middle } **Explore Features**
 
-## Hello World
+    ---
 
-```python title="app.py"
-from cello import App
+    Discover routing, middleware, security, real-time, and more.
 
-app = App()
+    [:octicons-arrow-right-24: Features](../features/index.md)
 
-@app.get("/")
-def hello(request):
-    return {"message": "Hello, World!"}
+-   :material-school:{ .lg .middle } **Learn with Tutorials**
 
-if __name__ == "__main__":
-    app.run()
-```
+    ---
 
-```bash
-python app.py
-# Cello running at http://127.0.0.1:8000
-```
+    Build a REST API, chat app, auth system, and microservices.
 
-Visit `http://127.0.0.1:8000` to see your first Cello response!
+    [:octicons-arrow-right-24: Tutorials](../learn/index.md)
 
-## What's Next?
+-   :material-code-braces:{ .lg .middle } **Browse Examples**
 
-1. **[Installation](installation.md)** - Detailed installation instructions
-2. **[Quick Start](quickstart.md)** - Learn the basics in 5 minutes
-3. **[First Application](first-app.md)** - Build a complete REST API
-4. **[Features](../features/index.md)** - Explore all features
+    ---
 
-## Need Help?
+    Copy-paste examples from basic to enterprise-grade apps.
 
-- :material-book: [Documentation](../index.md)
-- :material-github: [GitHub Issues](https://github.com/jagadeesh32/cello/issues)
-- :material-discord: [Discord Community](https://discord.gg/cello)
+    [:octicons-arrow-right-24: Examples](../examples/index.md)
+
+</div>
+
+---
+
+!!! tip "Join the Cello Community"
+
+    Have questions? Want to share what you're building? Join the community:
+
+    - :material-discord: **[Discord Server](https://discord.gg/cello)** -- Real-time help and discussion
+    - :material-github: **[GitHub Discussions](https://github.com/jagadeesh32/cello/discussions)** -- Feature requests and Q&A
+    - :material-stack-overflow: **[Stack Overflow](https://stackoverflow.com/questions/tagged/cello-framework)** -- Tagged questions and answers
+
+    We'd love to hear from you!

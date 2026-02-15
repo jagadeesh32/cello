@@ -1,65 +1,517 @@
-/* Cello Framework - Custom Styles for Material for MkDocs */
+/* ==========================================================================
+   Cello Framework - Custom Theme Styles
+   Material for MkDocs - Dark Orange / Black Light Theme
+   ========================================================================== */
 
-/* Color scheme */
-:root {
-  --md-primary-fg-color: #7e57c2;
-  --md-primary-fg-color--light: #b085f5;
-  --md-primary-fg-color--dark: #4d2c91;
-  --md-accent-fg-color: #ffc107;
+/* ==========================================================================
+   1. LIGHT MODE - Custom Color Scheme (Default)
+   ========================================================================== */
+
+[data-md-color-scheme="default"] {
+  /* Primary palette */
+  --md-primary-fg-color:         #E65100;
+  --md-primary-fg-color--light:  #FF6D00;
+  --md-primary-fg-color--dark:   #BF360C;
+
+  /* Accent */
+  --md-accent-fg-color:            #FF9100;
+  --md-accent-fg-color--transparent: rgba(255, 145, 0, 0.12);
+
+  /* Surfaces */
+  --md-default-bg-color:           #FAFAFA;
+  --md-default-fg-color:           #1A1A1A;
+  --md-default-fg-color--light:    #424242;
+  --md-default-fg-color--lighter:  #616161;
+  --md-default-fg-color--lightest: #E0E0E0;
+
+  /* Code */
+  --md-code-bg-color:  #1B1B1B;
+  --md-code-fg-color:  #E0E0E0;
+
+  /* Typeset link color */
+  --md-typeset-a-color: #E65100;
+
+  /* Footer */
+  --md-footer-bg-color:         #1A1A1A;
+  --md-footer-bg-color--dark:   #121212;
+  --md-footer-fg-color:         rgba(255, 255, 255, 0.9);
+  --md-footer-fg-color--light:  rgba(255, 255, 255, 0.7);
+  --md-footer-fg-color--lighter: rgba(255, 255, 255, 0.5);
+
+  /* Custom properties for reuse */
+  --cello-orange:        #E65100;
+  --cello-orange-light:  #FF6D00;
+  --cello-orange-dark:   #BF360C;
+  --cello-accent:        #FF9100;
+  --cello-black:         #1A1A1A;
+  --cello-black-soft:    #2D2D2D;
+  --cello-surface:       #FFFFFF;
+  --cello-bg:            #FAFAFA;
+  --cello-text:          #1A1A1A;
+  --cello-text-secondary: #424242;
+  --cello-border:        #E0E0E0;
+  --cello-glow:          rgba(230, 81, 0, 0.35);
+  --cello-shadow:        rgba(230, 81, 0, 0.15);
 }
+
+/* --------------------------------------------------------------------------
+   1a. Header - Black gradient with white text
+   -------------------------------------------------------------------------- */
+
+[data-md-color-scheme="default"] .md-header {
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 100%);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+[data-md-color-scheme="default"] .md-header__button,
+[data-md-color-scheme="default"] .md-header__topic,
+[data-md-color-scheme="default"] .md-header-nav__button,
+[data-md-color-scheme="default"] .md-header__title {
+  color: #FFFFFF;
+}
+
+[data-md-color-scheme="default"] .md-header__button:hover {
+  color: #FF9100;
+}
+
+/* Search bar in header */
+[data-md-color-scheme="default"] .md-search__input {
+  background-color: rgba(255, 255, 255, 0.08);
+  color: #FFFFFF;
+}
+
+[data-md-color-scheme="default"] .md-search__input::placeholder {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+[data-md-color-scheme="default"] .md-search__input:focus {
+  background-color: rgba(255, 255, 255, 0.12);
+  border-bottom: 2px solid #FF9100;
+}
+
+/* --------------------------------------------------------------------------
+   1b. Navigation Tabs - Dark background, orange active indicator
+   -------------------------------------------------------------------------- */
+
+[data-md-color-scheme="default"] .md-tabs {
+  background: #1A1A1A;
+  border-bottom: 1px solid rgba(255, 145, 0, 0.15);
+}
+
+[data-md-color-scheme="default"] .md-tabs__link {
+  color: rgba(255, 255, 255, 0.7);
+  font-weight: 500;
+  transition: color 0.3s ease, opacity 0.3s ease;
+}
+
+[data-md-color-scheme="default"] .md-tabs__link:hover {
+  color: #FF9100;
+  opacity: 1;
+}
+
+[data-md-color-scheme="default"] .md-tabs__link--active {
+  color: #FFFFFF;
+  font-weight: 700;
+  border-bottom: 2px solid #FF6D00;
+}
+
+/* --------------------------------------------------------------------------
+   1c. Announcement Bar - Orange gradient, black text
+   -------------------------------------------------------------------------- */
+
+[data-md-color-scheme="default"] .md-banner {
+  background: linear-gradient(90deg, #E65100 0%, #FF6D00 50%, #FF9100 100%);
+  color: #000000;
+  font-weight: 600;
+}
+
+[data-md-color-scheme="default"] .md-banner a {
+  color: #1A1A1A;
+  text-decoration: underline;
+}
+
+[data-md-color-scheme="default"] .md-banner__button {
+  color: #1A1A1A;
+}
+
+/* --------------------------------------------------------------------------
+   1d. Sidebar / Navigation / TOC
+   -------------------------------------------------------------------------- */
+
+[data-md-color-scheme="default"] .md-nav__link--active {
+  color: #E65100 !important;
+  font-weight: 700;
+}
+
+[data-md-color-scheme="default"] .md-nav__link:hover {
+  color: #FF6D00;
+}
+
+[data-md-color-scheme="default"] .md-nav__link:focus {
+  color: #E65100;
+}
+
+/* TOC right sidebar active */
+[data-md-color-scheme="default"] .md-nav--secondary .md-nav__link--active {
+  color: #E65100 !important;
+  font-weight: 600;
+  border-left: 2px solid #E65100;
+  padding-left: 0.6rem;
+}
+
+/* --------------------------------------------------------------------------
+   1e. Footer - Dark background, orange links
+   -------------------------------------------------------------------------- */
+
+[data-md-color-scheme="default"] .md-footer {
+  background-color: #1A1A1A;
+}
+
+[data-md-color-scheme="default"] .md-footer-meta {
+  background-color: #121212;
+}
+
+[data-md-color-scheme="default"] .md-footer a {
+  color: #FF9100;
+  transition: color 0.3s ease;
+}
+
+[data-md-color-scheme="default"] .md-footer a:hover {
+  color: #FF6D00;
+}
+
+[data-md-color-scheme="default"] .md-footer__link {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+[data-md-color-scheme="default"] .md-footer__title {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/* ==========================================================================
+   2. DARK MODE - Slate Scheme (Keep existing purple styling)
+   ========================================================================== */
 
 [data-md-color-scheme="slate"] {
-  --md-primary-fg-color: #9575cd;
-  --md-primary-fg-color--light: #c7a4ff;
-  --md-primary-fg-color--dark: #65499c;
+  --md-primary-fg-color:         #9575cd;
+  --md-primary-fg-color--light:  #c7a4ff;
+  --md-primary-fg-color--dark:   #65499c;
+  --md-accent-fg-color:          #ffc107;
 }
 
-/* Hero section on home page */
-.md-typeset .md-button--primary {
-  background-color: var(--md-primary-fg-color);
-  border-color: var(--md-primary-fg-color);
-}
+/* ==========================================================================
+   3. BUTTONS - Hero Section & General
+   ========================================================================== */
 
-.md-typeset .md-button--primary:hover {
-  background-color: var(--md-primary-fg-color--dark);
-  border-color: var(--md-primary-fg-color--dark);
-}
-
-/* Card grid improvements */
-.md-typeset .grid.cards > ul > li {
-  border: 1px solid var(--md-default-fg-color--lightest);
-  border-radius: 8px;
-  transition: transform 0.2s, box-shadow 0.2s;
-}
-
-.md-typeset .grid.cards > ul > li:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-}
-
-/* Code blocks */
-.md-typeset pre > code {
+/* Primary button: Deep orange gradient with glow */
+[data-md-color-scheme="default"] .md-typeset .md-button--primary {
+  background: linear-gradient(135deg, #E65100 0%, #FF6D00 100%);
+  border: none;
+  color: #FFFFFF;
+  font-weight: 700;
+  padding: 0.7em 1.8em;
   border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(230, 81, 0, 0.25);
+  transition: all 0.3s ease;
+  text-transform: none;
+  letter-spacing: 0.02em;
 }
 
-/* Admonition customizations */
-.md-typeset .admonition.tip,
-.md-typeset details.tip {
-  border-color: var(--md-accent-fg-color);
+[data-md-color-scheme="default"] .md-typeset .md-button--primary:hover,
+[data-md-color-scheme="default"] .md-typeset .md-button--primary:focus {
+  background: linear-gradient(135deg, #BF360C 0%, #E65100 100%);
+  box-shadow: 0 4px 20px rgba(230, 81, 0, 0.5), 0 0 30px rgba(255, 109, 0, 0.2);
+  transform: translateY(-1px);
 }
 
-.md-typeset .tip > .admonition-title,
-.md-typeset .tip > summary {
-  background-color: rgba(255, 193, 7, 0.1);
+[data-md-color-scheme="default"] .md-typeset .md-button--primary:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 6px rgba(230, 81, 0, 0.3);
 }
 
-/* Tables */
-.md-typeset table:not([class]) th {
-  background-color: var(--md-primary-fg-color);
-  color: white;
+/* Secondary button: Black outline, orange hover */
+[data-md-color-scheme="default"] .md-typeset .md-button:not(.md-button--primary) {
+  border: 2px solid #1A1A1A;
+  color: #1A1A1A;
+  font-weight: 600;
+  padding: 0.65em 1.8em;
+  border-radius: 6px;
+  background: transparent;
+  transition: all 0.3s ease;
 }
 
-/* Status badges */
+[data-md-color-scheme="default"] .md-typeset .md-button:not(.md-button--primary):hover,
+[data-md-color-scheme="default"] .md-typeset .md-button:not(.md-button--primary):focus {
+  border-color: #E65100;
+  color: #E65100;
+  background: rgba(230, 81, 0, 0.06);
+  box-shadow: 0 2px 12px rgba(230, 81, 0, 0.15);
+}
+
+/* ==========================================================================
+   4. CARDS - Grid Cards
+   ========================================================================== */
+
+[data-md-color-scheme="default"] .md-typeset .grid.cards > ul > li {
+  background: #FFFFFF;
+  border: 1px solid #E0E0E0;
+  border-left: 3px solid #E65100;
+  border-radius: 8px;
+  padding: 1rem 1.2rem;
+  transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+}
+
+[data-md-color-scheme="default"] .md-typeset .grid.cards > ul > li:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(230, 81, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.06);
+  border-left-color: #FF6D00;
+}
+
+/* Card headings */
+[data-md-color-scheme="default"] .md-typeset .grid.cards > ul > li h2,
+[data-md-color-scheme="default"] .md-typeset .grid.cards > ul > li h3 {
+  color: #1A1A1A;
+}
+
+/* ==========================================================================
+   5. CODE BLOCKS
+   ========================================================================== */
+
+/* Fenced code blocks */
+[data-md-color-scheme="default"] .md-typeset pre > code {
+  background-color: #1B1B1B;
+  color: #E0E0E0;
+  border-radius: 8px;
+  border-left: 3px solid #E65100;
+  font-size: 0.85em;
+}
+
+[data-md-color-scheme="default"] .md-typeset pre {
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+/* Code copy button */
+[data-md-color-scheme="default"] .md-typeset .md-clipboard {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+[data-md-color-scheme="default"] .md-typeset .md-clipboard:hover {
+  color: #FF9100;
+}
+
+/* Inline code */
+[data-md-color-scheme="default"] .md-typeset code {
+  background-color: rgba(230, 81, 0, 0.08);
+  color: #BF360C;
+  border-radius: 4px;
+  padding: 0.1em 0.35em;
+  font-size: 0.88em;
+  border: 1px solid rgba(230, 81, 0, 0.12);
+}
+
+/* Reset inline style inside code blocks */
+[data-md-color-scheme="default"] .md-typeset pre > code,
+[data-md-color-scheme="default"] .md-typeset pre code {
+  background-color: #1B1B1B;
+  color: #E0E0E0;
+  border: none;
+  padding: 0;
+  font-size: inherit;
+}
+
+/* Line numbers */
+[data-md-color-scheme="default"] .md-typeset .linenums code {
+  background: transparent;
+}
+
+/* ==========================================================================
+   6. TABLES
+   ========================================================================== */
+
+[data-md-color-scheme="default"] .md-typeset table:not([class]) {
+  border-collapse: collapse;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+}
+
+[data-md-color-scheme="default"] .md-typeset table:not([class]) th {
+  background-color: #1A1A1A;
+  color: #FF9100;
+  font-weight: 700;
+  padding: 0.8rem 1rem;
+  text-align: left;
+  border-bottom: 2px solid #E65100;
+}
+
+[data-md-color-scheme="default"] .md-typeset table:not([class]) td {
+  padding: 0.7rem 1rem;
+  border-bottom: 1px solid #E0E0E0;
+}
+
+[data-md-color-scheme="default"] .md-typeset table:not([class]) tr:nth-child(even) {
+  background-color: #F5F5F5;
+}
+
+[data-md-color-scheme="default"] .md-typeset table:not([class]) tr:nth-child(odd) {
+  background-color: #FFFFFF;
+}
+
+[data-md-color-scheme="default"] .md-typeset table:not([class]) tr:hover {
+  background-color: rgba(230, 81, 0, 0.04);
+}
+
+/* First column emphasis */
+[data-md-color-scheme="default"] .md-typeset table:not([class]) td:first-child {
+  font-weight: 500;
+}
+
+/* Benchmark table */
+[data-md-color-scheme="default"] .md-typeset table.benchmark th,
+[data-md-color-scheme="default"] .md-typeset table.benchmark td {
+  text-align: center;
+}
+
+[data-md-color-scheme="default"] .md-typeset table.benchmark td:first-child {
+  text-align: left;
+  font-weight: 600;
+}
+
+/* ==========================================================================
+   7. ADMONITIONS
+   ========================================================================== */
+
+/* General admonition styling */
+[data-md-color-scheme="default"] .md-typeset .admonition,
+[data-md-color-scheme="default"] .md-typeset details {
+  border-radius: 8px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+  border-left-width: 4px;
+  overflow: hidden;
+}
+
+/* Note */
+[data-md-color-scheme="default"] .md-typeset .admonition.note,
+[data-md-color-scheme="default"] .md-typeset details.note {
+  border-color: #424242;
+}
+
+[data-md-color-scheme="default"] .md-typeset .note > .admonition-title,
+[data-md-color-scheme="default"] .md-typeset .note > summary {
+  background-color: rgba(66, 66, 66, 0.08);
+}
+
+/* Tip - Orange themed */
+[data-md-color-scheme="default"] .md-typeset .admonition.tip,
+[data-md-color-scheme="default"] .md-typeset details.tip {
+  border-color: #E65100;
+}
+
+[data-md-color-scheme="default"] .md-typeset .tip > .admonition-title,
+[data-md-color-scheme="default"] .md-typeset .tip > summary {
+  background-color: rgba(230, 81, 0, 0.08);
+  color: #BF360C;
+}
+
+[data-md-color-scheme="default"] .md-typeset .tip > .admonition-title::before,
+[data-md-color-scheme="default"] .md-typeset .tip > summary::before {
+  background-color: #E65100;
+}
+
+/* Warning */
+[data-md-color-scheme="default"] .md-typeset .admonition.warning,
+[data-md-color-scheme="default"] .md-typeset details.warning {
+  border-color: #FF9100;
+}
+
+[data-md-color-scheme="default"] .md-typeset .warning > .admonition-title,
+[data-md-color-scheme="default"] .md-typeset .warning > summary {
+  background-color: rgba(255, 145, 0, 0.08);
+}
+
+/* Danger */
+[data-md-color-scheme="default"] .md-typeset .admonition.danger,
+[data-md-color-scheme="default"] .md-typeset details.danger {
+  border-color: #D32F2F;
+}
+
+[data-md-color-scheme="default"] .md-typeset .danger > .admonition-title,
+[data-md-color-scheme="default"] .md-typeset .danger > summary {
+  background-color: rgba(211, 47, 47, 0.08);
+}
+
+/* Info */
+[data-md-color-scheme="default"] .md-typeset .admonition.info,
+[data-md-color-scheme="default"] .md-typeset details.info {
+  border-color: #E65100;
+}
+
+[data-md-color-scheme="default"] .md-typeset .info > .admonition-title,
+[data-md-color-scheme="default"] .md-typeset .info > summary {
+  background-color: rgba(230, 81, 0, 0.06);
+}
+
+/* Example */
+[data-md-color-scheme="default"] .md-typeset .admonition.example,
+[data-md-color-scheme="default"] .md-typeset details.example {
+  border-color: #FF6D00;
+}
+
+[data-md-color-scheme="default"] .md-typeset .example > .admonition-title,
+[data-md-color-scheme="default"] .md-typeset .example > summary {
+  background-color: rgba(255, 109, 0, 0.06);
+}
+
+/* ==========================================================================
+   8. SEARCH
+   ========================================================================== */
+
+[data-md-color-scheme="default"] .md-search-result mark {
+  background-color: rgba(255, 145, 0, 0.4);
+  color: #1A1A1A;
+}
+
+[data-md-color-scheme="default"] .md-search-result__link:hover {
+  background-color: rgba(230, 81, 0, 0.06);
+}
+
+/* ==========================================================================
+   9. CONTENT TABS
+   ========================================================================== */
+
+[data-md-color-scheme="default"] .md-typeset .tabbed-labels > label {
+  font-weight: 500;
+  color: #424242;
+  transition: color 0.3s ease;
+}
+
+[data-md-color-scheme="default"] .md-typeset .tabbed-labels > label:hover {
+  color: #E65100;
+}
+
+[data-md-color-scheme="default"] .md-typeset .tabbed-labels > label--active,
+[data-md-color-scheme="default"] .md-typeset .tabbed-set > input:checked + label {
+  color: #E65100;
+  border-color: #E65100;
+}
+
+/* ==========================================================================
+   10. TASK LIST CHECKBOXES
+   ========================================================================== */
+
+[data-md-color-scheme="default"] .md-typeset .task-list-indicator::before {
+  background-color: #E65100;
+}
+
+[data-md-color-scheme="default"] .md-typeset [type="checkbox"]:checked + .task-list-indicator::before {
+  background-color: #E65100;
+}
+
+/* ==========================================================================
+   11. STATUS BADGES
+   ========================================================================== */
+
 .green {
   color: #4caf50 !important;
 }
@@ -72,98 +524,306 @@
   color: #f44336 !important;
 }
 
-/* Feature comparison table */
-.md-typeset table:not([class]) td:first-child {
-  font-weight: 500;
-}
-
-/* Navigation tab styling */
-.md-tabs__link--active {
+.primary {
+  color: #E65100 !important;
   font-weight: 600;
 }
 
-/* Footer customization */
-.md-footer-meta {
-  background-color: var(--md-primary-fg-color--dark);
+/* ==========================================================================
+   12. SCROLLBAR - Thin, orange thumb on dark track
+   ========================================================================== */
+
+[data-md-color-scheme="default"] ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
 }
 
-/* Announcement bar */
-.md-banner {
-  background-color: var(--md-accent-fg-color);
-  color: black;
+[data-md-color-scheme="default"] ::-webkit-scrollbar-track {
+  background: #F5F5F5;
 }
 
-/* Search highlights */
-.md-search-result mark {
-  background-color: rgba(255, 193, 7, 0.4);
+[data-md-color-scheme="default"] ::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #E65100, #FF6D00);
+  border-radius: 4px;
 }
 
-/* TOC active item */
-.md-nav__link--active {
-  color: var(--md-primary-fg-color) !important;
+[data-md-color-scheme="default"] ::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #BF360C, #E65100);
+}
+
+/* Firefox scrollbar */
+[data-md-color-scheme="default"] * {
+  scrollbar-width: thin;
+  scrollbar-color: #E65100 #F5F5F5;
+}
+
+/* ==========================================================================
+   13. LINKS
+   ========================================================================== */
+
+[data-md-color-scheme="default"] .md-typeset a {
+  color: #E65100;
+  transition: color 0.3s ease;
+}
+
+[data-md-color-scheme="default"] .md-typeset a:hover {
+  color: #BF360C;
+}
+
+/* Navigation links within content */
+[data-md-color-scheme="default"] .md-content a:not(.md-button) {
+  border-bottom: 1px solid rgba(230, 81, 0, 0.2);
+  transition: border-color 0.3s ease, color 0.3s ease;
+}
+
+[data-md-color-scheme="default"] .md-content a:not(.md-button):hover {
+  border-bottom-color: #E65100;
+}
+
+/* ==========================================================================
+   14. VERSION SELECTOR
+   ========================================================================== */
+
+[data-md-color-scheme="default"] .md-version__current {
   font-weight: 500;
+  color: #FFFFFF;
 }
 
-/* Version selector */
-.md-version__current {
-  font-weight: 500;
+/* ==========================================================================
+   15. TYPOGRAPHY & GENERAL
+   ========================================================================== */
+
+/* Headings */
+[data-md-color-scheme="default"] .md-typeset h1 {
+  color: #1A1A1A;
+  font-weight: 800;
+  letter-spacing: -0.02em;
 }
 
-/* Responsive adjustments */
+[data-md-color-scheme="default"] .md-typeset h2 {
+  color: #1A1A1A;
+  font-weight: 700;
+  border-bottom: 2px solid rgba(230, 81, 0, 0.15);
+  padding-bottom: 0.3em;
+}
+
+[data-md-color-scheme="default"] .md-typeset h3 {
+  color: #2D2D2D;
+  font-weight: 600;
+}
+
+/* Horizontal rule */
+[data-md-color-scheme="default"] .md-typeset hr {
+  border-color: rgba(230, 81, 0, 0.15);
+}
+
+/* Blockquotes */
+[data-md-color-scheme="default"] .md-typeset blockquote {
+  border-left: 4px solid #E65100;
+  background: rgba(230, 81, 0, 0.04);
+  padding: 0.8rem 1.2rem;
+  border-radius: 0 8px 8px 0;
+  color: #424242;
+}
+
+/* Keyboard keys */
+[data-md-color-scheme="default"] .md-typeset kbd {
+  background: #FFFFFF;
+  border: 1px solid #E0E0E0;
+  box-shadow: 0 2px 0 #BDBDBD;
+  color: #1A1A1A;
+}
+
+/* ==========================================================================
+   16. MERMAID DIAGRAMS
+   ========================================================================== */
+
+.mermaid {
+  text-align: center;
+  margin: 1rem 0;
+}
+
+/* ==========================================================================
+   17. BACK-TO-TOP BUTTON
+   ========================================================================== */
+
+[data-md-color-scheme="default"] .md-top {
+  background-color: #1A1A1A;
+  color: #FFFFFF;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  transition: background-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+[data-md-color-scheme="default"] .md-top:hover {
+  background-color: #E65100;
+  box-shadow: 0 4px 16px rgba(230, 81, 0, 0.3);
+}
+
+/* ==========================================================================
+   18. SOURCE/REPO ICON
+   ========================================================================== */
+
+[data-md-color-scheme="default"] .md-source {
+  color: #FFFFFF;
+}
+
+[data-md-color-scheme="default"] .md-source:hover {
+  opacity: 0.8;
+}
+
+/* ==========================================================================
+   19. RESPONSIVE ADJUSTMENTS
+   ========================================================================== */
+
 @media screen and (max-width: 76.1875em) {
   .md-typeset .grid.cards > ul {
     gap: 0.5rem;
   }
+
+  [data-md-color-scheme="default"] .md-nav__link--active {
+    color: #E65100 !important;
+  }
 }
 
-/* Print styles */
+@media screen and (max-width: 60em) {
+  [data-md-color-scheme="default"] .md-typeset .md-button--primary,
+  [data-md-color-scheme="default"] .md-typeset .md-button:not(.md-button--primary) {
+    width: 100%;
+    text-align: center;
+  }
+}
+
+/* ==========================================================================
+   20. PRINT STYLES
+   ========================================================================== */
+
 @media print {
   .md-header,
   .md-footer,
-  .md-sidebar {
-    display: none;
+  .md-sidebar,
+  .md-tabs,
+  .md-top {
+    display: none !important;
   }
 
   .md-main__inner {
     margin: 0;
     padding: 0;
   }
+
+  .md-content {
+    max-width: 100%;
+  }
+
+  .md-typeset a {
+    color: #1A1A1A !important;
+    text-decoration: underline;
+  }
+
+  .md-typeset pre > code {
+    background: #F5F5F5 !important;
+    color: #1A1A1A !important;
+    border: 1px solid #E0E0E0 !important;
+  }
 }
 
-/* Inline code styling */
-.md-typeset code {
-  background-color: rgba(126, 87, 194, 0.1);
+/* ==========================================================================
+   21. ANIMATIONS & TRANSITIONS (Global)
+   ========================================================================== */
+
+[data-md-color-scheme="default"] .md-nav__link,
+[data-md-color-scheme="default"] .md-typeset a,
+[data-md-color-scheme="default"] .md-tabs__link,
+[data-md-color-scheme="default"] .md-footer a,
+[data-md-color-scheme="default"] .md-header__button,
+[data-md-color-scheme="default"] .md-typeset .md-button,
+[data-md-color-scheme="default"] .md-typeset .grid.cards > ul > li {
+  transition: all 0.3s ease;
+}
+
+/* Subtle fade-in for main content */
+[data-md-color-scheme="default"] .md-content__inner {
+  animation: celloFadeIn 0.4s ease-out;
+}
+
+@keyframes celloFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ==========================================================================
+   22. SELECTION HIGHLIGHT
+   ========================================================================== */
+
+[data-md-color-scheme="default"] ::selection {
+  background-color: rgba(230, 81, 0, 0.2);
+  color: #1A1A1A;
+}
+
+[data-md-color-scheme="default"] ::-moz-selection {
+  background-color: rgba(230, 81, 0, 0.2);
+  color: #1A1A1A;
+}
+
+/* ==========================================================================
+   23. CONTENT TOOLTIPS
+   ========================================================================== */
+
+[data-md-color-scheme="default"] .md-tooltip {
+  background-color: #1A1A1A;
+  color: #FFFFFF;
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+/* ==========================================================================
+   24. TAG STYLING
+   ========================================================================== */
+
+[data-md-color-scheme="default"] .md-tag {
+  background-color: rgba(230, 81, 0, 0.1);
+  color: #E65100;
   border-radius: 4px;
-  padding: 0.1em 0.3em;
-}
-
-/* Task list checkboxes */
-.md-typeset .task-list-indicator::before {
-  background-color: var(--md-primary-fg-color);
-}
-
-/* Content tabs */
-.md-typeset .tabbed-labels > label {
   font-weight: 500;
+  transition: background-color 0.3s ease;
 }
 
-.md-typeset .tabbed-labels > label:hover {
-  color: var(--md-primary-fg-color);
+[data-md-color-scheme="default"] .md-tag:hover {
+  background-color: rgba(230, 81, 0, 0.2);
 }
 
-/* Mermaid diagrams */
-.mermaid {
-  text-align: center;
-  margin: 1rem 0;
+/* ==========================================================================
+   25. SOCIAL LINKS (Footer)
+   ========================================================================== */
+
+[data-md-color-scheme="default"] .md-social__link {
+  color: rgba(255, 255, 255, 0.6);
+  transition: color 0.3s ease, transform 0.3s ease;
 }
 
-/* Benchmark table styling */
-.md-typeset table.benchmark th,
-.md-typeset table.benchmark td {
-  text-align: center;
+[data-md-color-scheme="default"] .md-social__link:hover {
+  color: #FF9100;
+  transform: scale(1.15);
 }
 
-.md-typeset table.benchmark td:first-child {
-  text-align: left;
-  font-weight: 600;
+/* ==========================================================================
+   26. FEEDBACK WIDGET
+   ========================================================================== */
+
+[data-md-color-scheme="default"] .md-feedback__icon:hover {
+  color: #E65100;
+}
+
+/* ==========================================================================
+   27. PROGRESS BAR (Instant Loading)
+   ========================================================================== */
+
+[data-md-color-scheme="default"] .md-progress {
+  background-color: #FF6D00;
 }
