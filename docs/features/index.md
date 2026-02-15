@@ -51,6 +51,14 @@ Cello provides a comprehensive set of features for building modern web applicati
 
     [:octicons-arrow-right-24: Advanced](advanced/dependency-injection.md)
 
+-   :material-protocol:{ .lg .middle } **API Protocols**
+
+    ---
+
+    GraphQL, gRPC, Kafka, RabbitMQ, SQS -- multi-protocol API and messaging support
+
+    [:octicons-arrow-right-24: API Protocols](enterprise/integration/graphql.md)
+
 </div>
 
 ---
@@ -123,6 +131,25 @@ Cello provides a comprehensive set of features for building modern web applicati
 | **HTTP/3 (QUIC)** | Next-gen protocol | v0.4.0 |
 | **Lifecycle Hooks** | Startup/shutdown events | v0.4.0 |
 | **Exception Handling** | RFC 7807 Problem Details | v0.5.0 |
+
+### Data Layer (v0.8.0)
+
+| Feature | Description | Version |
+|---------|-------------|---------|
+| **Database Pooling** | Async connection pool with health monitoring | v0.8.0 |
+| **Redis Integration** | Async Redis client with pool, Pub/Sub, cluster | v0.8.0 |
+| **Transactions** | Automatic transaction management with decorators | v0.8.0 |
+
+### API Protocols (v0.9.0)
+
+| Feature | Description | Version |
+|---------|-------------|---------|
+| **GraphQL** | Query, Mutation, Subscription with Schema builder | v0.9.0 |
+| **DataLoader** | N+1 prevention with batching and caching | v0.9.0 |
+| **gRPC** | Service-based gRPC with streaming support | v0.9.0 |
+| **Kafka** | Consumer/producer decorators with message routing | v0.9.0 |
+| **RabbitMQ** | AMQP messaging with topic exchanges | v0.9.0 |
+| **SQS/SNS** | AWS message queue integration | v0.9.0 |
 
 ---
 

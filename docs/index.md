@@ -68,6 +68,15 @@ hide:
 
     [:octicons-arrow-right-24: Quick start](getting-started/quickstart.md)
 
+-   :material-protocol:{ .lg .middle } **API Protocols**
+
+    ---
+
+    Native **GraphQL** with subscriptions, **gRPC** with streaming, and message
+    queues (**Kafka**, **RabbitMQ**, **SQS**) -- all Rust-powered.
+
+    [:octicons-arrow-right-24: API Protocols](enterprise/integration/graphql.md)
+
 </div>
 
 ---
@@ -104,6 +113,40 @@ hide:
     ```bash
     python app.py
     # Cello running at http://127.0.0.1:8000
+    ```
+
+=== "API Protocols"
+
+    ```python
+    from cello import App
+    from cello.graphql import GraphQLSchema, query, mutation
+    from cello.grpc import grpc_service, grpc_method
+
+    app = App()
+
+    # GraphQL endpoint
+    @query
+    def get_user(id: str) -> dict:
+        return {"id": id, "name": "Alice"}
+
+    @mutation
+    def create_user(name: str) -> dict:
+        return {"id": "new-id", "name": name}
+
+    schema = GraphQLSchema(queries=[get_user], mutations=[create_user])
+    app.mount_graphql("/graphql", schema)
+
+    # gRPC service
+    @grpc_service("UserService")
+    class UserService:
+        @grpc_method
+        def GetUser(self, request):
+            return {"id": request.id, "name": "Alice"}
+
+    app.mount_grpc(UserService)
+
+    if __name__ == "__main__":
+        app.run()
     ```
 
 ---
@@ -162,13 +205,22 @@ hide:
     - :material-shield-lock: **TLS/SSL** - Native HTTPS (rustls)
     - :material-lightning-bolt: **HTTP/2 & HTTP/3** - Modern protocols
 
+=== "Data & Protocols"
+
+    - :material-database: **Database Pooling** - Async connection pool with health monitoring (v0.8.0)
+    - :material-memory: **Redis Integration** - Async Redis client with Pub/Sub and cluster (v0.8.0)
+    - :material-swap-horizontal: **Transactions** - Automatic transaction management (v0.8.0)
+    - :material-graphql: **GraphQL** - Query, Mutation, Subscription with schema builder (v0.9.0)
+    - :material-server: **gRPC** - Service-based gRPC with streaming support (v0.9.0)
+    - :material-email-fast: **Message Queues** - Kafka, RabbitMQ, SQS integration (v0.9.0)
+
 </div>
 
 ---
 
 ## :bar_chart: Benchmarks {#benchmarks}
 
-Cello is designed to be the **fastest Python web framework**:
+Cello v0.9.0 is designed to be the **fastest Python web framework**:
 
 | Framework | Requests/sec | Latency p50 | Latency p99 |
 |-----------|-------------|-------------|-------------|
@@ -224,6 +276,15 @@ Cello is designed to be the **fastest Python web framework**:
     - HTTP/3 (quinn/QUIC)
     - WebSocket (tungstenite)
 
+-   :material-protocol:{ .lg } **API & Messaging**
+
+    ---
+
+    - GraphQL (async-graphql)
+    - gRPC (tonic)
+    - Kafka (rdkafka)
+    - RabbitMQ (lapin)
+
 </div>
 
 ---
@@ -249,7 +310,7 @@ Used in production by teams building:
 | [:material-school: Learn](learn/index.md) | Tutorials, guides, patterns |
 | [:material-book-open-page-variant: Reference](reference/index.md) | API reference, configuration |
 | [:material-code-tags: Examples](examples/index.md) | Code examples and use cases |
-| [:material-office-building: Enterprise](enterprise/index.md) | Enterprise features and deployment |
+| [:material-office-building: Enterprise](enterprise/index.md) | Enterprise features, API protocols (GraphQL, gRPC), and deployment |
 | [:material-tag: Release Notes](releases/index.md) | Version history and changelog |
 
 ---

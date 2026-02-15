@@ -19,8 +19,8 @@ theme:
   language: en
 
   # Logo and favicon
-  logo: assets/logo.svg
-  favicon: assets/favicon.png
+  logo: logo.jpg
+  favicon: logo.jpg
 
   # Color palette
   palette:

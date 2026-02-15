@@ -18,7 +18,7 @@ gantt
     section Data Layer
     Database & Redis Integration     :2026-Q2, 90d
     section Protocols
-    GraphQL & gRPC Support           :2026-Q3, 90d
+    GraphQL & gRPC Support           :2026-Q1, 90d
     section Patterns
     Event Sourcing & CQRS            :2026-Q4, 90d
     section Production
@@ -120,21 +120,21 @@ await redis.set("key", "value", ttl=300)
 
 ---
 
-## v0.9.0 - API Protocols (Q3 2026)
+## v0.9.0 - API Protocols (Q1 2026) :material-check-circle:{ .green }
 
 ### GraphQL Support
 
 Schema-first and code-first approaches.
 
 ```python
-from cello.graphql import GraphQL
+from cello.graphql import Query, Schema, DataLoader
 
 @Query
 def users(info) -> list[User]:
     return db.get_users()
 
-graphql = GraphQL(schema)
-app.mount("/graphql", graphql)
+schema = Schema().query(users).build()
+app.mount("/graphql", schema)
 ```
 
 **Features:**
@@ -148,11 +148,12 @@ app.mount("/graphql", graphql)
 High-performance RPC with protobuf.
 
 ```python
-from cello.grpc import GrpcService
+from cello.grpc import GrpcService, grpc_method, GrpcResponse
 
 class UserService(GrpcService):
+    @grpc_method
     async def GetUser(self, request):
-        return UserResponse(id=request.id)
+        return GrpcResponse.ok({"id": request.id, "name": "Alice"})
 
 app.add_grpc_service(UserService())
 ```
@@ -168,11 +169,13 @@ app.add_grpc_service(UserService())
 Event-driven architecture support.
 
 ```python
-from cello.messaging import kafka_consumer
+from cello.messaging import kafka_consumer, Message, MessageResult
 
-@kafka_consumer(topic="orders")
-async def process_order(message):
-    await process(message)
+@kafka_consumer(topic="orders", group="processors")
+async def process_order(message: Message):
+    data = message.json()
+    await process(data)
+    return MessageResult.ACK
 ```
 
 **Supported:**
@@ -295,10 +298,10 @@ We prioritize features based on:
 Help us build these features! See our [Contributing Guide](../community/contributing.md).
 
 Priority areas:
-- OpenTelemetry integration
-- Database adapters
-- GraphQL implementation
-- Documentation
+- Event Sourcing
+- CQRS
+- Saga Pattern
+- OAuth2
 
 ---
 

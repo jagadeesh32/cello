@@ -12,13 +12,89 @@ This guide helps you migrate between major versions of Cello.
 
 Version 0.9.0 adds API protocol features:
 
-- GraphQL support with Playground UI
-- gRPC support with bidirectional streaming
-- Message queue adapters (Kafka, RabbitMQ)
+- GraphQL support with Query, Mutation, Subscription decorators and DataLoader
+- gRPC support with GrpcService base class, @grpc_method decorator, and bidirectional streaming
+- Message queue adapters for Kafka, RabbitMQ, and AWS SQS
 
 ### Breaking Changes
 
-No breaking changes in 0.9.0. All existing code continues to work.
+No breaking changes from v0.8.0. All existing code continues to work.
+
+### New Imports
+
+```python
+from cello import GrpcConfig, KafkaConfig, RabbitMQConfig, SqsConfig
+```
+
+### New Python Modules
+
+```python
+from cello.graphql import Query, Mutation, Subscription, Schema, DataLoader
+from cello.grpc import GrpcService, grpc_method, GrpcResponse, GrpcServer, GrpcChannel, GrpcError
+from cello.messaging import kafka_consumer, kafka_producer, Message, MessageResult, Producer, Consumer
+```
+
+### New App Methods
+
+```python
+app = App()
+
+# gRPC
+app.enable_grpc()
+app.add_grpc_service(UserService())
+
+# Messaging
+app.enable_messaging()       # Kafka (default)
+app.enable_rabbitmq()        # RabbitMQ
+app.enable_sqs()             # AWS SQS
+```
+
+### External Dependencies
+
+| Feature    | External Dependency Required         |
+|------------|--------------------------------------|
+| GraphQL    | None                                 |
+| gRPC       | None                                 |
+| Kafka      | Kafka broker needed                  |
+| RabbitMQ   | RabbitMQ server needed               |
+| SQS        | AWS account or LocalStack            |
+
+### New APIs (v0.9.0)
+
+```python
+from cello import App, KafkaConfig
+from cello.graphql import Query, Schema, DataLoader
+from cello.grpc import GrpcService, grpc_method, GrpcResponse
+from cello.messaging import kafka_consumer, Message, MessageResult
+
+app = App()
+
+# GraphQL
+@Query
+def users(info) -> list[dict]:
+    return [{"id": 1, "name": "Alice"}]
+
+schema = Schema().query(users).build()
+app.mount("/graphql", schema)
+
+# gRPC
+class UserService(GrpcService):
+    @grpc_method
+    async def GetUser(self, request):
+        return GrpcResponse.ok({"id": request.id, "name": "Alice"})
+
+app.enable_grpc()
+app.add_grpc_service(UserService())
+
+# Kafka consumer
+@kafka_consumer(topic="orders", group="processors")
+async def process_order(message: Message):
+    data = message.json()
+    await handle_order(data)
+    return MessageResult.ACK
+
+app.enable_messaging()
+```
 
 ---
 

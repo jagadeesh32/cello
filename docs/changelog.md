@@ -2,14 +2,30 @@
 
 All notable changes to Cello are documented in this file.
 
-## [0.9.0] - 2026-02-15
+## [0.9.0] - February 2026
 
 ### Added
+- GraphQL support with Query, Mutation, Subscription decorators
+- DataLoader for N+1 query prevention with batching and caching
+- Schema builder with fluent API for composing GraphQL schemas
+- gRPC support with GrpcService base class and @grpc_method decorator
+- GrpcServer and GrpcChannel for server/client communication
+- GrpcConfig with reflection, gRPC-Web, and keepalive support
+- Kafka integration with @kafka_consumer and @kafka_producer decorators
+- RabbitMQ integration with RabbitMQConfig
+- AWS SQS integration with SqsConfig and LocalStack support
+- Message class with text, json, ack, nack methods
+- MessageResult constants (ACK, NACK, REJECT, REQUEUE, DEAD_LETTER)
+- Producer and Consumer classes for manual message control
+- GrpcError with all standard gRPC status codes
 
-#### Features
-- **GraphQL Support**: Schema-first and code-first GraphQL with Playground UI
-- **gRPC Support**: Protocol buffer integration with bidirectional streaming
-- **Message Queue Adapters**: Kafka, RabbitMQ integration with consumer/producer patterns
+### Fixed
+- Database connection pool not releasing connections on handler timeout
+- Redis hgetall returning empty dict for non-existent keys
+- @transactional decorator not propagating exceptions in nested async calls
+- Health check endpoint returning 200 when database is down
+- Memory leak in long-running WebSocket connections
+- Improved error message when maturin develop is not run before import
 
 ---
 
