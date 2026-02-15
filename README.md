@@ -19,7 +19,7 @@
   <a href="#-quick-start">Quick Start</a> •
   <a href="#-features">Features</a> •
   <a href="#-examples">Examples</a> •
-  <a href="https://jagadeesh32.github.io/cello/">Documentation</a>
+  <a href="https://cello-framework.vercel.app/">Documentation</a>
 </p>
 
 ---
@@ -441,13 +441,13 @@ cargo fmt
 
 ## 📚 Documentation
 
-Full documentation available at: **[jagadeesh32.github.io/cello](https://jagadeesh32.github.io/cello/)**
+Full documentation available at: **[cello-framework.vercel.app](https://cello-framework.vercel.app/)**
 
-- 📖 [Getting Started](https://jagadeesh32.github.io/cello/getting-started/)
-- ✨ [Features](https://jagadeesh32.github.io/cello/features/)
-- 📘 [API Reference](https://jagadeesh32.github.io/cello/reference/)
-- 🏢 [Enterprise Guide](https://jagadeesh32.github.io/cello/enterprise/)
-- 📝 [Examples](https://jagadeesh32.github.io/cello/examples/)
+- 📖 [Getting Started](https://cello-framework.vercel.app/getting-started/)
+- ✨ [Features](https://cello-framework.vercel.app/features/)
+- 📘 [API Reference](https://cello-framework.vercel.app/reference/)
+- 🏢 [Enterprise Guide](https://cello-framework.vercel.app/enterprise/)
+- 📝 [Examples](https://cello-framework.vercel.app/examples/)
 
 ---
 
