@@ -482,6 +482,7 @@ impl Server {
             pyo3::exceptions::PyRuntimeError::new_err(format!("Failed to create socket: {e}"))
         })?;
 
+        #[cfg(unix)]
         socket.set_reuse_port(true).map_err(|e| {
             pyo3::exceptions::PyRuntimeError::new_err(format!("Failed to set SO_REUSEPORT: {e}"))
         })?;
@@ -518,20 +519,18 @@ impl Server {
         let mut shutdown_rx = shutdown.subscribe();
 
         // Listen for SIGTERM (systemd, process manager, multi-worker shutdown)
-        let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
-            .map_err(|e| {
-                pyo3::exceptions::PyRuntimeError::new_err(format!(
-                    "Failed to install SIGTERM handler: {e}"
-                ))
-            })?;
+        let shutdown_sigterm = shutdown.clone();
+        tokio::task::spawn(async move {
+            #[cfg(unix)]
+            if let Ok(mut sig) = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
+                let _ = sig.recv().await;
+                shutdown_sigterm.shutdown();
+            }
+        });
 
         loop {
             tokio::select! {
                 _ = tokio::signal::ctrl_c() => {
-                    shutdown.shutdown();
-                    break;
-                }
-                _ = sigterm.recv() => {
                     shutdown.shutdown();
                     break;
                 }
@@ -616,12 +615,13 @@ impl Server {
                                 });
 
                                 // PERF: Enable keep-alive and pipelining for better throughput
-                                if let Err(err) = http1::Builder::new()
+                                let serve_res: Result<(), hyper::Error> = http1::Builder::new()
                                     .keep_alive(true)
                                     .pipeline_flush(true)
                                     .serve_connection(io, service)
-                                    .await
-                                {
+                                    .await;
+                                
+                                if let Err(err) = serve_res {
                                     // Only log if not a normal connection close
                                     if !err.is_incomplete_message() {
                                         eprintln!("Connection error: {err:?}");

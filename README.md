@@ -40,6 +40,23 @@ Cello is an **enterprise-grade Python web framework** that combines Python's dev
 
 ---
 
+## ⚡ Performance
+
+Cello is the **fastest Python web framework** — benchmarked with `wrk` on the same machine, same worker count, same settings.
+
+### Benchmark Results (4 workers, 5 processes each, wrk -t12 -c400 -d10s)
+
+| Framework | Server | Req/sec | Avg Latency | p99 Latency | Relative |
+|-----------|--------|---------|-------------|-------------|----------|
+| **Cello** | **Built-in (Rust/Tokio)** | **170,000+** | **2.76ms** | **15.34ms** | **1.0x (fastest)** |
+| BlackSheep + Granian | Granian (Rust) | ~92,000 | 4.31ms | 12.63ms | 1.9x slower |
+| FastAPI + Granian | Granian (Rust) | ~55,000 | 7.14ms | 16.86ms | 3.1x slower |
+| Robyn | Built-in (Rust) | ~29,000 | 14.21ms | 37.91ms | 5.9x slower |
+
+> **How to reproduce**: See [`benchmarks/compare/`](benchmarks/compare/) for the automated comparison runner. All frameworks use the same JSON endpoint, same process count, and same `wrk` settings for a fair comparison.
+
+---
+
 ## 📦 Installation
 
 ```bash
