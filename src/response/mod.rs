@@ -465,6 +465,21 @@ impl Response {
         }
     }
 
+    /// PERF: Create a response from pre-serialized JSON bytes (skips serde_json::to_vec).
+    #[inline]
+    pub fn from_json_bytes(body: Vec<u8>, status: u16) -> Self {
+        let mut headers = HashMap::with_capacity(1);
+        headers.insert("Content-Type".to_string(), "application/json".to_string());
+
+        Response {
+            status,
+            headers,
+            body,
+            content_type: "application/json".to_string(),
+            body_type: ResponseBody::Bytes(Vec::new()),
+        }
+    }
+
     /// Create an error response (internal use).
     #[inline]
     pub fn error(status: u16, message: &str) -> Self {

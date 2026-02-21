@@ -402,6 +402,24 @@ impl Request {
         }
     }
 
+    /// Create a lightweight clone without body bytes or lazy cache.
+    /// PERF: Used for after-middleware which only needs method, path, headers, and context.
+    /// Avoids cloning the potentially large body Vec<u8> and the Arc<RwLock> cache structures.
+    #[inline]
+    pub fn clone_without_body(&self) -> Self {
+        Request {
+            method: self.method.clone(),
+            path: self.path.clone(),
+            params: self.params.clone(),
+            query_params: self.query_params.clone(),
+            headers: self.headers.clone(),
+            body: Vec::new(),
+            content_type: self.content_type.clone(),
+            context: self.context.clone(),
+            lazy_cache: LazyCache::default(),
+        }
+    }
+
     /// Get the raw body bytes (internal use).
     #[inline]
     pub fn body_bytes(&self) -> &[u8] {

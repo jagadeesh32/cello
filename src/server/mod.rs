@@ -29,11 +29,11 @@ use std::time::{Duration, Instant};
 use tokio::net::TcpListener;
 use tokio::sync::broadcast;
 
-use crate::handler::HandlerRegistry;
+use crate::handler::{HandlerRegistry, HandlerResult};
 use crate::middleware::{MiddlewareAction, MiddlewareChain};
 use crate::request::Request;
 use crate::response::Response;
-use crate::router::{RouteMatch, Router};
+use crate::router::Router;
 use crate::websocket::WebSocketRegistry;
 
 pub use cluster::{ClusterConfig, ClusterManager};
@@ -645,32 +645,26 @@ async fn handle_request(
         headers.insert(k.as_str().to_owned(), v.to_str().unwrap_or("").to_owned());
     }
 
-    // PERF: Lazy body reading - skip body collection for methods that typically have no body
-    let body_bytes = match method.as_str() {
+    // PERF: Lazy body reading - skip body allocation for methods that typically have no body.
+    // For GET/HEAD/OPTIONS/DELETE, drain the body without allocating a Vec.
+    // The body must be consumed for hyper to release resources.
+    let body_bytes: Vec<u8> = match method.as_str() {
         "GET" | "HEAD" | "OPTIONS" | "DELETE" => {
-            // Fast path: these methods rarely have bodies
-            // Try to collect but don't block on empty bodies
+            // Fast path: drain body without allocating - these methods almost never have bodies
+            let _ = req.collect().await;
+            Vec::new()
+        }
+        _ => {
+            // POST, PUT, PATCH - expect body, use Bytes to avoid extra copy
             match req.collect().await {
                 Ok(collected) => {
                     let bytes = collected.to_bytes();
                     if bytes.is_empty() {
                         Vec::new()
                     } else {
-                        let v = bytes.to_vec();
-                        metrics.add_bytes_received(v.len() as u64);
-                        v
+                        metrics.add_bytes_received(bytes.len() as u64);
+                        bytes.to_vec()
                     }
-                }
-                Err(_) => Vec::new(),
-            }
-        }
-        _ => {
-            // POST, PUT, PATCH - expect body
-            match req.collect().await {
-                Ok(collected) => {
-                    let v = collected.to_bytes().to_vec();
-                    metrics.add_bytes_received(v.len() as u64);
-                    v
                 }
                 Err(_) => {
                     metrics.inc_errors();
@@ -683,13 +677,18 @@ async fn handle_request(
     // Match route FIRST before building Request (fail fast on 404)
     let route_match = router.match_route(&method, &path);
 
-    let params = match &route_match {
-        Some(m) => m.params.clone(),
-        None => HashMap::new(),
+    // PERF: Fast-return 404 before allocating Request object
+    let route_match = match route_match {
+        Some(m) => m,
+        None => {
+            let response = Response::not_found(&format!("Not Found: {} {}", method, path));
+            return build_hyper_response(&response, metrics);
+        }
     };
 
-    // Create request object
-    // PERF: Avoid cloning method/path - move into Request, use references above for routing
+    let params = route_match.params.clone();
+
+    // Create request object - method/path are moved in, no extra clone needed
     let mut request = Request::from_http(method, path, params, query, headers, body_bytes);
 
     // PERF: Skip middleware execution if no middleware registered
@@ -758,56 +757,70 @@ async fn handle_request(
     }
 
     // Handle route
-    let mut response = match route_match {
-        Some(RouteMatch { handler_id, .. }) => {
-            // PERF: Pass request by value - no clone needed
-            let result = handlers
-                .invoke_async(handler_id, request.clone(), dependency_container.clone())
-                .await;
+    // PERF: Instead of cloning the full request (which copies body bytes),
+    // create a lightweight copy for after-middleware by stripping the body.
+    // After-middleware only needs method, path, headers, and context.
+    let has_after_middleware = !middleware.is_empty() || !middleware.is_async_empty();
 
-            match result {
-                Ok(json_value) => {
-                    // Check if this is a serialized Response object
-                    if let Some(obj) = json_value.as_object() {
-                        if obj
-                            .get("__cello_response__")
-                            .and_then(|v| v.as_bool())
-                            .unwrap_or(false)
-                        {
-                            // Reconstruct Response from serialized format
-                            let status =
-                                obj.get("status").and_then(|v| v.as_u64()).unwrap_or(200) as u16;
-                            let body = obj.get("body").and_then(|v| v.as_str()).unwrap_or("");
+    // PERF: Create lightweight request for after-middleware (no body copy)
+    let after_request = if has_after_middleware {
+        Some(request.clone_without_body())
+    } else {
+        None
+    };
 
-                            let mut resp = Response::new(status);
-                            resp.set_body(body.as_bytes().to_vec());
+    // Pass the full request (with body) to the handler by value - no clone needed
+    let handler_id = route_match.handler_id;
+    let result = handlers
+        .invoke_async(handler_id, request, dependency_container.clone())
+        .await;
 
-                            // Copy headers
-                            if let Some(headers) = obj.get("headers").and_then(|v| v.as_object()) {
-                                for (key, value) in headers {
-                                    if let Some(v) = value.as_str() {
-                                        resp.set_header(key, v);
-                                    }
+    // Restore request for after-middleware (the original was moved into the handler)
+    let request = after_request.unwrap_or_default();
+
+    let mut response = match result {
+        Ok(handler_result) => match handler_result {
+            // PERF: Fast path - pre-serialized JSON bytes, no serde_json::Value involved
+            HandlerResult::JsonBytes(bytes) => {
+                Response::from_json_bytes(bytes, 200)
+            }
+            // Slow path - Response objects that need special handling via serde_json::Value
+            HandlerResult::JsonValue(json_value) => {
+                if let Some(obj) = json_value.as_object() {
+                    if obj
+                        .get("__cello_response__")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false)
+                    {
+                        // Reconstruct Response from serialized format
+                        let status =
+                            obj.get("status").and_then(|v| v.as_u64()).unwrap_or(200) as u16;
+                        let body = obj.get("body").and_then(|v| v.as_str()).unwrap_or("");
+
+                        let mut resp = Response::new(status);
+                        resp.set_body(body.as_bytes().to_vec());
+
+                        // Copy headers
+                        if let Some(headers) = obj.get("headers").and_then(|v| v.as_object()) {
+                            for (key, value) in headers {
+                                if let Some(v) = value.as_str() {
+                                    resp.set_header(key, v);
                                 }
                             }
-
-                            resp
-                        } else {
-                            Response::from_json_value(json_value, 200)
                         }
+
+                        resp
                     } else {
                         Response::from_json_value(json_value, 200)
                     }
-                }
-                Err(err) => {
-                    metrics.inc_errors();
-                    Response::error(500, &err)
+                } else {
+                    Response::from_json_value(json_value, 200)
                 }
             }
-        }
-        None => {
-            // 404 Not Found
-            Response::not_found(&format!("Not Found: {} {}", request.method, request.path))
+        },
+        Err(err) => {
+            metrics.inc_errors();
+            Response::error(500, &err)
         }
     };
 

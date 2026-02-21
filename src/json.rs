@@ -146,6 +146,134 @@ pub fn python_to_json(py: Python<'_>, obj: &PyAny) -> Result<serde_json::Value, 
     Err(format!("Cannot convert Python object to JSON: {obj:?}"))
 }
 
+/// PERF: Convert a Python object directly to JSON bytes, skipping intermediate serde_json::Value.
+/// Returns Ok(Some(bytes)) for normal dicts/lists/primitives,
+/// Returns Ok(None) for Response objects (caller must fall back to python_to_json).
+#[inline]
+pub fn python_to_json_bytes_direct(py: Python<'_>, obj: &PyAny) -> Result<Option<Vec<u8>>, String> {
+    // Check if this is a Response object - caller needs to handle specially
+    let class_name = obj.get_type().name().unwrap_or("");
+    if class_name == "Response" {
+        return Ok(None);
+    }
+
+    let mut buf = Vec::with_capacity(128);
+    write_json_value(py, obj, &mut buf)?;
+    Ok(Some(buf))
+}
+
+/// Write a Python object as JSON directly to a byte buffer.
+fn write_json_value(py: Python<'_>, obj: &PyAny, buf: &mut Vec<u8>) -> Result<(), String> {
+    use std::io::Write;
+
+    // Handle None
+    if obj.is_none() {
+        buf.extend_from_slice(b"null");
+        return Ok(());
+    }
+
+    // Handle bool (must come before int check since bool is subclass of int in Python)
+    if let Ok(b) = obj.extract::<bool>() {
+        buf.extend_from_slice(if b { b"true" } else { b"false" });
+        return Ok(());
+    }
+
+    // Handle int
+    if let Ok(i) = obj.extract::<i64>() {
+        write!(buf, "{}", i).map_err(|e| e.to_string())?;
+        return Ok(());
+    }
+
+    // Handle float
+    if let Ok(f) = obj.extract::<f64>() {
+        if f.is_finite() {
+            write!(buf, "{}", f).map_err(|e| e.to_string())?;
+        } else {
+            buf.extend_from_slice(b"null");
+        }
+        return Ok(());
+    }
+
+    // Handle string - need to JSON-escape
+    if let Ok(s) = obj.extract::<String>() {
+        write_json_string(&s, buf);
+        return Ok(());
+    }
+
+    // Handle list
+    if let Ok(list) = obj.downcast::<PyList>() {
+        buf.push(b'[');
+        for (i, item) in list.iter().enumerate() {
+            if i > 0 {
+                buf.push(b',');
+            }
+            write_json_value(py, item, buf)?;
+        }
+        buf.push(b']');
+        return Ok(());
+    }
+
+    // Handle dict
+    if let Ok(dict) = obj.downcast::<PyDict>() {
+        buf.push(b'{');
+        let mut first = true;
+        for (key, value) in dict.iter() {
+            let key_str = key
+                .extract::<String>()
+                .map_err(|_| "Dict keys must be strings".to_string())?;
+            if !first {
+                buf.push(b',');
+            }
+            first = false;
+            write_json_string(&key_str, buf);
+            buf.push(b':');
+            write_json_value(py, value, buf)?;
+        }
+        buf.push(b'}');
+        return Ok(());
+    }
+
+    // Handle tuple
+    if let Ok(tuple) = obj.downcast::<PyTuple>() {
+        buf.push(b'[');
+        for (i, item) in tuple.iter().enumerate() {
+            if i > 0 {
+                buf.push(b',');
+            }
+            write_json_value(py, item, buf)?;
+        }
+        buf.push(b']');
+        return Ok(());
+    }
+
+    Err(format!("Cannot convert Python object to JSON: {obj:?}"))
+}
+
+/// Write a JSON-escaped string to the buffer.
+#[inline]
+fn write_json_string(s: &str, buf: &mut Vec<u8>) {
+    buf.push(b'"');
+    for byte in s.bytes() {
+        match byte {
+            b'"' => buf.extend_from_slice(b"\\\""),
+            b'\\' => buf.extend_from_slice(b"\\\\"),
+            b'\n' => buf.extend_from_slice(b"\\n"),
+            b'\r' => buf.extend_from_slice(b"\\r"),
+            b'\t' => buf.extend_from_slice(b"\\t"),
+            b if b < 0x20 => {
+                // Control characters: \u00XX
+                buf.extend_from_slice(b"\\u00");
+                let high = b >> 4;
+                let low = b & 0x0f;
+                buf.push(if high < 10 { b'0' + high } else { b'a' + high - 10 });
+                buf.push(if low < 10 { b'0' + low } else { b'a' + low - 10 });
+            }
+            _ => buf.push(byte),
+        }
+    }
+    buf.push(b'"');
+}
+
 /// Convert a serde_json::Value to a Python object.
 #[inline]
 pub fn json_to_python(py: Python<'_>, value: &serde_json::Value) -> PyResult<PyObject> {

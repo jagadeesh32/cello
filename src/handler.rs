@@ -11,8 +11,18 @@ use pyo3::prelude::*;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
-use crate::json::python_to_json;
+use crate::json::{python_to_json, python_to_json_bytes_direct};
 use crate::request::Request;
+
+/// Result from handler invocation - either pre-serialized JSON bytes or a serde_json::Value.
+/// PERF: The bytes variant skips the intermediate serde_json::Value allocation for the common
+/// case where a handler returns a plain dict (not a Response object).
+pub enum HandlerResult {
+    /// Pre-serialized JSON bytes (common case: dict/list/primitive return)
+    JsonBytes(Vec<u8>),
+    /// serde_json::Value (Response objects that need special handling)
+    JsonValue(serde_json::Value),
+}
 
 /// Cached metadata for a handler to avoid per-request introspection.
 struct HandlerMeta {
@@ -90,12 +100,13 @@ impl HandlerRegistry {
     /// 2. Caches DI parameter resolution per handler (avoid inspect.signature every call)
     /// 3. Skips DI entirely when no singletons registered (atomic check, no lock)
     /// 4. Single Python::with_gil call per request
+    /// 5. Returns HandlerResult::JsonBytes for common dict returns (skips serde_json::Value)
     pub async fn invoke_async(
         &self,
         handler_id: usize,
         request: Request,
         dependency_container: Arc<crate::dependency::DependencyContainer>,
-    ) -> Result<serde_json::Value, String> {
+    ) -> Result<HandlerResult, String> {
         let meta = self
             .get_meta(handler_id)
             .ok_or_else(|| format!("Handler {handler_id} not found"))?;
@@ -157,11 +168,15 @@ impl HandlerRegistry {
                     Some(params) => params,
                     None => {
                         // Fallback: DI params not yet cached (should not happen), use fast path
-                        return meta
+                        let result = meta
                             .handler
                             .call1(py, (request,))
-                            .map_err(|e| format!("Handler error: {e}"))
-                            .and_then(|result| python_to_json(py, result.as_ref(py)));
+                            .map_err(|e| format!("Handler error: {e}"))?;
+                        // Try direct bytes serialization
+                        match python_to_json_bytes_direct(py, result.as_ref(py))? {
+                            Some(bytes) => return Ok(HandlerResult::JsonBytes(bytes)),
+                            None => return python_to_json(py, result.as_ref(py)).map(HandlerResult::JsonValue),
+                        }
                     }
                 };
 
@@ -213,7 +228,12 @@ impl HandlerRegistry {
                 call_result.as_ref(py)
             };
 
-            python_to_json(py, final_result)
+            // PERF: Try direct-to-bytes serialization first (skips serde_json::Value allocation)
+            // Falls back to Value path only for Response objects that need special handling
+            match python_to_json_bytes_direct(py, final_result)? {
+                Some(bytes) => Ok(HandlerResult::JsonBytes(bytes)),
+                None => python_to_json(py, final_result).map(HandlerResult::JsonValue),
+            }
         })
     }
 
