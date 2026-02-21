@@ -456,6 +456,97 @@ cargo fmt
 
 ---
 
+## 📋 Release History
+
+### v1.0.0 — Production-Ready Stable Release (Feb 2026)
+
+- **170,000+ req/s** sustained throughput (fastest Python web framework)
+- Handler metadata caching, lazy query parsing, zero-copy response building
+- TCP_NODELAY, HTTP/1.1 keep-alive and pipeline flush optimization
+- Pre-allocated headers, fast-path skip for empty middleware/guards
+- Optimized release profile: LTO fat, panic abort, symbol stripping
+- API stability guarantee under Semantic Versioning
+- 394 tests passing, comprehensive security hardening
+
+### v0.10.0 — Event Sourcing, CQRS & Saga Pattern
+
+- **Event Sourcing**: Aggregate root pattern, event store, snapshot support, event versioning
+- **CQRS**: Command/Query buses, separate read/write models, event-driven sync
+- **Saga Pattern**: Distributed transaction coordination, compensation logic, persistent state, retry with backoff
+
+### v0.9.0 — GraphQL, gRPC & Message Queues
+
+- **GraphQL**: Query, Mutation, Subscription decorators, DataLoader for N+1 prevention, schema introspection
+- **gRPC**: Protocol buffer integration, bidirectional streaming, gRPC-Web, reflection service
+- **Kafka**: Consumer/producer decorators, consumer group management, dead letter queues
+- **RabbitMQ**: AMQP messaging with topic exchanges and prefetch control
+- **SQS/SNS**: AWS message queue integration with LocalStack support
+
+### v0.8.0 — Database & Redis Integration
+
+- Enhanced database connection pooling (PostgreSQL, MySQL, SQLite) with health monitoring
+- Redis async client with connection pooling, Pub/Sub, and cluster mode
+- Query builder with parameterized queries
+- Transaction management with `@transactional` decorator and nested savepoints
+- Pool metrics exposed via Prometheus
+
+### v0.7.0 — Enterprise Observability
+
+- OpenTelemetry distributed tracing with OTLP export
+- Health check endpoints (`/health/live`, `/health/ready`, `/health/startup`)
+- Structured JSON logging with trace context injection
+- Kubernetes deployment support and Docker multi-stage builds
+
+### v0.6.0 — Smart Caching & Validation
+
+- `@cache` decorator with TTL and tag-based invalidation
+- Adaptive rate limiting based on server health metrics
+- DTO validation with RFC 7807 Problem Details errors
+- Circuit breaker middleware for fault tolerance
+- 15% faster JSON parsing, 20% lower memory usage
+
+### v0.5.0 — Dependency Injection & RBAC
+
+- Dependency injection via `Depends` with singleton and transient lifetimes
+- Composable guards: `RoleGuard`, `PermissionGuard`, `AndGuard`, `OrGuard`, `NotGuard`
+- Prometheus metrics endpoint (`/metrics`)
+- OpenAPI 3.0 schema generation with Swagger UI and ReDoc
+- Background tasks and Jinja2 template rendering
+
+### v0.4.0 — Security & Cluster Mode
+
+- JWT authentication (HS256/384/512, RS256/384/512, ES256/384)
+- Rate limiting with token bucket and sliding window algorithms
+- Encrypted cookie sessions with automatic rotation
+- Security headers: CSP, HSTS, X-Frame-Options, X-Content-Type-Options
+- Cluster mode with multi-process workers via SO_REUSEPORT
+- Native TLS via rustls (TLS 1.2 and 1.3)
+
+### v0.3.0 — Real-Time Communication
+
+- WebSocket support via `tokio-tungstenite` with full-duplex communication
+- Server-Sent Events (SSE) with async generators
+- Multipart form handling and file uploads via `multer`
+- Blueprints for modular route organization with nesting
+
+### v0.2.0 — Middleware System
+
+- Composable middleware chain execution
+- CORS middleware with configurable origins, methods, and headers
+- Request/response logging middleware
+- Gzip and brotli compression middleware
+
+### v0.1.0 — Initial Release
+
+- Rust-powered HTTP server via Hyper and Tokio
+- Python route registration with decorators (`@app.get`, `@app.post`, etc.)
+- Radix tree routing via matchit with path parameters and wildcards
+- SIMD-accelerated JSON parsing via simd-json
+- Async handler support and static file serving
+- PyO3 abi3 bindings for Python 3.12+
+
+---
+
 ## 📚 Documentation
 
 Full documentation available at: **[cello-framework.vercel.app](https://cello-framework.vercel.app/)**
