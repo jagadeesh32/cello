@@ -18,7 +18,7 @@ All notable changes to the Cello Framework are documented here. Each version lin
 - Atomic fast-path checks for DI, guards, middleware, and lifecycle hooks
 - Optimized release build: LTO fat, panic=abort, strip, overflow-checks=false
 - API stability commitment: no breaking changes until v2.0
-- All 372 tests passing
+- All 394 tests passing
 
 [Full release notes](v1.0.0.md)
 

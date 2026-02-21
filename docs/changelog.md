@@ -12,12 +12,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Cello v1.0.0 is the first production-ready stable release of the framework. After ten iterative
 pre-release versions, the entire public API is now frozen under Semantic Versioning. No breaking
 changes will be introduced until v2.0. This release consolidates 32,000+ lines of Rust and 6,000+
-lines of Python into a cohesive, enterprise-grade web framework capable of sustaining **1,500,000+
-requests per second** -- faster than Robyn, FastAPI, and Litestar.
+lines of Python into a cohesive, enterprise-grade web framework capable of sustaining **150,000+
+requests per second** on multi-core hardware -- faster than Robyn, FastAPI, and Litestar.
 
 ### Performance
 
-- **1,500,000+ requests/second** benchmark throughput, achieving C-level performance on the hot path
+- **150,000+ requests/second** benchmark throughput (multi-worker, 4 cores, wrk 12t/400c), achieving C-level performance on the hot path
 - **SIMD JSON** (`simd-json 0.13`): hardware-accelerated JSON parsing and serialization, up to 10x faster than Python's `json` module
 - **Zero-copy radix tree routing** (`matchit 0.7`): O(log n) route matching with compile-time optimization and zero allocations per lookup
 - **Arena allocators** (`bumpalo 3`): per-request arena allocation eliminates heap fragmentation and reduces allocator pressure
@@ -27,9 +27,11 @@ requests per second** -- faster than Robyn, FastAPI, and Litestar.
 - **Pre-allocated headers**: `HashMap::with_capacity()` eliminates rehashing during header collection
 - **Fast-path skip for empty middleware chains, guards, and lifecycle hooks**: no overhead when features are unused
 - **Atomic `has_py_singletons` check**: replaces `RwLock` with `AtomicBool` for DI singleton existence, removing lock contention
+- **Multi-process workers (SO_REUSEPORT)**: fork N worker processes, each with its own GIL and Tokio runtime, with kernel-level connection distribution for near-linear core scaling
+- **Direct Python-to-JSON bytes serialization**: handler dict/list returns are serialized directly to JSON bytes in a single pass, skipping intermediate `serde_json::Value` tree allocation
+- **Sampled latency recording**: write lock contention eliminated by sampling every 64th request instead of recording all
 - **TCP_NODELAY on accepted connections**: Nagle's algorithm disabled for lower latency
 - **HTTP/1.1 keep-alive and pipeline flush**: connection reuse and pipelining enabled by default
-- **VecDeque ring buffer**: O(1) latency tracking replaces O(n) `Vec::remove(0)` in metrics
 - **Zero-copy response body building**: response bodies use `Bytes::copy_from_slice` for efficient transfer
 - **Thread-local cached regex**: OpenAPI path parameter regex compiled once per thread instead of per call
 - **Async middleware lock optimization**: middleware chain collects `Arc` references under a short read lock, then releases the lock before any `await`
@@ -129,7 +131,7 @@ All middleware is implemented in Rust for maximum performance:
 - **RBAC guards**: composable `RoleGuard` and `PermissionGuard` with `And`/`Or` combinators for fine-grained access control
 - **DTO validation**: Pydantic integration for request payload validation with automatic `422 Unprocessable Entity` error responses
 - **20 example applications**: comprehensive examples covering every feature from basic routing to advanced enterprise patterns
-- **376 tests passing**: full integration test suite covering all framework features
+- **394 tests passing**: full integration test suite covering all framework features
 
 ### API Stability
 

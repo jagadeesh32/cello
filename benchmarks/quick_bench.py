@@ -49,13 +49,17 @@ def run_server():
     def echo(request):
         return request.json()
     
+    import os
+    workers = int(os.environ.get("CELLO_WORKERS", "1"))
+
     print("\n" + "=" * 50)
     print("  CELLO BENCHMARK SERVER")
     print("=" * 50)
     print(f"\n  http://127.0.0.1:8080/")
+    print(f"  Workers: {workers}")
     print("  Press Ctrl+C to stop\n")
-    
-    app.run(host="127.0.0.1", port=8080)
+
+    app.run(host="127.0.0.1", port=8080, env="production", logs=False, workers=workers)
 
 
 def make_request(host: str, port: int, path: str) -> float:
@@ -204,10 +208,13 @@ def main():
     parser.add_argument("--bench", action="store_true", help="Run the benchmark")
     parser.add_argument("--host", default="127.0.0.1", help="Server host")
     parser.add_argument("--port", type=int, default=8080, help="Server port")
+    parser.add_argument("--workers", type=int, default=1, help="Number of worker processes (default: 1)")
     
     args = parser.parse_args()
     
     if args.server:
+        import os
+        os.environ["CELLO_WORKERS"] = str(args.workers)
         run_server()
     elif args.bench:
         run_benchmark(args.host, args.port)

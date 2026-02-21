@@ -187,7 +187,7 @@ hide:
 
 <div class="hero-badges">
   <code class="badge-version">v1.0.0</code>
-  <code class="badge-tests">372 tests passing</code>
+  <code class="badge-tests">394 tests passing</code>
   <code class="badge-license">MIT License</code>
   <code class="badge-python">Python 3.12+</code>
 </div>
@@ -273,7 +273,7 @@ hide:
 
     ---
 
-    **Event Sourcing**, **CQRS**, and **Saga** orchestration built right into the framework. Enterprise architecture, zero boilerplate. _New in v0.10.0_.
+    **Event Sourcing**, **CQRS**, and **Saga** orchestration built right into the framework. Enterprise architecture, zero boilerplate. _Stable in v1.0.0_.
 
     [:octicons-arrow-right-24: Event Sourcing](examples/enterprise/event-sourcing.md)
 

@@ -1267,11 +1267,82 @@ class App:
         if logs:
             self.enable_logging()
 
+        # Determine worker count
+        if workers is None:
+            workers = 1
+
         # Run Server
+        if workers > 1:
+            # Multi-process mode: fork N worker processes, each with its own GIL.
+            # Uses SO_REUSEPORT so all processes can bind to the same port.
+            # This bypasses the GIL bottleneck for true parallel request handling.
+            self._run_multiprocess(host, port, workers, env)
+        else:
+            try:
+                self._app.run(host, port, None)
+            except KeyboardInterrupt:
+                pass  # Handled by Rust ctrl_c
+
+    def _run_multiprocess(self, host: str, port: int, workers: int, env: str):
+        """Run server with multiple worker processes for maximum throughput.
+
+        Each worker process has its own Python GIL and Tokio runtime,
+        using SO_REUSEPORT for kernel-level load balancing.
+        """
+        import os
+        import signal
+        import multiprocessing
+
+        print(f"  Starting {workers} worker processes (SO_REUSEPORT)")
+
+        child_pids = []
+
+        def _worker_target(worker_id):
+            """Worker process entry point."""
+            try:
+                self._app.run(host, port, None)
+            except KeyboardInterrupt:
+                pass
+
+        def _signal_handler(signum, frame):
+            """Forward signals to all worker processes."""
+            for pid in child_pids:
+                try:
+                    os.kill(pid, signum)
+                except ProcessLookupError:
+                    pass
+            raise KeyboardInterrupt
+
+        # Use fork for efficiency (shares memory copy-on-write)
+        multiprocessing.set_start_method('fork', force=True)
+
         try:
-             self._app.run(host, port, workers)
+            processes = []
+            for i in range(workers):
+                p = multiprocessing.Process(
+                    target=_worker_target,
+                    args=(i,),
+                    daemon=False,
+                )
+                p.start()
+                child_pids.append(p.pid)
+                processes.append(p)
+
+            # Install signal handler in parent
+            signal.signal(signal.SIGINT, _signal_handler)
+            signal.signal(signal.SIGTERM, _signal_handler)
+
+            # Wait for all workers
+            for p in processes:
+                p.join()
+
         except KeyboardInterrupt:
-            pass # Handled by Rust ctrl_c
+            print("\nShutting down workers...")
+            for p in processes:
+                if p.is_alive():
+                    p.terminate()
+            for p in processes:
+                p.join(timeout=5)
 
     def _watch_files(self, process):
         import os

@@ -180,14 +180,14 @@ fn write_json_value(py: Python<'_>, obj: &PyAny, buf: &mut Vec<u8>) -> Result<()
 
     // Handle int
     if let Ok(i) = obj.extract::<i64>() {
-        write!(buf, "{}", i).map_err(|e| e.to_string())?;
+        write!(buf, "{i}").map_err(|e| e.to_string())?;
         return Ok(());
     }
 
     // Handle float
     if let Ok(f) = obj.extract::<f64>() {
         if f.is_finite() {
-            write!(buf, "{}", f).map_err(|e| e.to_string())?;
+            write!(buf, "{f}").map_err(|e| e.to_string())?;
         } else {
             buf.extend_from_slice(b"null");
         }

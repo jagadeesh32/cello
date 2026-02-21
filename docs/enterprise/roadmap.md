@@ -291,7 +291,7 @@ First production-ready release with semantic versioning guarantees and major per
 - Handler metadata caching (async detection, DI params)
 - Lazy body parsing, zero-copy responses, TCP_NODELAY
 - Optimized release build configuration
-- All 372 tests passing
+- All 394 tests passing
 
 ---
 

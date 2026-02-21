@@ -24,6 +24,9 @@ hyper = { version = "1", features = ["full"] }
 hyper-util = { version = "0.1", features = ["full"] }
 http-body-util = "0.1"
 
+# Socket configuration (SO_REUSEPORT for multi-process)
+socket2 = { version = "0.5", features = ["all"] }
+
 # WebSocket support
 tokio-tungstenite = "0.21"
 futures-util = "0.3"

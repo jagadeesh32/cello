@@ -39,7 +39,7 @@ Request → Rust HTTP Engine → Python Handler → Rust Response
 - 📡 **SSE** - Server-Sent Events streaming
 - 📁 **File Uploads** - Multipart form data handling
 
-### Advanced Features (v0.5.1)
+### Advanced Features
 - 🔐 **Authentication** - JWT, Basic Auth, API Key
 - ⏱️ **Rate Limiting** - Token bucket, sliding window
 - 🍪 **Sessions** - Secure cookie-based sessions

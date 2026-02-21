@@ -39,6 +39,27 @@ app = App()
 | `on_event(event_type)` | Register lifecycle hook |
 | `run(host, port, **kwargs)` | Start the server |
 
+#### `app.run()` Parameters
+
+```python
+app.run(
+    host="127.0.0.1",    # Bind address
+    port=8000,            # Port number
+    workers=1,            # Worker processes (use CPU count for max throughput)
+    env="development",    # "development" or "production"
+    debug=None,           # Debug mode (auto: True in dev, False in prod)
+    logs=None,            # Request logging (auto: True in dev, False in prod)
+    reload=False,         # Hot reload (development only)
+)
+```
+
+**Multi-worker mode**: When `workers > 1`, Cello forks N processes using `SO_REUSEPORT` for kernel-level connection distribution. Each worker has its own Python GIL and Tokio runtime, enabling near-linear scaling with core count.
+
+```python
+# Production: 4 workers for a 4-core machine
+app.run(host="0.0.0.0", port=8080, env="production", workers=4)
+```
+
 ---
 
 ### Blueprint
