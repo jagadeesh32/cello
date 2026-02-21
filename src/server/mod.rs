@@ -496,10 +496,7 @@ impl Server {
             pyo3::exceptions::PyRuntimeError::new_err(format!("Failed to create listener: {e}"))
         })?;
 
-        println!("Cello server running at http://{addr}");
-        println!("   Middleware: {} registered", self.middleware.len());
-        println!("   Max connections: {}", self.config.max_connections);
-        println!("   Press CTRL+C to stop the server");
+        // Banner and server details are printed by Python
 
         let router = Arc::new(self.router);
         let handlers = Arc::new(self.handlers);
@@ -513,10 +510,20 @@ impl Server {
 
         let mut shutdown_rx = shutdown.subscribe();
 
+        // Listen for SIGTERM (systemd, process manager, multi-worker shutdown)
+        let mut sigterm = tokio::signal::unix::signal(
+            tokio::signal::unix::SignalKind::terminate(),
+        ).map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(
+            format!("Failed to install SIGTERM handler: {e}")
+        ))?;
+
         loop {
             tokio::select! {
                 _ = tokio::signal::ctrl_c() => {
-                    println!("\nShutting down gracefully...");
+                    shutdown.shutdown();
+                    break;
+                }
+                _ = sigterm.recv() => {
                     shutdown.shutdown();
                     break;
                 }
@@ -625,9 +632,9 @@ impl Server {
         }
 
         // Wait for active requests to complete
-        println!("Draining {} active requests...", shutdown.active_requests());
-        shutdown.drain().await;
-        println!("Server stopped");
+        if shutdown.active_requests() > 0 {
+            shutdown.drain().await;
+        }
 
         Ok(())
     }
@@ -647,11 +654,28 @@ async fn handle_request(
 ) -> Result<HyperResponse<Full<Bytes>>, Infallible> {
     metrics.inc_requests();
 
-    let method = req.method().as_str().to_owned();
-    let path = req.uri().path().to_owned();
-    let query_string = req.uri().query().unwrap_or("");
+    // PERF: Extract method and path WITHOUT owning - use references as long as possible
+    let method = req.method().clone();
+    let method_str = method.as_str();
+    let uri = req.uri().clone();
+    let path = uri.path();
 
-    // PERF: Lazy query parsing - only decode when query string exists
+    // PERF: Route match FIRST - fail fast on 404 before any allocation
+    let route_match = router.match_route(method_str, path);
+
+    // PERF: Fast-return 404 before allocating Request object
+    let route_match = match route_match {
+        Some(m) => m,
+        None => {
+            let response = Response::not_found(&format!("Not Found: {method_str} {path}"));
+            return build_hyper_response(&response, metrics);
+        }
+    };
+
+    let params = route_match.params.clone();
+
+    // PERF: Only parse query string when present
+    let query_string = uri.query().unwrap_or("");
     let query: HashMap<String, String> = if query_string.is_empty() {
         HashMap::new()
     } else {
@@ -680,24 +704,21 @@ async fn handle_request(
             .collect()
     };
 
-    // PERF: Pre-allocate headers HashMap with known capacity
+    // PERF: Only copy headers for matched routes (skip for 404s)
     let header_count = req.headers().len();
     let mut headers: HashMap<String, String> = HashMap::with_capacity(header_count);
     for (k, v) in req.headers().iter() {
         headers.insert(k.as_str().to_owned(), v.to_str().unwrap_or("").to_owned());
     }
 
-    // PERF: Lazy body reading - skip body allocation for methods that typically have no body.
-    // For GET/HEAD/OPTIONS/DELETE, drain the body without allocating a Vec.
-    // The body must be consumed for hyper to release resources.
-    let body_bytes: Vec<u8> = match method.as_str() {
+    // PERF: Only collect body for methods that carry payloads
+    let body_bytes: Vec<u8> = match method_str {
         "GET" | "HEAD" | "OPTIONS" | "DELETE" => {
-            // Fast path: drain body without allocating - these methods almost never have bodies
-            let _ = req.collect().await;
+            // Fast path: drop body without draining - hyper handles cleanup
+            drop(req);
             Vec::new()
         }
         _ => {
-            // POST, PUT, PATCH - expect body, use Bytes to avoid extra copy
             match req.collect().await {
                 Ok(collected) => {
                     let bytes = collected.to_bytes();
@@ -716,22 +737,10 @@ async fn handle_request(
         }
     };
 
-    // Match route FIRST before building Request (fail fast on 404)
-    let route_match = router.match_route(&method, &path);
-
-    // PERF: Fast-return 404 before allocating Request object
-    let route_match = match route_match {
-        Some(m) => m,
-        None => {
-            let response = Response::not_found(&format!("Not Found: {method} {path}"));
-            return build_hyper_response(&response, metrics);
-        }
-    };
-
-    let params = route_match.params.clone();
-
-    // Create request object - method/path are moved in, no extra clone needed
-    let mut request = Request::from_http(method, path, params, query, headers, body_bytes);
+    // Create request object with owned data
+    let method_owned = method_str.to_owned();
+    let path_owned = path.to_owned();
+    let mut request = Request::from_http(method_owned, path_owned, params, query, headers, body_bytes);
 
     // PERF: Skip middleware execution if no middleware registered
     if !middleware.is_empty() {
@@ -799,9 +808,6 @@ async fn handle_request(
     }
 
     // Handle route
-    // PERF: Instead of cloning the full request (which copies body bytes),
-    // create a lightweight copy for after-middleware by stripping the body.
-    // After-middleware only needs method, path, headers, and context.
     let has_after_middleware = !middleware.is_empty() || !middleware.is_async_empty();
 
     // PERF: Create lightweight request for after-middleware (no body copy)
@@ -816,6 +822,32 @@ async fn handle_request(
     let result = handlers
         .invoke_async(handler_id, request, dependency_container.clone())
         .await;
+
+    // PERF: Ultra-fast path for the most common case:
+    // Handler returned a dict (JsonBytes), no after-middleware, no Prometheus.
+    // Skip Response struct allocation entirely and build hyper response directly.
+    if !has_after_middleware && !guards.has_guards() {
+        let prom_guard = prometheus.read();
+        let no_prometheus = prom_guard.is_none();
+        drop(prom_guard);
+
+        if no_prometheus {
+            match result {
+                Ok(HandlerResult::JsonBytes(bytes)) => {
+                    metrics.add_bytes_sent(bytes.len() as u64);
+                    let hyper_resp = HyperResponse::builder()
+                        .status(StatusCode::OK)
+                        .header("Content-Type", "application/json")
+                        .body(Full::new(Bytes::from(bytes)))
+                        .unwrap_or_else(|_| {
+                            HyperResponse::new(Full::new(Bytes::from_static(b"Internal Server Error")))
+                        });
+                    return Ok(hyper_resp);
+                }
+                _ => {}
+            }
+        }
+    }
 
     // Restore request for after-middleware (the original was moved into the handler)
     let request = after_request.unwrap_or_default();

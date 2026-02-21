@@ -32,8 +32,6 @@ All frameworks run with the **same number of workers** on the **same machine**.
 | Robyn | Built-in (Rust) | HTTP/1.1 |
 | BlackSheep + Granian | Granian (Rust) | HTTP/1.1 |
 | FastAPI + Granian | Granian (Rust) | HTTP/1.1 |
-| FastAPI + Uvicorn | Uvicorn (Python) | HTTP/1.1 |
-| Flask + Gunicorn | Gunicorn (Python) | HTTP/1.1 |
 
 ## Benchmark Settings
 

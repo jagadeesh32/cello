@@ -104,10 +104,8 @@ With `--workers N` (where N = core count), expect near-linear scaling:
 |-----------|--------|-------------|
 | **Cello** | Built-in (Rust) | **150,000+** |
 | Robyn | Built-in (Rust) | ~40,000 |
+| BlackSheep | Granian (Rust) | ~30,000 |
 | FastAPI | Granian (Rust) | ~25,000 |
-| Flask | Granian (Rust) | ~18,000 |
-| FastAPI | Uvicorn | ~12,000 |
-| Flask | Gunicorn | ~3,000 |
 
 ### How to Reproduce
 
@@ -122,19 +120,21 @@ wrk -t12 -c400 -d10s http://127.0.0.1:8080/
 python app.py --workers 4
 wrk -t12 -c400 -d10s http://127.0.0.1:8080/
 
-# FastAPI + Granian (4 workers)
+# BlackSheep + Granian (4 workers)
 granian --interface asgi --workers 4 --host 127.0.0.1 --port 8000 app:app
 wrk -t12 -c400 -d10s http://127.0.0.1:8000/
 
-# Flask + Granian (4 workers)
-granian --interface wsgi --workers 4 --host 127.0.0.1 --port 8000 app:app
+# FastAPI + Granian (4 workers)
+granian --interface asgi --workers 4 --host 127.0.0.1 --port 8000 app:app
 wrk -t12 -c400 -d10s http://127.0.0.1:8000/
+```
 
-# FastAPI + Uvicorn (4 workers)
-uvicorn app:app --workers 4 --host 127.0.0.1 --port 8000
-wrk -t12 -c400 -d10s http://127.0.0.1:8000/
+### Automated Comparison
 
-# Flask + Gunicorn (4 workers)
-gunicorn -w 4 -b 127.0.0.1:5000 app:app
-wrk -t12 -c400 -d10s http://127.0.0.1:5000/
+Use the automated benchmark runner for reproducible results:
+
+```bash
+cd benchmarks/compare
+pip install -r requirements.txt
+python run_benchmarks.py --workers 4
 ```

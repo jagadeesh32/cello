@@ -1214,7 +1214,8 @@ class App:
             parser.add_argument("--env", default=env or "development")
             parser.add_argument("--debug", action="store_true")
             parser.add_argument("--reload", action="store_true")
-            parser.add_argument("--workers", type=int, default=workers)
+            parser.add_argument("--workers", type=int, default=workers,
+                                help="Number of worker processes (default: CPU count)")
             parser.add_argument("--no-logs", action="store_true")
 
             # Use parse_known_args to avoid conflicts
@@ -1267,9 +1268,17 @@ class App:
         if logs:
             self.enable_logging()
 
-        # Determine worker count
+        # Determine worker count (default: all CPU cores)
         if workers is None:
-            workers = 1
+            # Single worker in test/debug mode, multi-worker in production
+            if "unittest" in sys.modules or "pytest" in sys.modules or debug:
+                workers = 1
+            else:
+                workers = os.cpu_count() or 1
+
+        # Print startup banner (skip in test environments)
+        if "unittest" not in sys.modules and "pytest" not in sys.modules:
+            self._print_banner(host, port, workers, env)
 
         # Run Server
         if workers > 1:
@@ -1283,66 +1292,83 @@ class App:
             except KeyboardInterrupt:
                 pass  # Handled by Rust ctrl_c
 
+    @staticmethod
+    def _print_banner(host: str, port: int, workers: int, env: str):
+        """Print the Cello startup banner with ASCII art logo."""
+        v = __version__
+        url = f"http://{host}:{port}"
+        banner = f"""
+\033[38;5;208m     ██████╗███████╗██╗     ██╗      ██████╗\033[0m
+\033[38;5;208m    ██╔════╝██╔════╝██║     ██║     ██╔═══██╗\033[0m
+\033[38;5;214m    ██║     █████╗  ██║     ██║     ██║   ██║\033[0m
+\033[38;5;214m    ██║     ██╔══╝  ██║     ██║     ██║   ██║\033[0m
+\033[38;5;220m    ╚██████╗███████╗███████╗███████╗╚██████╔╝\033[0m
+\033[38;5;220m     ╚═════╝╚══════╝╚══════╝╚══════╝ ╚═════╝\033[0m
+
+    \033[1mv{v}\033[0m  \033[2m|\033[0m  Rust-powered Python Web Framework
+
+    \033[32m➜\033[0m  \033[1mServer:\033[0m    {url}
+    \033[32m➜\033[0m  \033[1mWorkers:\033[0m   {workers}
+    \033[32m➜\033[0m  \033[1mEnvironment:\033[0m {env}
+
+    \033[2mPress CTRL+C to stop\033[0m
+"""
+        print(banner)
+
     def _run_multiprocess(self, host: str, port: int, workers: int, env: str):
         """Run server with multiple worker processes for maximum throughput.
 
-        Each worker process has its own Python GIL and Tokio runtime,
-        using SO_REUSEPORT for kernel-level load balancing.
+        Uses os.fork() directly for reliable multi-process spawning.
+        Each child process gets its own Python GIL and Tokio runtime.
+        SO_REUSEPORT allows the kernel to distribute connections across workers.
         """
         import os
         import signal
-        import multiprocessing
 
-        print(f"  Starting {workers} worker processes (SO_REUSEPORT)")
+        print(f"    \033[32m➜\033[0m  \033[1mMode:\033[0m      SO_REUSEPORT (kernel load balancing)")
 
         child_pids = []
 
-        def _worker_target(worker_id):
-            """Worker process entry point."""
-            try:
-                self._app.run(host, port, None)
-            except KeyboardInterrupt:
-                pass
+        # Fork N-1 child workers. Parent becomes the last worker.
+        for i in range(workers - 1):
+            pid = os.fork()
+            if pid == 0:
+                # Child process: run server and exit
+                try:
+                    self._app.run(host, port, None)
+                except (KeyboardInterrupt, SystemExit):
+                    pass
+                except Exception:
+                    pass
+                finally:
+                    os._exit(0)
+            else:
+                child_pids.append(pid)
 
-        def _signal_handler(signum, frame):
-            """Forward signals to all worker processes."""
+        # Parent: set up signal forwarding, then run as last worker
+        def _cleanup(signum=None, frame=None):
             for pid in child_pids:
                 try:
-                    os.kill(pid, signum)
+                    os.kill(pid, signal.SIGTERM)
                 except ProcessLookupError:
                     pass
-            raise KeyboardInterrupt
 
-        # Use fork for efficiency (shares memory copy-on-write)
-        multiprocessing.set_start_method('fork', force=True)
+        signal.signal(signal.SIGINT, lambda s, f: (_cleanup(), os._exit(0)))
+        signal.signal(signal.SIGTERM, lambda s, f: (_cleanup(), os._exit(0)))
 
         try:
-            processes = []
-            for i in range(workers):
-                p = multiprocessing.Process(
-                    target=_worker_target,
-                    args=(i,),
-                    daemon=False,
-                )
-                p.start()
-                child_pids.append(p.pid)
-                processes.append(p)
-
-            # Install signal handler in parent
-            signal.signal(signal.SIGINT, _signal_handler)
-            signal.signal(signal.SIGTERM, _signal_handler)
-
-            # Wait for all workers
-            for p in processes:
-                p.join()
-
+            # Parent also runs a server (last worker)
+            self._app.run(host, port, None)
         except KeyboardInterrupt:
-            print("\nShutting down workers...")
-            for p in processes:
-                if p.is_alive():
-                    p.terminate()
-            for p in processes:
-                p.join(timeout=5)
+            pass
+        finally:
+            _cleanup()
+            # Wait for children
+            for pid in child_pids:
+                try:
+                    os.waitpid(pid, os.WNOHANG)
+                except ChildProcessError:
+                    pass
 
     def _watch_files(self, process):
         import os

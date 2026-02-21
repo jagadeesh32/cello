@@ -736,19 +736,17 @@ def openapi_handler(request):
         let host = host.unwrap_or("127.0.0.1");
         let port = port.unwrap_or(8000);
 
-        println!("🐍 Cello v1.0.0 server starting at http://{host}:{port}");
-        if let Some(w) = workers {
-            println!("   Workers: {w}");
-        }
+        // Banner is printed by Python; Rust just runs the server
 
         // Release the GIL and run the server
         py.allow_threads(|| {
-            let mut builder = tokio::runtime::Builder::new_multi_thread();
+            // PERF: Use single-threaded Tokio runtime per process.
+            // Parallelism comes from multi-process (os.fork + SO_REUSEPORT), not multi-thread.
+            // Multi-threaded runtime causes GIL contention: N Tokio threads all compete
+            // for Python::with_gil, creating massive serialization overhead.
+            // Single-threaded runtime eliminates GIL contention within each worker process.
+            let mut builder = tokio::runtime::Builder::new_current_thread();
             builder.enable_all();
-
-            if let Some(w) = workers {
-                builder.worker_threads(w);
-            }
 
             let rt = builder
                 .build()

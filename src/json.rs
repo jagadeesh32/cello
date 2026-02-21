@@ -151,15 +151,28 @@ pub fn python_to_json(py: Python<'_>, obj: &PyAny) -> Result<serde_json::Value, 
 /// Returns Ok(None) for Response objects (caller must fall back to python_to_json).
 #[inline]
 pub fn python_to_json_bytes_direct(py: Python<'_>, obj: &PyAny) -> Result<Option<Vec<u8>>, String> {
-    // Check if this is a Response object - caller needs to handle specially
-    let class_name = obj.get_type().name().unwrap_or("");
-    if class_name == "Response" {
-        return Ok(None);
+    // PERF: Check for dict/list FIRST (common case) before the expensive class name check.
+    // Most handlers return dicts, so fast-path that.
+    if obj.downcast::<PyDict>().is_ok() || obj.downcast::<PyList>().is_ok() {
+        let mut buf = Vec::with_capacity(128);
+        write_json_value(py, obj, &mut buf)?;
+        return Ok(Some(buf));
     }
 
-    let mut buf = Vec::with_capacity(128);
-    write_json_value(py, obj, &mut buf)?;
-    Ok(Some(buf))
+    // Check primitives
+    if obj.is_none()
+        || obj.extract::<bool>().is_ok()
+        || obj.extract::<i64>().is_ok()
+        || obj.extract::<f64>().is_ok()
+        || obj.extract::<String>().is_ok()
+    {
+        let mut buf = Vec::with_capacity(64);
+        write_json_value(py, obj, &mut buf)?;
+        return Ok(Some(buf));
+    }
+
+    // Not a simple type - likely a Response object, fall back to Value path
+    Ok(None)
 }
 
 /// Write a Python object as JSON directly to a byte buffer.
