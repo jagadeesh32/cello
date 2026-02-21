@@ -736,7 +736,7 @@ def openapi_handler(request):
         let host = host.unwrap_or("127.0.0.1");
         let port = port.unwrap_or(8000);
 
-        println!("🐍 Cello v2 server starting at http://{host}:{port}");
+        println!("🐍 Cello v1.0.0 server starting at http://{host}:{port}");
         if let Some(w) = workers {
             println!("   Workers: {w}");
         }

@@ -98,6 +98,19 @@ With `--workers N` (where N = core count), expect near-linear scaling:
 
 ## Comparison with Other Frameworks
 
+### Expected Results (4 workers, 4 cores, wrk 12t/400c)
+
+| Framework | Server | Requests/sec |
+|-----------|--------|-------------|
+| **Cello** | Built-in (Rust) | **150,000+** |
+| Robyn | Built-in (Rust) | ~40,000 |
+| FastAPI | Granian (Rust) | ~25,000 |
+| Flask | Granian (Rust) | ~18,000 |
+| FastAPI | Uvicorn | ~12,000 |
+| Flask | Gunicorn | ~3,000 |
+
+### How to Reproduce
+
 For fair comparison, use the same machine, worker count, and wrk settings:
 
 ```bash
@@ -105,11 +118,23 @@ For fair comparison, use the same machine, worker count, and wrk settings:
 python benchmarks/quick_bench.py --server --workers 4
 wrk -t12 -c400 -d10s http://127.0.0.1:8080/
 
-# FastAPI (4 workers via uvicorn)
+# Robyn (4 workers)
+python app.py --workers 4
+wrk -t12 -c400 -d10s http://127.0.0.1:8080/
+
+# FastAPI + Granian (4 workers)
+granian --interface asgi --workers 4 --host 127.0.0.1 --port 8000 app:app
+wrk -t12 -c400 -d10s http://127.0.0.1:8000/
+
+# Flask + Granian (4 workers)
+granian --interface wsgi --workers 4 --host 127.0.0.1 --port 8000 app:app
+wrk -t12 -c400 -d10s http://127.0.0.1:8000/
+
+# FastAPI + Uvicorn (4 workers)
 uvicorn app:app --workers 4 --host 127.0.0.1 --port 8000
 wrk -t12 -c400 -d10s http://127.0.0.1:8000/
 
-# Flask (4 workers via gunicorn)
+# Flask + Gunicorn (4 workers)
 gunicorn -w 4 -b 127.0.0.1:5000 app:app
 wrk -t12 -c400 -d10s http://127.0.0.1:5000/
 ```

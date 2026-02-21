@@ -11,7 +11,7 @@ Visit: http://127.0.0.1:8080/
 Features demonstrated:
 - Core: Routing, Async, Blueprints, WebSocket, SSE, Multipart
 - Advanced: Auth, CSRF, Rate Limiting, Sessions, Security Headers
-- v0.5.1: DI, Guards, Prometheus, OpenAPI, Background Tasks, Templates
+- Extended: DI, Guards, Prometheus, OpenAPI, Background Tasks, Templates
 """
 
 import asyncio
@@ -49,7 +49,7 @@ app.enable_prometheus(endpoint="/metrics", namespace="cello", subsystem="api")
 
 
 # =============================================================================
-# DEPENDENCY INJECTION (v0.5.1 Feature)
+# DEPENDENCY INJECTION (v1.0.0)
 # =============================================================================
 
 # Register singletons - shared across all requests
@@ -74,14 +74,14 @@ app.register_singleton("config", {
 
 
 # =============================================================================
-# TEMPLATE ENGINE (v0.5.1 Feature)
+# TEMPLATE ENGINE (v1.0.0)
 # =============================================================================
 
 templates = TemplateEngine("templates")
 
 
 # =============================================================================
-# BACKGROUND TASKS (v0.5.1 Feature)
+# BACKGROUND TASKS (v1.0.0)
 # =============================================================================
 
 def send_email_task(to: str, subject: str):
@@ -112,7 +112,7 @@ def home(request):
         "features": {
             "core": ["/routing", "/async", "/blueprints", "/sse", "/multipart"],
             "advanced": ["/auth", "/csrf", "/sessions", "/security"],
-            "v0.5.1": ["/di", "/guards", "/metrics", "/docs", "/templates", "/background"]
+            "extended": ["/di", "/guards", "/metrics", "/docs", "/templates", "/background"]
         },
         "endpoints": {
             "/docs": "Swagger UI",
@@ -345,7 +345,7 @@ def file_upload(request):
 
 
 # =============================================================================
-# v0.5.1 FEATURE: Dependency Injection
+# FEATURE: Dependency Injection
 # =============================================================================
 
 @app.get("/di/config", tags=["DI"], summary="Get Config (DI)")
@@ -373,7 +373,7 @@ def get_database_di(request):
 
 
 # =============================================================================
-# v0.5.1 FEATURE: Background Tasks
+# FEATURE: Background Tasks
 # =============================================================================
 
 @app.post("/background/email", tags=["Background"], summary="Send Email (Background)")
@@ -406,7 +406,7 @@ def cleanup_background(request):
 
 
 # =============================================================================
-# v0.5.1 FEATURE: Template Rendering
+# FEATURE: Template Rendering
 # =============================================================================
 
 @app.get("/template/render", tags=["Templates"], summary="Render Template")
@@ -586,7 +586,7 @@ if __name__ == "__main__":
     print("    - Query:       /search?q=hello&page=1")
     print("    - Responses:   /response/json, /response/html, /response/text")
     print("    - Blueprints:  /items, /api/v2")
-    print("\n  v0.5.1 Features:")
+    print("\n  v1.0.0s:")
     print("    - Swagger UI:  http://127.0.0.1:8080/docs")
     print("    - ReDoc:       http://127.0.0.1:8080/redoc")
     print("    - Metrics:     http://127.0.0.1:8080/metrics")

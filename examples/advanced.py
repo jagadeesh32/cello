@@ -34,7 +34,7 @@ app.enable_compression(min_size=1024)
 def home(request):
     """Welcome endpoint."""
     return {
-        "message": "Welcome to Cello v2!",
+        "message": "Welcome to Cello v1.0.0!",
         "version": "1.0.0",
         "features": [
             "SIMD JSON",
@@ -217,7 +217,7 @@ app.register_blueprint(forms_bp)
 # =============================================================================
 
 if __name__ == "__main__":
-    print("🚀 Starting Cello v2 Advanced Example")
+    print("🚀 Starting Cello v1.0.0 Advanced Example")
     print("   Try these endpoints:")
     print("   - GET  http://127.0.0.1:8000/")
     print("   - GET  http://127.0.0.1:8000/health")
