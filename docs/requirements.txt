@@ -1,0 +1,24 @@
+# Material for MkDocs - Documentation Requirements
+# Install with: pip install -r docs/requirements.txt
+
+# Core
+mkdocs>=1.6.0
+mkdocs-material>=9.5.0
+
+# Plugins
+mkdocs-minify-plugin>=0.8.0
+mkdocs-git-revision-date-localized-plugin>=1.2.0
+mkdocs-git-committers-plugin-2>=2.3.0
+mkdocs-glightbox>=0.4.0
+mkdocstrings>=0.24.0
+mkdocstrings-python>=1.8.0
+
+# Extensions
+pymdown-extensions>=10.7.0
+
+# Optional: Social cards (requires cairo)
+# pillow>=10.0.0
+# cairosvg>=2.7.0
+
+# Optional: Version management
+# mike>=2.0.0

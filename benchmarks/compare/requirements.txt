@@ -1,0 +1,9 @@
+# Cello (install separately: maturin develop --release)
+
+# Frameworks
+robyn
+blacksheep
+fastapi
+
+# Servers
+granian
