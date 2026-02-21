@@ -178,7 +178,7 @@ impl LimitsConfig {
     #[staticmethod]
     pub fn parse_size(size: &str) -> PyResult<usize> {
         parse_size_string(size)
-            .ok_or_else(|| pyo3::exceptions::PyValueError::new_err(format!("Invalid size: {}", size)))
+            .ok_or_else(|| pyo3::exceptions::PyValueError::new_err(format!("Invalid size: {size}")))
     }
 }
 
@@ -204,13 +204,13 @@ pub fn parse_size_string(s: &str) -> Option<usize> {
     }
 
     let (num, unit) = if s.ends_with("kb") || s.ends_with("k") {
-        let num = s.trim_end_matches(|c| c == 'k' || c == 'b');
+        let num = s.trim_end_matches(['k', 'b']);
         (num, 1024usize)
     } else if s.ends_with("mb") || s.ends_with("m") {
-        let num = s.trim_end_matches(|c| c == 'm' || c == 'b');
+        let num = s.trim_end_matches(['m', 'b']);
         (num, 1024 * 1024)
     } else if s.ends_with("gb") || s.ends_with("g") {
-        let num = s.trim_end_matches(|c| c == 'g' || c == 'b');
+        let num = s.trim_end_matches(['g', 'b']);
         (num, 1024 * 1024 * 1024)
     } else if s.ends_with('b') {
         let num = s.trim_end_matches('b');
@@ -257,12 +257,18 @@ impl RouteTimeouts {
 
     /// Get effective handler timeout.
     pub fn handler_timeout(&self, default: &TimeoutConfig) -> Duration {
-        Duration::from_millis(self.handler_timeout_ms.unwrap_or(default.handler_timeout_ms))
+        Duration::from_millis(
+            self.handler_timeout_ms
+                .unwrap_or(default.handler_timeout_ms),
+        )
     }
 
     /// Get effective body read timeout.
     pub fn read_body_timeout(&self, default: &TimeoutConfig) -> Duration {
-        Duration::from_millis(self.read_body_timeout_ms.unwrap_or(default.read_body_timeout_ms))
+        Duration::from_millis(
+            self.read_body_timeout_ms
+                .unwrap_or(default.read_body_timeout_ms),
+        )
     }
 
     /// Get effective max body size.
@@ -319,18 +325,18 @@ impl std::fmt::Display for LimitError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             LimitError::BodyTooLarge { limit, actual } => {
-                write!(f, "Request body too large: {} bytes (limit: {})", actual, limit)
+                write!(f, "Request body too large: {actual} bytes (limit: {limit})")
             }
             LimitError::HeadersTooLarge { limit } => {
-                write!(f, "Request headers too large (limit: {} bytes)", limit)
+                write!(f, "Request headers too large (limit: {limit} bytes)")
             }
             LimitError::TooManyConnections { limit } => {
-                write!(f, "Too many concurrent connections (limit: {})", limit)
+                write!(f, "Too many concurrent connections (limit: {limit})")
             }
             LimitError::TooManyConnectionsFromIp { ip, limit } => {
-                write!(f, "Too many connections from IP {} (limit: {})", ip, limit)
+                write!(f, "Too many connections from IP {ip} (limit: {limit})")
             }
-            LimitError::ReadError(msg) => write!(f, "Read error: {}", msg),
+            LimitError::ReadError(msg) => write!(f, "Read error: {msg}"),
         }
     }
 }
@@ -631,8 +637,14 @@ mod tests {
         let default = TimeoutConfig::default();
         let route = RouteTimeouts::new().with_handler_timeout(60000);
 
-        assert_eq!(route.handler_timeout(&default), Duration::from_millis(60000));
-        assert_eq!(route.read_body_timeout(&default), Duration::from_millis(30000)); // Falls back to default
+        assert_eq!(
+            route.handler_timeout(&default),
+            Duration::from_millis(60000)
+        );
+        assert_eq!(
+            route.read_body_timeout(&default),
+            Duration::from_millis(30000)
+        ); // Falls back to default
     }
 
     #[test]

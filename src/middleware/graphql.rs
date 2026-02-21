@@ -70,10 +70,7 @@ impl GraphQLResponse {
     }
 
     pub fn errors(errors: Vec<GraphQLError>) -> Self {
-        Self {
-            data: None,
-            errors,
-        }
+        Self { data: None, errors }
     }
 }
 
@@ -351,7 +348,7 @@ impl GraphQLMiddleware {
     where
         F: Fn(&ResolverContext) -> ResolverResult + Send + Sync + 'static,
     {
-        let key = format!("{}.{}", type_name, field_name);
+        let key = format!("{type_name}.{field_name}");
         let mut resolvers = self.resolvers.write();
         resolvers.insert(key, Arc::new(resolver));
     }
@@ -367,9 +364,7 @@ impl GraphQLMiddleware {
         // Check for introspection
         if query.contains("__schema") || query.contains("__type") {
             if !self.config.introspection {
-                return GraphQLResponse::error(GraphQLError::new(
-                    "Introspection is disabled",
-                ));
+                return GraphQLResponse::error(GraphQLError::new("Introspection is disabled"));
             }
             return self.handle_introspection(query);
         }
@@ -388,7 +383,7 @@ impl GraphQLMiddleware {
         let field_name = self.extract_field_name(query);
 
         if let Some(field_name) = field_name {
-            let key = format!("{}.{}", type_name, field_name);
+            let key = format!("{type_name}.{field_name}");
             let resolvers = self.resolvers.read();
 
             if let Some(resolver) = resolvers.get(&key) {
@@ -401,8 +396,7 @@ impl GraphQLMiddleware {
                 }
             } else {
                 GraphQLResponse::error(GraphQLError::new(&format!(
-                    "No resolver found for {}.{}",
-                    type_name, field_name
+                    "No resolver found for {type_name}.{field_name}"
                 )))
             }
         } else {
@@ -543,13 +537,16 @@ impl AsyncMiddleware for GraphQLMiddleware {
                         let request_arc = Arc::new(request.clone());
 
                         let gql_response = self.execute(&gql_req, request_arc);
-                        let body = serde_json::to_value(&gql_response).unwrap_or_else(|_| json!({"errors": [{"message": "Serialization error"}]}));
+                        let body = serde_json::to_value(&gql_response).unwrap_or_else(
+                            |_| json!({"errors": [{"message": "Serialization error"}]}),
+                        );
                         let response = Response::from_json_value(body, 200);
                         return Ok(MiddlewareAction::Stop(response));
                     }
                     Err(e) => {
-                        let error = GraphQLError::new(&format!("Invalid GraphQL request: {}", e));
-                        let body = serde_json::to_value(&GraphQLResponse::error(error)).unwrap_or_else(|_| json!({"errors": [{"message": "Error"}]}));
+                        let error = GraphQLError::new(&format!("Invalid GraphQL request: {e}"));
+                        let body = serde_json::to_value(GraphQLResponse::error(error))
+                            .unwrap_or_else(|_| json!({"errors": [{"message": "Error"}]}));
                         let response = Response::from_json_value(body, 400);
                         return Ok(MiddlewareAction::Stop(response));
                     }

@@ -179,7 +179,8 @@ impl PoolMetrics {
 
     pub fn record_query(&self, duration_ms: u64, error: bool) {
         self.total_queries.fetch_add(1, Ordering::Relaxed);
-        self.query_time_sum_ms.fetch_add(duration_ms, Ordering::Relaxed);
+        self.query_time_sum_ms
+            .fetch_add(duration_ms, Ordering::Relaxed);
         if error {
             self.total_errors.fetch_add(1, Ordering::Relaxed);
         }
@@ -441,13 +442,13 @@ pub enum DatabaseError {
 impl std::fmt::Display for DatabaseError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            DatabaseError::Connection(msg) => write!(f, "Connection error: {}", msg),
-            DatabaseError::Query(msg) => write!(f, "Query error: {}", msg),
+            DatabaseError::Connection(msg) => write!(f, "Connection error: {msg}"),
+            DatabaseError::Query(msg) => write!(f, "Query error: {msg}"),
             DatabaseError::PoolExhausted => write!(f, "Connection pool exhausted"),
             DatabaseError::Timeout => write!(f, "Connection timeout"),
-            DatabaseError::Transaction(msg) => write!(f, "Transaction error: {}", msg),
-            DatabaseError::Config(msg) => write!(f, "Configuration error: {}", msg),
-            DatabaseError::Unknown(msg) => write!(f, "Unknown error: {}", msg),
+            DatabaseError::Transaction(msg) => write!(f, "Transaction error: {msg}"),
+            DatabaseError::Config(msg) => write!(f, "Configuration error: {msg}"),
+            DatabaseError::Unknown(msg) => write!(f, "Unknown error: {msg}"),
         }
     }
 }
@@ -518,7 +519,8 @@ struct MockConnection {
 impl DatabaseConnection for MockConnection {
     fn execute(&self, _query: &str, _params: &[&dyn ToSql]) -> Result<u64, DatabaseError> {
         let start = Instant::now();
-        self.metrics.record_query(start.elapsed().as_millis() as u64, false);
+        self.metrics
+            .record_query(start.elapsed().as_millis() as u64, false);
         Ok(1)
     }
 
@@ -536,7 +538,8 @@ impl DatabaseConnection for MockConnection {
         let data = self.data.read();
         let rows = data.get(table).cloned().unwrap_or_default();
 
-        self.metrics.record_query(start.elapsed().as_millis() as u64, false);
+        self.metrics
+            .record_query(start.elapsed().as_millis() as u64, false);
         Ok(rows)
     }
 
@@ -573,7 +576,8 @@ impl Transaction for MockTransaction {
 
     fn execute(&self, _query: &str, _params: &[&dyn ToSql]) -> Result<u64, DatabaseError> {
         let start = Instant::now();
-        self.metrics.record_query(start.elapsed().as_millis() as u64, false);
+        self.metrics
+            .record_query(start.elapsed().as_millis() as u64, false);
         Ok(1)
     }
 
@@ -590,7 +594,8 @@ impl Transaction for MockTransaction {
         let data = self.data.read();
         let rows = data.get(table).cloned().unwrap_or_default();
 
-        self.metrics.record_query(start.elapsed().as_millis() as u64, false);
+        self.metrics
+            .record_query(start.elapsed().as_millis() as u64, false);
         Ok(rows)
     }
 }

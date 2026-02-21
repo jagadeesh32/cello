@@ -447,8 +447,9 @@ class SagaExecution:
                         try:
                             await comp_step.compensate_step(context)
                             self.steps[comp_index]["status"] = StepStatus.COMPENSATED
-                        except Exception:
+                        except Exception as comp_err:
                             self.steps[comp_index]["status"] = StepStatus.FAILED
+                            self.steps[comp_index]["compensation_error"] = str(comp_err)
 
                     self.status = StepStatus.FAILED
                     self.completed_at = time.time()

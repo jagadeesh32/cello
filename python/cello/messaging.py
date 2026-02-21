@@ -395,25 +395,58 @@ class Message:
             return self.value.decode("utf-8")
         return str(self.value)
 
+    # Maximum size in bytes for JSON deserialization to prevent
+    # denial-of-service via extremely large payloads.
+    MAX_JSON_SIZE: int = 10 * 1024 * 1024  # 10 MB
+
     def json(self) -> Any:
         """
         Parse the message value as JSON.
 
+        SECURITY: Enforces a size limit (MAX_JSON_SIZE, default 10 MB) on the
+        raw payload before parsing to prevent denial-of-service via
+        oversized messages. The parsed result must be a dict or list;
+        other JSON top-level types (strings, numbers, booleans, null)
+        are rejected to reduce the risk of type-confusion bugs.
+
         Returns:
-            Parsed JSON value (dict, list, etc.).
+            Parsed JSON value (dict or list).
 
         Raises:
             json.JSONDecodeError: If the value is not valid JSON.
+            ValueError: If the payload exceeds MAX_JSON_SIZE or the parsed
+                        result is not a dict or list.
         """
         raw = self.value
-        if isinstance(raw, bytes):
-            raw = raw.decode("utf-8")
-        if isinstance(raw, str):
-            return json.loads(raw)
-        # If already a dict/list, return as-is
+
+        # Already a dict/list -- return as-is
         if isinstance(raw, (dict, list)):
             return raw
-        return json.loads(str(raw))
+
+        if isinstance(raw, bytes):
+            if len(raw) > self.MAX_JSON_SIZE:
+                raise ValueError(
+                    f"Message payload size ({len(raw)} bytes) exceeds "
+                    f"maximum allowed ({self.MAX_JSON_SIZE} bytes)"
+                )
+            raw = raw.decode("utf-8")
+        elif isinstance(raw, str):
+            if len(raw.encode("utf-8")) > self.MAX_JSON_SIZE:
+                raise ValueError(
+                    f"Message payload size exceeds "
+                    f"maximum allowed ({self.MAX_JSON_SIZE} bytes)"
+                )
+        else:
+            raw = str(raw)
+
+        parsed = json.loads(raw)
+
+        if not isinstance(parsed, (dict, list)):
+            raise ValueError(
+                f"Expected JSON object or array, got {type(parsed).__name__}"
+            )
+
+        return parsed
 
     def ack(self) -> None:
         """

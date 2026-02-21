@@ -6,8 +6,8 @@
 //! - Request context for middleware data
 //! - Streaming multipart uploads
 
-pub mod parsing;
 pub mod multipart_streaming;
+pub mod parsing;
 
 use pyo3::prelude::*;
 use std::collections::HashMap;
@@ -15,8 +15,8 @@ use std::collections::HashMap;
 use crate::json::{json_to_python, parse_json, python_to_json};
 use crate::multipart::parse_urlencoded;
 
-pub use parsing::{LazyBody, TypedParams, ParamError};
-pub use multipart_streaming::{StreamingMultipart, MultipartPart};
+pub use multipart_streaming::{MultipartPart, StreamingMultipart};
+pub use parsing::{LazyBody, ParamError, TypedParams};
 
 // ============================================================================
 // HTTP Request
@@ -64,7 +64,8 @@ pub struct Request {
 #[derive(Clone, Default)]
 pub struct LazyCache {
     json_parsed: std::sync::Arc<parking_lot::RwLock<Option<Result<serde_json::Value, String>>>>,
-    form_parsed: std::sync::Arc<parking_lot::RwLock<Option<Result<HashMap<String, String>, String>>>>,
+    form_parsed:
+        std::sync::Arc<parking_lot::RwLock<Option<Result<HashMap<String, String>, String>>>>,
     text_parsed: std::sync::Arc<parking_lot::RwLock<Option<Result<String, String>>>>,
 }
 
@@ -109,14 +110,14 @@ impl Request {
         if let Some(ref result) = *cache {
             return result
                 .clone()
-                .map_err(|e| pyo3::exceptions::PyValueError::new_err(e));
+                .map_err(pyo3::exceptions::PyValueError::new_err);
         }
 
         let result = String::from_utf8(self.body.clone()).map_err(|e| e.to_string());
         let return_value = result.clone();
         *cache = Some(result);
 
-        return_value.map_err(|e| pyo3::exceptions::PyValueError::new_err(e))
+        return_value.map_err(pyo3::exceptions::PyValueError::new_err)
     }
 
     /// Get the request body as bytes.
@@ -131,7 +132,7 @@ impl Request {
         let value = if let Some(ref result) = *cache {
             result
                 .clone()
-                .map_err(|e| pyo3::exceptions::PyValueError::new_err(e))?
+                .map_err(pyo3::exceptions::PyValueError::new_err)?
         } else {
             let text = String::from_utf8(self.body.clone())
                 .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
@@ -154,14 +155,14 @@ impl Request {
         if let Some(ref result) = *cache {
             return result
                 .clone()
-                .map_err(|e| pyo3::exceptions::PyValueError::new_err(e));
+                .map_err(pyo3::exceptions::PyValueError::new_err);
         }
 
         let result = parse_urlencoded(&self.body);
         let return_value = result.clone();
         *cache = Some(result);
 
-        return_value.map_err(|e| pyo3::exceptions::PyValueError::new_err(e))
+        return_value.map_err(pyo3::exceptions::PyValueError::new_err)
     }
 
     /// Get the content type.
@@ -170,6 +171,7 @@ impl Request {
     }
 
     /// Check if the request is JSON.
+    #[inline]
     pub fn is_json(&self) -> bool {
         self.content_type
             .as_ref()
@@ -178,6 +180,7 @@ impl Request {
     }
 
     /// Check if the request is form data.
+    #[inline]
     pub fn is_form(&self) -> bool {
         self.content_type
             .as_ref()
@@ -186,6 +189,7 @@ impl Request {
     }
 
     /// Check if the request is multipart.
+    #[inline]
     pub fn is_multipart(&self) -> bool {
         self.content_type
             .as_ref()
@@ -206,13 +210,11 @@ impl Request {
     #[pyo3(signature = (key, default=None))]
     pub fn get_query_int(&self, key: &str, default: Option<i64>) -> PyResult<Option<i64>> {
         match self.query_params.get(key) {
-            Some(value) => value
-                .parse::<i64>()
-                .map(Some)
-                .map_err(|_| pyo3::exceptions::PyValueError::new_err(format!(
-                    "Query parameter '{}' is not a valid integer",
-                    key
-                ))),
+            Some(value) => value.parse::<i64>().map(Some).map_err(|_| {
+                pyo3::exceptions::PyValueError::new_err(format!(
+                    "Query parameter '{key}' is not a valid integer"
+                ))
+            }),
             None => Ok(default),
         }
     }
@@ -221,13 +223,11 @@ impl Request {
     #[pyo3(signature = (key, default=None))]
     pub fn get_query_float(&self, key: &str, default: Option<f64>) -> PyResult<Option<f64>> {
         match self.query_params.get(key) {
-            Some(value) => value
-                .parse::<f64>()
-                .map(Some)
-                .map_err(|_| pyo3::exceptions::PyValueError::new_err(format!(
-                    "Query parameter '{}' is not a valid float",
-                    key
-                ))),
+            Some(value) => value.parse::<f64>().map(Some).map_err(|_| {
+                pyo3::exceptions::PyValueError::new_err(format!(
+                    "Query parameter '{key}' is not a valid float"
+                ))
+            }),
             None => Ok(default),
         }
     }
@@ -268,13 +268,11 @@ impl Request {
     #[pyo3(signature = (key, default=None))]
     pub fn get_param_int(&self, key: &str, default: Option<i64>) -> PyResult<Option<i64>> {
         match self.params.get(key) {
-            Some(value) => value
-                .parse::<i64>()
-                .map(Some)
-                .map_err(|_| pyo3::exceptions::PyValueError::new_err(format!(
-                    "Path parameter '{}' is not a valid integer",
-                    key
-                ))),
+            Some(value) => value.parse::<i64>().map(Some).map_err(|_| {
+                pyo3::exceptions::PyValueError::new_err(format!(
+                    "Path parameter '{key}' is not a valid integer"
+                ))
+            }),
             None => Ok(default),
         }
     }
@@ -347,21 +345,19 @@ impl Request {
     /// Set a context value by key.
     pub fn set_context(&mut self, py: Python<'_>, key: String, value: PyObject) -> PyResult<()> {
         let json_value = python_to_json(py, value.as_ref(py))
-            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e))?;
+            .map_err(pyo3::exceptions::PyValueError::new_err)?;
         self.context.insert(key, json_value);
         Ok(())
     }
 
     /// Get a context value as string by key.
     pub fn get_context_string(&self, key: &str) -> Option<String> {
-        self.context
-            .get(key)
-            .and_then(|v| match v {
-                serde_json::Value::String(s) => Some(s.clone()),
-                serde_json::Value::Number(n) => Some(n.to_string()),
-                serde_json::Value::Bool(b) => Some(b.to_string()),
-                _ => None,
-            })
+        self.context.get(key).and_then(|v| match v {
+            serde_json::Value::String(s) => Some(s.clone()),
+            serde_json::Value::Number(n) => Some(n.to_string()),
+            serde_json::Value::Bool(b) => Some(b.to_string()),
+            _ => None,
+        })
     }
 }
 
@@ -382,6 +378,7 @@ impl Request {
     }
 
     /// Create a request from HTTP components (internal use).
+    #[inline]
     pub fn from_http(
         method: String,
         path: String,
@@ -406,6 +403,7 @@ impl Request {
     }
 
     /// Get the raw body bytes (internal use).
+    #[inline]
     pub fn body_bytes(&self) -> &[u8] {
         &self.body
     }
@@ -439,16 +437,19 @@ impl Request {
     }
 
     /// Set a context value (Rust-only, internal use).
+    #[inline]
     pub fn set_context_internal(&mut self, key: &str, value: serde_json::Value) {
         self.context.insert(key.to_string(), value);
     }
 
     /// Get a context value by key (Rust-only, internal use).
+    #[inline]
     pub fn get_context_internal(&self, key: &str) -> Option<serde_json::Value> {
         self.context.get(key).cloned()
     }
 
     /// Get a context value as string (Rust-only, internal use).
+    #[inline]
     pub fn get_context_str(&self, key: &str) -> Option<String> {
         self.context
             .get(key)
@@ -502,16 +503,14 @@ mod tests {
             request.get_context_internal("user_id"),
             Some(serde_json::json!(123))
         );
-        assert_eq!(
-            request.get_context_str("role"),
-            Some("admin".to_string())
-        );
+        assert_eq!(request.get_context_str("role"), Some("admin".to_string()));
     }
 
     #[test]
     fn test_multipart_boundary() {
         let mut request = Request::new("POST", "/upload");
-        request.content_type = Some("multipart/form-data; boundary=----WebKitFormBoundary123".to_string());
+        request.content_type =
+            Some("multipart/form-data; boundary=----WebKitFormBoundary123".to_string());
 
         assert_eq!(
             request.multipart_boundary(),

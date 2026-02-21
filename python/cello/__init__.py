@@ -120,6 +120,82 @@ from cello._cello import (
     SagaConfig,
 )
 
+def validate_jwt_config(config: JwtConfig) -> JwtConfig:
+    """Validate a JwtConfig instance.
+
+    Args:
+        config: JwtConfig to validate.
+
+    Returns:
+        The validated JwtConfig.
+
+    Raises:
+        ValueError: If the config has invalid values.
+    """
+    if not getattr(config, "secret", None):
+        raise ValueError("JwtConfig: 'secret' must not be empty")
+    return config
+
+
+def validate_session_config(config: SessionConfig) -> SessionConfig:
+    """Validate a SessionConfig instance.
+
+    Args:
+        config: SessionConfig to validate.
+
+    Returns:
+        The validated SessionConfig.
+
+    Raises:
+        ValueError: If the config has invalid values.
+    """
+    if not getattr(config, "cookie_name", None):
+        raise ValueError("SessionConfig: 'cookie_name' must not be empty")
+    return config
+
+
+def validate_rate_limit_config(config: RateLimitConfig) -> RateLimitConfig:
+    """Validate a RateLimitConfig instance.
+
+    Args:
+        config: RateLimitConfig to validate.
+
+    Returns:
+        The validated RateLimitConfig.
+
+    Raises:
+        ValueError: If the config has invalid values.
+    """
+    max_requests = getattr(config, "max_requests", None)
+    if max_requests is not None and max_requests <= 0:
+        raise ValueError("RateLimitConfig: 'max_requests' must be positive")
+    window_secs = getattr(config, "window_secs", None)
+    if window_secs is not None and window_secs <= 0:
+        raise ValueError("RateLimitConfig: 'window_secs' must be positive")
+    return config
+
+
+def validate_tls_config(config: TlsConfig) -> TlsConfig:
+    """Validate a TlsConfig instance.
+
+    Args:
+        config: TlsConfig to validate.
+
+    Returns:
+        The validated TlsConfig.
+
+    Raises:
+        ValueError: If the config has invalid values.
+    """
+    cert_path = getattr(config, "cert_path", None)
+    key_path = getattr(config, "key_path", None)
+    if not cert_path or not isinstance(cert_path, str):
+        raise ValueError("TlsConfig: 'cert_path' must be a non-empty string")
+    if not key_path or not isinstance(key_path, str):
+        raise ValueError("TlsConfig: 'key_path' must be a non-empty string")
+    return config
+
+
 __all__ = [
     # Core
     "App",
@@ -167,6 +243,11 @@ __all__ = [
     "EventSourcingConfig",
     "CqrsConfig",
     "SagaConfig",
+    # Config validators
+    "validate_jwt_config",
+    "validate_session_config",
+    "validate_rate_limit_config",
+    "validate_tls_config",
 ]
 __version__ = "1.0.0"
 

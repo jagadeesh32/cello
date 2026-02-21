@@ -295,12 +295,7 @@ impl Default for ProducerConfig {
 /// Trait for message producers capable of sending messages to a broker.
 pub trait MessageProducer: Send + Sync {
     /// Send a single message to the specified topic.
-    fn send(
-        &self,
-        topic: &str,
-        key: Option<&str>,
-        value: &[u8],
-    ) -> Result<(), MessagingError>;
+    fn send(&self, topic: &str, key: Option<&str>, value: &[u8]) -> Result<(), MessagingError>;
 
     /// Send a batch of messages. Each tuple contains (topic, optional key, value).
     fn send_batch(
@@ -365,12 +360,7 @@ impl Default for MockProducer {
 }
 
 impl MessageProducer for MockProducer {
-    fn send(
-        &self,
-        topic: &str,
-        key: Option<&str>,
-        value: &[u8],
-    ) -> Result<(), MessagingError> {
+    fn send(&self, topic: &str, key: Option<&str>, value: &[u8]) -> Result<(), MessagingError> {
         let message = Message {
             id: format!("msg-{}", self.messages.read().len()),
             topic: topic.to_string(),
@@ -532,7 +522,7 @@ impl std::fmt::Display for MessagingError {
             MessagingError::QueueNotFound => write!(f, "Queue or topic not found"),
             MessagingError::BrokerUnavailable => write!(f, "Message broker unavailable"),
             MessagingError::Authentication => write!(f, "Messaging authentication error"),
-            MessagingError::Unknown(msg) => write!(f, "Messaging error: {}", msg),
+            MessagingError::Unknown(msg) => write!(f, "Messaging error: {msg}"),
         }
     }
 }
@@ -817,9 +807,7 @@ mod tests {
         producer
             .send("events", Some("key-1"), b"payload-1")
             .unwrap();
-        producer
-            .send("events", None, b"payload-2")
-            .unwrap();
+        producer.send("events", None, b"payload-2").unwrap();
 
         let messages = producer.sent_messages();
         assert_eq!(messages.len(), 2);
@@ -835,9 +823,17 @@ mod tests {
         let producer = MockProducer::new();
 
         let batch = vec![
-            ("topic-a".to_string(), Some("k1".to_string()), b"v1".to_vec()),
+            (
+                "topic-a".to_string(),
+                Some("k1".to_string()),
+                b"v1".to_vec(),
+            ),
             ("topic-b".to_string(), None, b"v2".to_vec()),
-            ("topic-a".to_string(), Some("k3".to_string()), b"v3".to_vec()),
+            (
+                "topic-a".to_string(),
+                Some("k3".to_string()),
+                b"v3".to_vec(),
+            ),
         ];
 
         producer.send_batch(batch).unwrap();
@@ -1046,8 +1042,12 @@ mod tests {
         consumer.subscribe(&["orders"]).unwrap();
 
         // Produce messages.
-        producer.send("orders", Some("order-1"), b"{\"item\": \"widget\"}").unwrap();
-        producer.send("orders", Some("order-2"), b"{\"item\": \"gadget\"}").unwrap();
+        producer
+            .send("orders", Some("order-1"), b"{\"item\": \"widget\"}")
+            .unwrap();
+        producer
+            .send("orders", Some("order-2"), b"{\"item\": \"gadget\"}")
+            .unwrap();
 
         // Transfer messages from producer to consumer (simulating broker).
         for msg in producer.sent_messages() {
@@ -1092,7 +1092,10 @@ mod tests {
             offset: Some(100),
         };
 
-        assert_eq!(msg.headers.get("correlation-id"), Some(&"abc-123".to_string()));
+        assert_eq!(
+            msg.headers.get("correlation-id"),
+            Some(&"abc-123".to_string())
+        );
         assert_eq!(msg.partition, Some(3));
         assert_eq!(msg.offset, Some(100));
     }

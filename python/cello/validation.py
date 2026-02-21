@@ -20,8 +20,8 @@ def wrap_handler_with_validation(handler):
         # get_type_hints is more reliable than signature.parameters for resolved types
         type_hints = get_type_hints(handler)
         sig = inspect.signature(handler)
-    except Exception:
-        # If we can't inspect (e.g. built-in), just return
+    except (TypeError, ValueError, NameError):
+        # If we can't inspect (e.g. built-in or unresolvable type hints), just return
         return handler
 
     # Identify Pydantic params
@@ -61,8 +61,8 @@ def wrap_handler_with_validation(handler):
                 try:
                     # request.json() is exposed by Rust bindings
                     json_body = request.json()
-                except Exception:
-                    # Invalid JSON or empty
+                except (ValueError, TypeError, UnicodeDecodeError, RuntimeError):
+                    # Invalid JSON, empty body, or Rust binding error
                     errors.append({"loc": ["body"], "msg": "Invalid JSON body", "type": "value_error.json"})
                     break
 

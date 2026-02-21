@@ -55,7 +55,9 @@ impl DTOConfig {
 
     pub fn rename(self, field: &str, alias: &str) -> Self {
         let mut new_self = self;
-        new_self.rename_fields.insert(field.to_string(), alias.to_string());
+        new_self
+            .rename_fields
+            .insert(field.to_string(), alias.to_string());
         new_self
     }
 
@@ -106,7 +108,10 @@ impl DTOConfig {
 
     /// Get the alias for a field (if renamed).
     pub fn get_alias(&self, field_name: &str) -> String {
-        self.rename_fields.get(field_name).cloned().unwrap_or_else(|| field_name.to_string())
+        self.rename_fields
+            .get(field_name)
+            .cloned()
+            .unwrap_or_else(|| field_name.to_string())
     }
 }
 
@@ -192,25 +197,25 @@ impl std::fmt::Display for DTOError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             DTOError::FieldNotIncluded(field) => {
-                write!(f, "Field '{}' is not included in DTO", field)
+                write!(f, "Field '{field}' is not included in DTO")
             }
             DTOError::ReadOnlyField(field) => {
-                write!(f, "Field '{}' is read-only", field)
+                write!(f, "Field '{field}' is read-only")
             }
             DTOError::WriteOnlyField(field) => {
-                write!(f, "Field '{}' is write-only", field)
+                write!(f, "Field '{field}' is write-only")
             }
             DTOError::ValidationError(msg) => {
-                write!(f, "Validation error: {}", msg)
+                write!(f, "Validation error: {msg}")
             }
             DTOError::SerializationError(msg) => {
-                write!(f, "Serialization error: {}", msg)
+                write!(f, "Serialization error: {msg}")
             }
             DTOError::DepthExceeded(current, max) => {
-                write!(f, "DTO nesting depth {} exceeds maximum {}", current, max)
+                write!(f, "DTO nesting depth {current} exceeds maximum {max}")
             }
             DTOError::Custom(msg) => {
-                write!(f, "DTO error: {}", msg)
+                write!(f, "DTO error: {msg}")
             }
         }
     }
@@ -294,8 +299,7 @@ where
             }
         }
 
-        serde_json::from_value(json)
-            .map_err(|e| DTOError::SerializationError(e.to_string()))
+        serde_json::from_value(json).map_err(|e| DTOError::SerializationError(e.to_string()))
     }
 }
 
@@ -309,7 +313,7 @@ pub struct UserDTO {
     pub id: Option<i64>,
     pub username: String,
     pub email: String,
-    pub password: Option<String>, // Write-only
+    pub password: Option<String>,   // Write-only
     pub created_at: Option<String>, // Read-only
     pub is_active: bool,
     pub roles: Vec<String>,
@@ -334,7 +338,9 @@ impl DTO<UserDTO> for UserDTO {
 
         // Validate required fields
         if model.username.is_empty() {
-            return Err(DTOError::ValidationError("Username is required".to_string()));
+            return Err(DTOError::ValidationError(
+                "Username is required".to_string(),
+            ));
         }
 
         if model.email.is_empty() {
@@ -359,16 +365,22 @@ impl DTO<UserDTO> for UserDTO {
 
     fn validate(&self) -> Result<(), DTOError> {
         if self.username.is_empty() {
-            return Err(DTOError::ValidationError("Username cannot be empty".to_string()));
+            return Err(DTOError::ValidationError(
+                "Username cannot be empty".to_string(),
+            ));
         }
 
         if self.email.is_empty() {
-            return Err(DTOError::ValidationError("Email cannot be empty".to_string()));
+            return Err(DTOError::ValidationError(
+                "Email cannot be empty".to_string(),
+            ));
         }
 
         // Email format validation (simple)
         if !self.email.contains('@') {
-            return Err(DTOError::ValidationError("Invalid email format".to_string()));
+            return Err(DTOError::ValidationError(
+                "Invalid email format".to_string(),
+            ));
         }
 
         Ok(())
@@ -407,14 +419,12 @@ impl DTOFactory {
 
     /// Create a user DTO for response (excludes write-only fields).
     pub fn user_response() -> DTOConfig {
-        DTOConfig::new()
-            .exclude(vec!["password"])
+        DTOConfig::new().exclude(vec!["password"])
     }
 
     /// Create a minimal user DTO for listing.
     pub fn user_list() -> DTOConfig {
-        DTOConfig::new()
-            .include(vec!["id", "username", "is_active"])
+        DTOConfig::new().include(vec!["id", "username", "is_active"])
     }
 }
 

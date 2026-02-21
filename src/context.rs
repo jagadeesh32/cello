@@ -136,7 +136,7 @@ impl PyContext {
     /// Set a value by key.
     pub fn set(&self, py: Python<'_>, key: &str, value: &PyAny) -> PyResult<()> {
         let json_value = crate::json::python_to_json(py, value)
-            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e))?;
+            .map_err(pyo3::exceptions::PyValueError::new_err)?;
         self.inner.write().set_named(key, json_value);
         Ok(())
     }
@@ -229,7 +229,11 @@ impl AppState {
     }
 
     /// Register a named singleton (for Python).
-    pub fn register_named_singleton(&self, name: impl Into<String>, instance: Arc<dyn Any + Send + Sync>) {
+    pub fn register_named_singleton(
+        &self,
+        name: impl Into<String>,
+        instance: Arc<dyn Any + Send + Sync>,
+    ) {
         self.named_singletons.write().insert(name.into(), instance);
     }
 

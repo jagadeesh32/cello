@@ -114,8 +114,8 @@ impl XmlSerializer {
     /// Serialize a value to XML.
     pub fn serialize<T: Serialize>(&self, value: &T) -> Result<String, XmlError> {
         // Convert to JSON value first for unified handling
-        let json = serde_json::to_value(value)
-            .map_err(|e| XmlError::Serialization(e.to_string()))?;
+        let json =
+            serde_json::to_value(value).map_err(|e| XmlError::Serialization(e.to_string()))?;
         self.serialize_json(&json)
     }
 
@@ -358,10 +358,10 @@ pub enum XmlError {
 impl std::fmt::Display for XmlError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            XmlError::Serialization(e) => write!(f, "XML serialization error: {}", e),
-            XmlError::Write(e) => write!(f, "XML write error: {}", e),
-            XmlError::Encoding(e) => write!(f, "XML encoding error: {}", e),
-            XmlError::Python(e) => write!(f, "Python conversion error: {}", e),
+            XmlError::Serialization(e) => write!(f, "XML serialization error: {e}"),
+            XmlError::Write(e) => write!(f, "XML write error: {e}"),
+            XmlError::Encoding(e) => write!(f, "XML encoding error: {e}"),
+            XmlError::Python(e) => write!(f, "Python conversion error: {e}"),
         }
     }
 }
@@ -434,7 +434,10 @@ fn python_to_json_value(py: Python<'_>, obj: &PyAny) -> Result<serde_json::Value
         return python_to_json_value(py, dict);
     }
 
-    Err(format!("Cannot convert Python object to XML: {:?}", obj.get_type().name()))
+    Err(format!(
+        "Cannot convert Python object to XML: {:?}",
+        obj.get_type().name()
+    ))
 }
 
 #[cfg(test)]
@@ -490,10 +493,7 @@ mod tests {
 
     #[test]
     fn test_xml_config() {
-        let config = XmlConfig::new()
-            .root("data")
-            .no_declaration()
-            .indent(4);
+        let config = XmlConfig::new().root("data").no_declaration().indent(4);
 
         assert_eq!(config.root_name, "data");
         assert!(!config.declaration);

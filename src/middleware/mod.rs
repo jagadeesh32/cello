@@ -32,19 +32,19 @@ pub mod session;
 pub mod static_files;
 
 // Enterprise modules
-pub mod telemetry;
-pub mod health;
 pub mod database;
 pub mod graphql;
-pub mod redis;
+pub mod health;
 pub mod messaging;
+pub mod redis;
+pub mod telemetry;
 
 // v0.9.0 - API Protocol modules
 pub mod grpc;
 
 // v0.10.0 - Advanced Pattern modules
-pub mod eventsourcing;
 pub mod cqrs;
+pub mod eventsourcing;
 pub mod saga;
 
 // Re-export DTO types from the dto module
@@ -61,35 +61,74 @@ use crate::response::Response;
 // Re-export all middleware types
 pub use auth::{ApiKeyAuth, BasicAuth, JwtAuth};
 pub use body_limit::BodyLimitMiddleware;
-pub use cache::{CacheMiddleware, CacheConfig, CacheStore, CachedResponse, CacheError, CacheKeyBuilder, DefaultCacheKeyBuilder, InMemoryCacheStore, create_cache_key};
-pub use circuit_breaker::{CircuitBreakerMiddleware, CircuitBreakerConfig};
+pub use cache::{
+    create_cache_key, CacheConfig, CacheError, CacheKeyBuilder, CacheMiddleware, CacheStore,
+    CachedResponse, DefaultCacheKeyBuilder, InMemoryCacheStore,
+};
+pub use circuit_breaker::{CircuitBreakerConfig, CircuitBreakerMiddleware};
 pub use cors::CorsMiddleware;
 pub use csrf::CsrfMiddleware;
 pub use etag::EtagMiddleware;
-pub use exception_handler::{ExceptionHandler, ExceptionHandlerMiddleware, ExceptionHandlerConfig, ExceptionContext, ValidationErrorHandler, AuthenticationErrorHandler, AuthorizationErrorHandler, NotFoundErrorHandler, InternalServerErrorHandler, CustomExceptionHandler};
-pub use guards::{Guard, GuardsMiddleware, RoleGuard, PermissionGuard, AuthenticatedGuard, AndGuard, OrGuard, NotGuard, CustomGuard};
-pub use prometheus::{PrometheusMiddleware, PrometheusConfig, PrometheusMetrics};
-pub use rate_limit::{RateLimitMiddleware, RateLimitStore, TokenBucketConfig, SlidingWindowConfig};
+pub use exception_handler::{
+    AuthenticationErrorHandler, AuthorizationErrorHandler, CustomExceptionHandler,
+    ExceptionContext, ExceptionHandler, ExceptionHandlerConfig, ExceptionHandlerMiddleware,
+    InternalServerErrorHandler, NotFoundErrorHandler, ValidationErrorHandler,
+};
+pub use guards::{
+    AndGuard, AuthenticatedGuard, CustomGuard, Guard, GuardsMiddleware, NotGuard, OrGuard,
+    PermissionGuard, RoleGuard,
+};
+pub use prometheus::{PrometheusConfig, PrometheusMetrics, PrometheusMiddleware};
+pub use rate_limit::{RateLimitMiddleware, RateLimitStore, SlidingWindowConfig, TokenBucketConfig};
 pub use request_id::RequestIdMiddleware;
-pub use security::{SecurityHeadersMiddleware, ContentSecurityPolicy, HstsConfig};
-pub use session::{SessionMiddleware, SessionStore, InMemorySessionStore};
+pub use security::{ContentSecurityPolicy, HstsConfig, SecurityHeadersMiddleware};
+pub use session::{InMemorySessionStore, SessionMiddleware, SessionStore};
 pub use static_files::StaticFilesMiddleware;
 
 // Enterprise module re-exports
-pub use telemetry::{OpenTelemetryMiddleware, OpenTelemetryConfig, TelemetryMetrics, TelemetryStats, TraceContext};
-pub use health::{HealthCheckMiddleware, HealthCheckConfig, HealthStatus, HealthCheckResult, HealthReport, SystemInfo};
-pub use database::{DatabaseConfig, DatabasePool, DatabaseConnection, DatabaseStats, DatabaseError, Row, SqlValue, ToSql, FromSql, MockDatabasePool};
-pub use graphql::{GraphQLMiddleware, GraphQLConfig, GraphQLRequest, GraphQLResponse, GraphQLError, GraphQLSchema, ResolverContext, ResolverFn};
-pub use redis::{RedisConfig, RedisClient, RedisStats, RedisError, RedisValue, MockRedisClient, RedisPoolMetrics};
-pub use messaging::{MessageQueueConfig, KafkaConfig, RabbitMQConfig, SqsConfig, Message, MessageResult, ProducerConfig, MessageProducer, MessageConsumer, MockProducer, MockConsumer, MessagingError, MessagingStats};
+pub use database::{
+    DatabaseConfig, DatabaseConnection, DatabaseError, DatabasePool, DatabaseStats, FromSql,
+    MockDatabasePool, Row, SqlValue, ToSql,
+};
+pub use graphql::{
+    GraphQLConfig, GraphQLError, GraphQLMiddleware, GraphQLRequest, GraphQLResponse, GraphQLSchema,
+    ResolverContext, ResolverFn,
+};
+pub use health::{
+    HealthCheckConfig, HealthCheckMiddleware, HealthCheckResult, HealthReport, HealthStatus,
+    SystemInfo,
+};
+pub use messaging::{
+    KafkaConfig, Message, MessageConsumer, MessageProducer, MessageQueueConfig, MessageResult,
+    MessagingError, MessagingStats, MockConsumer, MockProducer, ProducerConfig, RabbitMQConfig,
+    SqsConfig,
+};
+pub use redis::{
+    MockRedisClient, RedisClient, RedisConfig, RedisError, RedisPoolMetrics, RedisStats, RedisValue,
+};
+pub use telemetry::{
+    OpenTelemetryConfig, OpenTelemetryMiddleware, TelemetryMetrics, TelemetryStats, TraceContext,
+};
 
 // v0.9.0 - API Protocol re-exports
-pub use grpc::{GrpcConfig, GrpcServer, GrpcServiceDef, GrpcMethodDef, GrpcMethodType, GrpcRequest, GrpcResponse, GrpcStatus, GrpcError, GrpcStats};
+pub use grpc::{
+    GrpcConfig, GrpcError, GrpcMethodDef, GrpcMethodType, GrpcRequest, GrpcResponse, GrpcServer,
+    GrpcServiceDef, GrpcStats, GrpcStatus,
+};
 
 // v0.10.0 - Advanced Pattern re-exports
-pub use eventsourcing::{EventSourcingConfig, Event, AggregateState, Snapshot, EventStore, InMemoryEventStore, EventSourcingError, EventSourcingStats};
-pub use cqrs::{CqrsConfig, Command, CommandResult, QueryDef, QueryResult, CommandBus, QueryBus, CqrsError, CqrsStats};
-pub use saga::{SagaConfig, SagaStep, StepStatus, SagaDefinition, SagaStepDef, SagaExecution, SagaStatus, SagaOrchestrator, SagaError, SagaStats};
+pub use cqrs::{
+    Command, CommandBus, CommandResult, CqrsConfig, CqrsError, CqrsStats, QueryBus, QueryDef,
+    QueryResult,
+};
+pub use eventsourcing::{
+    AggregateState, Event, EventSourcingConfig, EventSourcingError, EventSourcingStats, EventStore,
+    InMemoryEventStore, Snapshot,
+};
+pub use saga::{
+    SagaConfig, SagaDefinition, SagaError, SagaExecution, SagaOrchestrator, SagaStats, SagaStatus,
+    SagaStep, SagaStepDef, StepStatus,
+};
 
 // ============================================================================
 // Core Middleware Types
@@ -119,6 +158,7 @@ pub struct MiddlewareError {
 }
 
 impl MiddlewareError {
+    #[inline]
     pub fn new(message: &str, status: u16) -> Self {
         MiddlewareError {
             message: message.to_string(),
@@ -176,31 +216,37 @@ impl std::error::Error for MiddlewareError {}
 /// Trait for implementing synchronous middleware.
 pub trait Middleware: Send + Sync {
     /// Called before the request is handled.
+    #[inline]
     fn before(&self, _request: &mut Request) -> MiddlewareResult {
         Ok(MiddlewareAction::Continue)
     }
 
     /// Called after the response is generated.
+    #[inline]
     fn after(&self, _request: &Request, _response: &mut Response) -> MiddlewareResult {
         Ok(MiddlewareAction::Continue)
     }
 
     /// Middleware priority (lower = runs first).
+    #[inline]
     fn priority(&self) -> i32 {
         0
     }
 
     /// Middleware name for debugging.
+    #[inline]
     fn name(&self) -> &str {
         "unnamed"
     }
 
     /// Whether this middleware should run for a given path.
+    #[inline]
     fn should_run(&self, _path: &str) -> bool {
         true
     }
 
     /// Get route patterns to skip (if any).
+    #[inline]
     fn skip_paths(&self) -> &[String] {
         &[]
     }
@@ -232,11 +278,13 @@ pub trait AsyncMiddleware: Send + Sync {
     }
 
     /// Middleware priority (lower = runs first).
+    #[inline]
     fn priority(&self) -> i32 {
         0
     }
 
     /// Middleware name for debugging.
+    #[inline]
     fn name(&self) -> &str {
         "unnamed_async"
     }
@@ -298,6 +346,7 @@ impl MiddlewareChain {
     }
 
     /// Execute all sync middleware before handlers.
+    #[inline]
     pub fn execute_before(&self, request: &mut Request) -> MiddlewareResult {
         let middlewares = self.sync_middlewares.read();
         for entry in middlewares.iter() {
@@ -313,6 +362,7 @@ impl MiddlewareChain {
     }
 
     /// Execute all sync middleware after handlers (in reverse order).
+    #[inline]
     pub fn execute_after(&self, request: &Request, response: &mut Response) -> MiddlewareResult {
         let middlewares = self.sync_middlewares.read();
         for entry in middlewares.iter().rev() {
@@ -353,7 +403,11 @@ impl MiddlewareChain {
     ) -> MiddlewareResult {
         let entries: Vec<Arc<dyn AsyncMiddleware>> = {
             let middlewares = self.async_middlewares.read();
-            middlewares.iter().rev().map(|e| e.middleware.clone()).collect()
+            middlewares
+                .iter()
+                .rev()
+                .map(|e| e.middleware.clone())
+                .collect()
         };
         for middleware in &entries {
             match middleware.after_async(request, response).await? {
@@ -365,21 +419,25 @@ impl MiddlewareChain {
     }
 
     /// Get the number of registered sync middleware.
+    #[inline]
     pub fn len(&self) -> usize {
         self.sync_middlewares.read().len()
     }
 
     /// Get the number of registered async middleware.
+    #[inline]
     pub fn async_len(&self) -> usize {
         self.async_middlewares.read().len()
     }
 
     /// Check if the chain has no sync middleware.
+    #[inline]
     pub fn is_empty(&self) -> bool {
         self.sync_middlewares.read().is_empty()
     }
 
     /// Check if the chain has no async middleware.
+    #[inline]
     pub fn is_async_empty(&self) -> bool {
         self.async_middlewares.read().is_empty()
     }
@@ -455,7 +513,7 @@ impl Middleware for LoggingMiddleware {
         println!("--> {} {}", request.method, request.path);
         if self.log_headers {
             for (key, value) in &request.headers {
-                println!("    {}: {}", key, value);
+                println!("    {key}: {value}");
             }
         }
         Ok(MiddlewareAction::Continue)
@@ -486,6 +544,7 @@ impl Middleware for LoggingMiddleware {
 }
 
 /// Get status text for HTTP status code.
+#[inline]
 pub fn status_text(status: u16) -> &'static str {
     match status {
         200 => "OK",

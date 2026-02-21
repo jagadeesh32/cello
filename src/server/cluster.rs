@@ -12,7 +12,6 @@ use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
-
 // ============================================================================
 // Cluster Configuration
 // ============================================================================
@@ -203,11 +202,7 @@ impl ClusterManager {
 
     /// Get worker PIDs.
     pub fn worker_pids(&self) -> Vec<u32> {
-        self.workers
-            .read()
-            .values()
-            .filter_map(|w| w.pid)
-            .collect()
+        self.workers.read().values().filter_map(|w| w.pid).collect()
     }
 
     /// Start the cluster.
@@ -266,7 +261,10 @@ impl ClusterManager {
         worker.last_restart = Some(std::time::Instant::now());
         worker.state = WorkerState::Starting;
 
-        println!("Restarting worker {} (restart #{})", worker_id, worker.restarts);
+        println!(
+            "Restarting worker {} (restart #{})",
+            worker_id, worker.restarts
+        );
 
         Ok(())
     }
@@ -343,12 +341,12 @@ impl std::fmt::Display for ClusterError {
         match self {
             ClusterError::AlreadyRunning => write!(f, "Cluster is already running"),
             ClusterError::NotRunning => write!(f, "Cluster is not running"),
-            ClusterError::WorkerNotFound(id) => write!(f, "Worker {} not found", id),
+            ClusterError::WorkerNotFound(id) => write!(f, "Worker {id} not found"),
             ClusterError::MaxRestartsExceeded(id) => {
-                write!(f, "Maximum restarts exceeded for worker {}", id)
+                write!(f, "Maximum restarts exceeded for worker {id}")
             }
-            ClusterError::ForkFailed(e) => write!(f, "Fork failed: {}", e),
-            ClusterError::SignalFailed(e) => write!(f, "Signal failed: {}", e),
+            ClusterError::ForkFailed(e) => write!(f, "Fork failed: {e}"),
+            ClusterError::SignalFailed(e) => write!(f, "Signal failed: {e}"),
         }
     }
 }

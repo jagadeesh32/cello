@@ -37,16 +37,16 @@ pub mod dependency;
 pub mod dto;
 pub mod error;
 pub mod lifecycle;
-pub mod timeout;
-pub mod routing;
 pub mod middleware;
 pub mod request;
 pub mod response;
+pub mod routing;
 pub mod server;
+pub mod timeout;
 
 // New v0.5.0 modules
-pub mod openapi;
 pub mod background;
+pub mod openapi;
 pub mod template;
 
 use pyo3::prelude::*;
@@ -157,15 +157,26 @@ impl Cello {
 
     /// Enable Prometheus metrics.
     #[pyo3(signature = (endpoint=None, namespace=None, subsystem=None))]
-    pub fn enable_prometheus(&mut self, endpoint: Option<String>, namespace: Option<String>, subsystem: Option<String>) -> PyResult<()> {
+    pub fn enable_prometheus(
+        &mut self,
+        endpoint: Option<String>,
+        namespace: Option<String>,
+        subsystem: Option<String>,
+    ) -> PyResult<()> {
         let mut config = middleware::prometheus::PrometheusConfig::default();
-        if let Some(e) = endpoint { config.endpoint = e; }
-        if let Some(n) = namespace { config.namespace = n; }
-        if let Some(s) = subsystem { config.subsystem = s; }
+        if let Some(e) = endpoint {
+            config.endpoint = e;
+        }
+        if let Some(n) = namespace {
+            config.namespace = n;
+        }
+        if let Some(s) = subsystem {
+            config.subsystem = s;
+        }
 
         let mw = middleware::prometheus::PrometheusMiddleware::with_config(config)
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-        
+
         *self.prometheus.write() = Some(mw);
         Ok(())
     }
@@ -200,9 +211,13 @@ impl Cello {
                 );
                 middleware::rate_limit::RateLimitMiddleware::adaptive(adaptive_config)
             }
-            _ => return Err(pyo3::exceptions::PyValueError::new_err("Unknown rate limit algorithm")),
+            _ => {
+                return Err(pyo3::exceptions::PyValueError::new_err(
+                    "Unknown rate limit algorithm",
+                ))
+            }
         };
-        
+
         self.middleware.add(mw);
         Ok(())
     }
@@ -215,7 +230,8 @@ impl Cello {
 
     /// Register a singleton dependency.
     pub fn register_singleton(&mut self, name: String, value: PyObject) {
-        self.dependency_container.register_py_singleton(&name, value);
+        self.dependency_container
+            .register_py_singleton(&name, value);
     }
 
     /// Enable logging middleware.
@@ -235,24 +251,27 @@ impl Cello {
 
     /// Enable caching middleware.
     #[pyo3(signature = (ttl=300, methods=None, exclude_paths=None))]
-    pub fn enable_caching(&mut self, ttl: u64, methods: Option<Vec<String>>, exclude_paths: Option<Vec<String>>) {
-         let mut config = middleware::cache::CacheConfig::default();
-         config.default_ttl = ttl;
-         if let Some(m) = methods {
-             config.methods = m;
-         }
-         if let Some(e) = exclude_paths {
-             config.exclude_paths = e;
-         }
-         
+    pub fn enable_caching(
+        &mut self,
+        ttl: u64,
+        methods: Option<Vec<String>>,
+        exclude_paths: Option<Vec<String>>,
+    ) {
+        let mut config = middleware::cache::CacheConfig::default();
+        config.default_ttl = ttl;
+        if let Some(m) = methods {
+            config.methods = m;
+        }
+        if let Some(e) = exclude_paths {
+            config.exclude_paths = e;
+        }
 
-         
-         let mw = middleware::cache::CacheMiddleware::with_config(config.clone());
-         
-         // Store reference for invalidation
-         *self.cache_store.write() = Some(config.store);
-         
-         self.middleware.add_async(mw);
+        let mw = middleware::cache::CacheMiddleware::with_config(config.clone());
+
+        // Store reference for invalidation
+        *self.cache_store.write() = Some(config.store);
+
+        self.middleware.add_async(mw);
     }
 
     /// Enable circuit breaker middleware.
@@ -262,18 +281,18 @@ impl Cello {
         failure_threshold: u32,
         reset_timeout: u64,
         half_open_target: u32,
-        failure_codes: Option<Vec<u16>>
+        failure_codes: Option<Vec<u16>>,
     ) {
-         let mut config = middleware::circuit_breaker::CircuitBreakerConfig::default();
-         config.failure_threshold = failure_threshold;
-         config.reset_timeout = std::time::Duration::from_secs(reset_timeout);
-         config.half_open_target = half_open_target;
-         if let Some(codes) = failure_codes {
-             config.failure_codes = codes;
-         }
-         
-         let mw = middleware::circuit_breaker::CircuitBreakerMiddleware::new(config);
-         self.middleware.add(mw);
+        let mut config = middleware::circuit_breaker::CircuitBreakerConfig::default();
+        config.failure_threshold = failure_threshold;
+        config.reset_timeout = std::time::Duration::from_secs(reset_timeout);
+        config.half_open_target = half_open_target;
+        if let Some(codes) = failure_codes {
+            config.failure_codes = codes;
+        }
+
+        let mw = middleware::circuit_breaker::CircuitBreakerMiddleware::new(config);
+        self.middleware.add(mw);
     }
 
     /// Register a startup handler.
@@ -300,13 +319,13 @@ impl Cello {
             // Let's spawn a thread that creates a runtime? No too heavy.
             // let's try to get handle.
             if let Ok(handle) = tokio::runtime::Handle::try_current() {
-                 handle.spawn(async move {
-                     let _ = store.invalidate_tags(&tags).await;
-                 });
+                handle.spawn(async move {
+                    let _ = store.invalidate_tags(&tags).await;
+                });
             } else {
-                 // Fallback: This might happen if called before app.run() or from outside.
-                 // We can start a temp runtime or just print warning.
-                 eprintln!("Warning: Cache invalidation failed - no async runtime");
+                // Fallback: This might happen if called before app.run() or from outside.
+                // We can start a temp runtime or just print warning.
+                eprintln!("Warning: Cache invalidation failed - no async runtime");
             }
         }
         Ok(())
@@ -335,13 +354,14 @@ impl Cello {
         let mw = middleware::telemetry::OpenTelemetryMiddleware::new(otel_config);
         self.middleware.add_async(mw);
 
-        println!("📊 OpenTelemetry enabled for service: {}", service_name);
+        println!("📊 OpenTelemetry enabled for service: {service_name}");
     }
 
     /// Enable health check endpoints.
     #[pyo3(signature = (config=None))]
     pub fn enable_health_checks(&mut self, config: Option<PyHealthCheckConfig>) {
-        let config = config.unwrap_or_else(|| PyHealthCheckConfig::new("/health", true, false, None, 5, Some(5)));
+        let config = config
+            .unwrap_or_else(|| PyHealthCheckConfig::new("/health", true, false, None, 5, Some(5)));
 
         let health_config = middleware::health::HealthCheckConfig {
             base_path: config.base_path.clone(),
@@ -364,7 +384,9 @@ impl Cello {
     /// Enable GraphQL endpoint.
     #[pyo3(signature = (config=None))]
     pub fn enable_graphql(&mut self, config: Option<PyGraphQLConfig>) {
-        let config = config.unwrap_or_else(|| PyGraphQLConfig::new("/graphql", true, true, Some(10), Some(1000), false, false));
+        let config = config.unwrap_or_else(|| {
+            PyGraphQLConfig::new("/graphql", true, true, Some(10), Some(1000), false, false)
+        });
 
         let gql_config = middleware::graphql::GraphQLConfig {
             path: config.path.clone(),
@@ -441,7 +463,8 @@ impl Cello {
     /// Enable gRPC service support.
     #[pyo3(signature = (config=None))]
     pub fn enable_grpc(&mut self, config: Option<PyGrpcConfig>) {
-        let config = config.unwrap_or_else(|| PyGrpcConfig::new("[::]:50051", true, 4194304, false, 60, 100));
+        let config = config
+            .unwrap_or_else(|| PyGrpcConfig::new("[::]:50051", true, 4194304, false, 60, 100));
 
         let grpc_config = middleware::grpc::GrpcConfig {
             address: config.address.clone(),
@@ -466,9 +489,9 @@ impl Cello {
     #[pyo3(signature = (name, methods=None))]
     pub fn add_grpc_service(&mut self, name: String, methods: Option<Vec<String>>) {
         let methods = methods.unwrap_or_default();
-        println!("🔌 gRPC service registered: {}", name);
+        println!("🔌 gRPC service registered: {name}");
         for method in &methods {
-            println!("   - {}", method);
+            println!("   - {method}");
         }
     }
 
@@ -478,7 +501,7 @@ impl Cello {
         println!("📨 Message queue enabled:");
         println!("   Brokers: {}", config.brokers.join(", "));
         if let Some(ref group_id) = config.group_id {
-            println!("   Group ID: {}", group_id);
+            println!("   Group ID: {group_id}");
         }
     }
 
@@ -509,7 +532,7 @@ impl Cello {
     /// Enable event sourcing support.
     #[pyo3(signature = (config=None))]
     pub fn enable_event_sourcing(&mut self, config: Option<PyEventSourcingConfig>) {
-        let config = config.unwrap_or_else(|| PyEventSourcingConfig::memory());
+        let config = config.unwrap_or_else(PyEventSourcingConfig::memory);
 
         let es_config = middleware::eventsourcing::EventSourcingConfig {
             store_type: config.store_type.clone(),
@@ -523,17 +546,24 @@ impl Cello {
         let _store = middleware::eventsourcing::InMemoryEventStore::with_config(es_config);
         println!("Event sourcing enabled:");
         println!("   Store type: {}", config.store_type);
-        println!("   Snapshots: {}", if config.enable_snapshots { "enabled" } else { "disabled" });
+        println!(
+            "   Snapshots: {}",
+            if config.enable_snapshots {
+                "enabled"
+            } else {
+                "disabled"
+            }
+        );
         println!("   Snapshot interval: {} events", config.snapshot_interval);
         if let Some(ref url) = config.connection_url {
-            println!("   Connection: {}", url);
+            println!("   Connection: {url}");
         }
     }
 
     /// Enable CQRS (Command Query Responsibility Segregation) support.
     #[pyo3(signature = (config=None))]
     pub fn enable_cqrs(&mut self, config: Option<PyCqrsConfig>) {
-        let config = config.unwrap_or_else(|| PyCqrsConfig::default());
+        let config = config.unwrap_or_else(PyCqrsConfig::default);
 
         let cqrs_config = middleware::cqrs::CqrsConfig {
             enable_event_sync: config.enable_event_sync,
@@ -554,7 +584,7 @@ impl Cello {
     /// Enable Saga pattern for distributed transaction orchestration.
     #[pyo3(signature = (config=None))]
     pub fn enable_saga(&mut self, config: Option<PySagaConfig>) {
-        let config = config.unwrap_or_else(|| PySagaConfig::default());
+        let config = config.unwrap_or_else(PySagaConfig::default);
 
         let saga_config = middleware::saga::SagaConfig {
             max_retries: config.max_retries,
@@ -568,7 +598,14 @@ impl Cello {
         println!("   Max retries: {}", config.max_retries);
         println!("   Retry delay: {}ms", config.retry_delay_ms);
         println!("   Timeout: {}ms", config.timeout_ms);
-        println!("   Logging: {}", if config.enable_logging { "enabled" } else { "disabled" });
+        println!(
+            "   Logging: {}",
+            if config.enable_logging {
+                "enabled"
+            } else {
+                "disabled"
+            }
+        );
     }
 
     // ========================================================================
@@ -581,7 +618,12 @@ impl Cello {
     /// - GET /redoc - ReDoc documentation
     /// - GET /openapi.json - OpenAPI JSON schema
     #[pyo3(signature = (title=None, version=None))]
-    pub fn enable_openapi(&mut self, py: Python<'_>, title: Option<String>, version: Option<String>) -> PyResult<()> {
+    pub fn enable_openapi(
+        &mut self,
+        py: Python<'_>,
+        title: Option<String>,
+        version: Option<String>,
+    ) -> PyResult<()> {
         let title = title.unwrap_or_else(|| "Cello API".to_string());
         let version = version.unwrap_or_else(|| "1.0.0".to_string());
 
@@ -590,7 +632,8 @@ impl Cello {
         let version_clone = version.clone();
 
         // Create a Python handler for /docs (Swagger UI)
-        let docs_code = format!(r#"
+        let docs_code = format!(
+            r#"
 def docs_handler(request):
     from cello import Response
     html = '''<!DOCTYPE html>
@@ -598,7 +641,7 @@ def docs_handler(request):
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{title} - Swagger UI</title>
+    <title>{title_clone} - Swagger UI</title>
     <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5.9.0/swagger-ui.css" />
     <style>
         body {{ margin: 0; padding: 0; }}
@@ -622,10 +665,12 @@ def docs_handler(request):
 </body>
 </html>'''
     return Response.html(html)
-"#, title = title_clone);
+"#
+        );
 
         // Create /redoc handler
-        let redoc_code = format!(r#"
+        let redoc_code = format!(
+            r#"
 def redoc_handler(request):
     from cello import Response
     html = '''<!DOCTYPE html>
@@ -633,7 +678,7 @@ def redoc_handler(request):
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{title} - ReDoc</title>
+    <title>{title_clone} - ReDoc</title>
     <link href="https://fonts.googleapis.com/css?family=Montserrat:300,400,700|Roboto:300,400,700" rel="stylesheet">
     <style>body {{ margin: 0; padding: 0; }}</style>
 </head>
@@ -643,26 +688,29 @@ def redoc_handler(request):
 </body>
 </html>'''
     return Response.html(html)
-"#, title = title_clone);
+"#
+        );
 
         // Create /openapi.json handler
-        let openapi_code = format!(r#"
+        let openapi_code = format!(
+            r#"
 def openapi_handler(request):
     return {{
         "openapi": "3.0.3",
         "info": {{
-            "title": "{title}",
-            "version": "{version}",
-            "description": "{title} - Powered by Cello Framework"
+            "title": "{title_clone}",
+            "version": "{version_clone}",
+            "description": "{title_clone} - Powered by Cello Framework"
         }},
         "paths": {{}}
     }}
-"#, title = title_clone, version = version_clone);
+"#
+        );
 
         // Execute Python code and register handlers
-        let docs_handler = py.eval(&format!("{}\ndocs_handler", docs_code), None, None)?;
-        let redoc_handler = py.eval(&format!("{}\nredoc_handler", redoc_code), None, None)?;
-        let openapi_handler = py.eval(&format!("{}\nopenapi_handler", openapi_code), None, None)?;
+        let docs_handler = py.eval(&format!("{docs_code}\ndocs_handler"), None, None)?;
+        let redoc_handler = py.eval(&format!("{redoc_code}\nredoc_handler"), None, None)?;
+        let openapi_handler = py.eval(&format!("{openapi_code}\nopenapi_handler"), None, None)?;
 
         self.add_route("GET", "/docs", docs_handler.into())?;
         self.add_route("GET", "/redoc", redoc_handler.into())?;
@@ -678,13 +726,19 @@ def openapi_handler(request):
 
     /// Start the HTTP server.
     #[pyo3(signature = (host=None, port=None, workers=None))]
-    pub fn run(&self, py: Python<'_>, host: Option<&str>, port: Option<u16>, workers: Option<usize>) -> PyResult<()> {
+    pub fn run(
+        &self,
+        py: Python<'_>,
+        host: Option<&str>,
+        port: Option<u16>,
+        workers: Option<usize>,
+    ) -> PyResult<()> {
         let host = host.unwrap_or("127.0.0.1");
         let port = port.unwrap_or(8000);
 
-        println!("🐍 Cello v2 server starting at http://{}:{}", host, port);
+        println!("🐍 Cello v2 server starting at http://{host}:{port}");
         if let Some(w) = workers {
-            println!("   Workers: {}", w);
+            println!("   Workers: {w}");
         }
 
         // Release the GIL and run the server
@@ -696,7 +750,8 @@ def openapi_handler(request):
                 builder.worker_threads(w);
             }
 
-            let rt = builder.build()
+            let rt = builder
+                .build()
                 .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
 
             rt.block_on(async {
@@ -713,27 +768,27 @@ def openapi_handler(request):
                     self.guards.clone(),
                     self.prometheus.clone(),
                 );
-                
+
                 // Execute startup handlers
                 Python::with_gil(|py| {
                     for handler in &self.startup_handlers {
                         if let Err(e) = call_lifecycle_handler(py, handler) {
-                            eprintln!("Error in startup handler: {}", e);
+                            eprintln!("Error in startup handler: {e}");
                         }
                     }
                 });
 
                 let result = server.run().await;
-                
+
                 // Execute shutdown handlers
                 Python::with_gil(|py| {
                     for handler in &self.shutdown_handlers {
                         if let Err(e) = call_lifecycle_handler(py, handler) {
-                            eprintln!("Error in shutdown handler: {}", e);
+                            eprintln!("Error in shutdown handler: {e}");
                         }
                     }
                 });
-                
+
                 result
             })
         })
@@ -744,7 +799,7 @@ def openapi_handler(request):
         let handler_id = self.handlers.register(handler);
         self.router
             .add_route(method, path, handler_id)
-            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e))
+            .map_err(pyo3::exceptions::PyValueError::new_err)
     }
 }
 
@@ -1061,14 +1116,35 @@ impl PyRateLimitConfig {
 
     /// Create adaptive config.
     #[staticmethod]
-    pub fn adaptive(capacity: u64, refill_rate: u64, min_capacity: u64, error_threshold: f64) -> Self {
-        Self::new("adaptive", capacity, refill_rate, 60, "ip", Some(min_capacity), Some(error_threshold))
+    pub fn adaptive(
+        capacity: u64,
+        refill_rate: u64,
+        min_capacity: u64,
+        error_threshold: f64,
+    ) -> Self {
+        Self::new(
+            "adaptive",
+            capacity,
+            refill_rate,
+            60,
+            "ip",
+            Some(min_capacity),
+            Some(error_threshold),
+        )
     }
 
     /// Create sliding window config.
     #[staticmethod]
     pub fn sliding_window(max_requests: u64, window_secs: u64) -> Self {
-        Self::new("sliding_window", max_requests, 0, window_secs, "ip", None, None)
+        Self::new(
+            "sliding_window",
+            max_requests,
+            0,
+            window_secs,
+            "ip",
+            None,
+            None,
+        )
     }
 }
 
@@ -1164,7 +1240,15 @@ impl PySecurityHeadersConfig {
     /// Create default secure headers.
     #[staticmethod]
     pub fn secure() -> Self {
-        Self::new("DENY", true, "1; mode=block", "strict-origin-when-cross-origin", Some(31536000), true, false)
+        Self::new(
+            "DENY",
+            true,
+            "1; mode=block",
+            "strict-origin-when-cross-origin",
+            Some(31536000),
+            true,
+            false,
+        )
     }
 }
 
@@ -1305,7 +1389,8 @@ impl PyOpenTelemetryConfig {
             sampling_rate: sampling_rate.clamp(0.0, 1.0),
             export_traces,
             export_metrics,
-            excluded_paths: excluded_paths.unwrap_or_else(|| vec!["/health".to_string(), "/metrics".to_string()]),
+            excluded_paths: excluded_paths
+                .unwrap_or_else(|| vec!["/health".to_string(), "/metrics".to_string()]),
         }
     }
 }
@@ -1419,9 +1504,9 @@ impl PyDatabaseConfig {
         pool_size: usize,
     ) -> Self {
         let url = if let Some(pw) = password {
-            format!("postgresql://{}:{}@{}:{}/{}", user, pw, host, port, database)
+            format!("postgresql://{user}:{pw}@{host}:{port}/{database}")
         } else {
-            format!("postgresql://{}@{}:{}/{}", user, host, port, database)
+            format!("postgresql://{user}@{host}:{port}/{database}")
         };
         Self::new(&url, pool_size, 1, 1800, 5, 300, Some("cello".to_string()))
     }
@@ -1490,14 +1575,28 @@ impl PyRedisConfig {
     /// Create config for local development.
     #[staticmethod]
     pub fn local() -> Self {
-        Self::new("redis://127.0.0.1:6379", 5, 1, 5, 300, false, None, 0, None, false, None)
+        Self::new(
+            "redis://127.0.0.1:6379",
+            5,
+            1,
+            5,
+            300,
+            false,
+            None,
+            0,
+            None,
+            false,
+            None,
+        )
     }
 
     /// Create config for cluster mode.
     #[staticmethod]
     #[pyo3(signature = (url, pool_size=20, password=None))]
     pub fn cluster(url: &str, pool_size: usize, password: Option<String>) -> Self {
-        Self::new(url, pool_size, 2, 5, 300, true, None, 0, password, false, None)
+        Self::new(
+            url, pool_size, 2, 5, 300, true, None, 0, password, false, None,
+        )
     }
 }
 
@@ -1901,17 +2000,17 @@ impl PySagaConfig {
 fn call_lifecycle_handler(py: Python<'_>, handler: &PyObject) -> PyResult<()> {
     // Call the handler. If it returns a coroutine, run it.
     let result = handler.call0(py)?;
-    
+
     let inspect = py.import("inspect")?;
     let is_coroutine = inspect
         .call_method1("iscoroutine", (result.as_ref(py),))?
         .is_true()?;
-    
+
     if is_coroutine {
         let asyncio = py.import("asyncio")?;
         let _ = asyncio.call_method1("run", (result.as_ref(py),))?;
     }
-    
+
     Ok(())
 }
 

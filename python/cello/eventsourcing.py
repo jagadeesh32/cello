@@ -295,8 +295,15 @@ class Aggregate:
         to the uncommitted events list. It is used to reconstitute
         an aggregate from the event store.
 
+        Validates that event versions are sequential (each event's version
+        must be exactly one greater than the previous). Raises ValueError
+        if the event stream is corrupted or out of order.
+
         Args:
             events: Ordered list of events to replay.
+
+        Raises:
+            ValueError: If event versions are not sequential.
 
         Example:
             events = await event_store.get_events("order-123")
@@ -308,6 +315,14 @@ class Aggregate:
         self.version = 0
 
         for event in events:
+            expected_version = self.version + 1
+            if event.version != expected_version:
+                raise ValueError(
+                    f"Event version out of order: expected {expected_version}, "
+                    f"got {event.version} (event_type={event.event_type!r}, "
+                    f"aggregate_id={self.id!r})"
+                )
+
             # Look for decorated handler first
             handler = self._event_handlers.get(event.event_type)
 

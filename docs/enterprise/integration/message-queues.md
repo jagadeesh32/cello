@@ -5,7 +5,7 @@ description: Kafka, RabbitMQ, and SQS support in Cello Framework
 
 # Message Queue Integration
 
-Cello v0.9.0 provides first-class support for message queues with decorator-based consumers, producers, and configuration for Kafka, RabbitMQ, and AWS SQS.
+Cello provides first-class support for message queues with decorator-based consumers, producers, and configuration for Kafka, RabbitMQ, and AWS SQS.
 
 ## Quick Start
 

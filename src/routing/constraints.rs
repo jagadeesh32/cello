@@ -515,7 +515,9 @@ impl ConstraintRegistry {
 
     /// Register a custom constraint.
     pub fn register(&self, name: &str, constraint: Box<dyn RouteConstraint>) {
-        self.constraints.write().insert(name.to_string(), constraint);
+        self.constraints
+            .write()
+            .insert(name.to_string(), constraint);
     }
 
     /// Get a constraint by name.

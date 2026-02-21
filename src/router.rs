@@ -21,6 +21,12 @@ pub struct Router {
     routes: Arc<RwLock<HashMap<String, MatchitRouter<usize>>>>,
 }
 
+impl Default for Router {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Router {
     /// Create a new empty router.
     pub fn new() -> Self {
@@ -30,9 +36,10 @@ impl Router {
     }
 
     /// Convert Python-style path params {param} to matchit-style :param
+    #[inline]
     fn convert_path_params(path: &str) -> String {
         let mut result = String::with_capacity(path.len());
-        
+
         for c in path.chars() {
             if c == '{' {
                 result.push(':');
@@ -42,7 +49,7 @@ impl Router {
                 result.push(c);
             }
         }
-        
+
         result
     }
 
@@ -54,16 +61,14 @@ impl Router {
     /// * `handler_id` - ID of the registered handler
     pub fn add_route(&mut self, method: &str, path: &str, handler_id: usize) -> Result<(), String> {
         let mut routes = self.routes.write();
-        let method_router = routes
-            .entry(method.to_uppercase())
-            .or_insert_with(MatchitRouter::new);
+        let method_router = routes.entry(method.to_uppercase()).or_default();
 
         // Convert {param} to :param for matchit compatibility
         let converted_path = Self::convert_path_params(path);
-        
+
         method_router
             .insert(&converted_path, handler_id)
-            .map_err(|e| format!("Failed to add route: {}", e))
+            .map_err(|e| format!("Failed to add route: {e}"))
     }
 
     /// Match a request path against registered routes.
@@ -75,17 +80,23 @@ impl Router {
     /// # Returns
     /// * `Some(RouteMatch)` if a matching route is found
     /// * `None` if no route matches
+    #[inline]
     pub fn match_route(&self, method: &str, path: &str) -> Option<RouteMatch> {
         let routes = self.routes.read();
-        let method_router = routes.get(&method.to_uppercase())?;
+        // PERF: Try direct lookup first (HTTP methods from hyper are already uppercase),
+        // only allocate for to_uppercase() if direct lookup fails
+        let method_router = routes
+            .get(method)
+            .or_else(|| routes.get(&method.to_uppercase()))?;
 
         match method_router.at(path) {
             Ok(matched) => {
-                let params: HashMap<String, String> = matched
-                    .params
-                    .iter()
-                    .map(|(k, v)| (k.to_string(), v.to_string()))
-                    .collect();
+                // PERF: Pre-allocate HashMap with known param count
+                let mut params: HashMap<String, String> =
+                    HashMap::with_capacity(matched.params.len());
+                for (k, v) in matched.params.iter() {
+                    params.insert(k.to_owned(), v.to_owned());
+                }
 
                 Some(RouteMatch {
                     handler_id: *matched.value,
@@ -123,10 +134,12 @@ mod tests {
     #[test]
     fn test_path_parameters() {
         let mut router = Router::new();
-        
+
         // Test with curly-brace style params - these get converted to :param
         router.add_route("GET", "/users/{id}", 0).unwrap();
-        router.add_route("GET", "/posts/{post_id}/comments/{comment_id}", 1).unwrap();
+        router
+            .add_route("GET", "/posts/{post_id}/comments/{comment_id}", 1)
+            .unwrap();
 
         // Verify the router matches
         let match1 = router.match_route("GET", "/users/123");
@@ -136,7 +149,10 @@ mod tests {
         assert_eq!(match1.params.get("id"), Some(&"123".to_string()));
 
         let match2 = router.match_route("GET", "/posts/456/comments/789");
-        assert!(match2.is_some(), "Route should match /posts/456/comments/789");
+        assert!(
+            match2.is_some(),
+            "Route should match /posts/456/comments/789"
+        );
         let match2 = match2.unwrap();
         assert_eq!(match2.handler_id, 1);
         assert_eq!(match2.params.get("post_id"), Some(&"456".to_string()));

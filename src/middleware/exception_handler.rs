@@ -9,8 +9,6 @@
 //! - JSON/HTML error responses
 //! - Status code mapping
 
-
-
 use super::{Middleware, MiddlewareAction, MiddlewareResult};
 use crate::request::Request;
 use crate::response::Response;
@@ -655,7 +653,10 @@ mod tests {
         let response = handler.handle(&mut context).unwrap();
 
         assert_eq!(response.status, 503);
-        assert_eq!(response.headers.get("Content-Type").unwrap(), "application/problem+json");
+        assert_eq!(
+            response.headers.get("Content-Type").unwrap(),
+            "application/problem+json"
+        );
         let body = String::from_utf8(response.body()).unwrap();
         assert!(body.contains("Custom error"));
     }

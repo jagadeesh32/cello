@@ -20,11 +20,11 @@ use hyper_util::rt::TokioIo;
 use parking_lot::RwLock;
 use pyo3::prelude::*;
 use std::collections::HashMap;
+use std::collections::VecDeque;
 use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
-use std::collections::VecDeque;
 use std::time::{Duration, Instant};
 use tokio::net::TcpListener;
 use tokio::sync::broadcast;
@@ -190,31 +190,37 @@ impl ServerMetrics {
     }
 
     /// Increment request count.
+    #[inline]
     pub fn inc_requests(&self) {
         self.total_requests.fetch_add(1, Ordering::Relaxed);
     }
 
     /// Increment connection count.
+    #[inline]
     pub fn inc_connections(&self) {
         self.active_connections.fetch_add(1, Ordering::Relaxed);
     }
 
     /// Decrement connection count.
+    #[inline]
     pub fn dec_connections(&self) {
         self.active_connections.fetch_sub(1, Ordering::Relaxed);
     }
 
     /// Add bytes received.
+    #[inline]
     pub fn add_bytes_received(&self, bytes: u64) {
         self.bytes_received.fetch_add(bytes, Ordering::Relaxed);
     }
 
     /// Add bytes sent.
+    #[inline]
     pub fn add_bytes_sent(&self, bytes: u64) {
         self.bytes_sent.fetch_add(bytes, Ordering::Relaxed);
     }
 
     /// Increment error count.
+    #[inline]
     pub fn inc_errors(&self) {
         self.total_errors.fetch_add(1, Ordering::Relaxed);
     }
@@ -329,17 +335,20 @@ impl ShutdownCoordinator {
     }
 
     /// Check if shutdown has been initiated.
+    #[inline]
     pub fn is_shutting_down(&self) -> bool {
         self.shutdown_initiated.load(Ordering::SeqCst)
     }
 
     /// Increment active request count.
     /// PERF: Use Relaxed ordering on hot path - exact count not critical for request processing.
+    #[inline]
     pub fn request_started(&self) {
         self.active_requests.fetch_add(1, Ordering::Relaxed);
     }
 
     /// Decrement active request count.
+    #[inline]
     pub fn request_finished(&self) {
         self.active_requests.fetch_sub(1, Ordering::Relaxed);
     }
@@ -380,7 +389,8 @@ pub struct Server {
     shutdown: ShutdownCoordinator,
     dependency_container: Arc<crate::dependency::DependencyContainer>,
     guards: Arc<crate::middleware::guards::GuardsMiddleware>,
-    prometheus: Arc<parking_lot::RwLock<Option<crate::middleware::prometheus::PrometheusMiddleware>>>,
+    prometheus:
+        Arc<parking_lot::RwLock<Option<crate::middleware::prometheus::PrometheusMiddleware>>>,
 }
 
 impl Server {
@@ -392,7 +402,9 @@ impl Server {
         websocket_handlers: WebSocketRegistry,
         dependency_container: Arc<crate::dependency::DependencyContainer>,
         guards: Arc<crate::middleware::guards::GuardsMiddleware>,
-        prometheus: Arc<parking_lot::RwLock<Option<crate::middleware::prometheus::PrometheusMiddleware>>>,
+        prometheus: Arc<
+            parking_lot::RwLock<Option<crate::middleware::prometheus::PrometheusMiddleware>>,
+        >,
     ) -> Self {
         let shutdown = ShutdownCoordinator::new(config.shutdown_timeout);
         Server {
@@ -446,14 +458,14 @@ impl Server {
         let addr: SocketAddr = format!("{}:{}", self.config.host, self.config.port)
             .parse()
             .map_err(|e| {
-                pyo3::exceptions::PyValueError::new_err(format!("Invalid address: {}", e))
+                pyo3::exceptions::PyValueError::new_err(format!("Invalid address: {e}"))
             })?;
 
         let listener = TcpListener::bind(addr).await.map_err(|e| {
-            pyo3::exceptions::PyRuntimeError::new_err(format!("Failed to bind: {}", e))
+            pyo3::exceptions::PyRuntimeError::new_err(format!("Failed to bind: {e}"))
         })?;
 
-        println!("Cello server running at http://{}", addr);
+        println!("Cello server running at http://{addr}");
         println!("   Middleware: {} registered", self.middleware.len());
         println!("   Max connections: {}", self.config.max_connections);
         println!("   Press CTRL+C to stop the server");
@@ -491,7 +503,7 @@ impl Server {
                             if metrics.active_connections.load(Ordering::Relaxed)
                                 >= self.config.max_connections as u64
                             {
-                                eprintln!("Connection limit reached, rejecting connection from {}", peer_addr);
+                                eprintln!("Connection limit reached, rejecting connection from {peer_addr}");
                                 continue;
                             }
 
@@ -529,13 +541,13 @@ impl Server {
 
                                         let result = handle_request(
                                             req,
-                                            router,
-                                            handlers,
-                                            middleware,
-                                            metrics.clone(),
-                                            dependency_container,
-                                            guards,
-                                            prometheus,
+                                            &router,
+                                            &handlers,
+                                            &middleware,
+                                            &metrics,
+                                            &dependency_container,
+                                            &guards,
+                                            &prometheus,
                                         )
                                         .await;
 
@@ -555,7 +567,7 @@ impl Server {
                                 {
                                     // Only log if not a normal connection close
                                     if !err.is_incomplete_message() {
-                                        eprintln!("Connection error: {:?}", err);
+                                        eprintln!("Connection error: {err:?}");
                                     }
                                 }
 
@@ -563,7 +575,7 @@ impl Server {
                             });
                         }
                         Err(e) => {
-                            eprintln!("Accept error: {}", e);
+                            eprintln!("Accept error: {e}");
                         }
                     }
                 }
@@ -581,18 +593,20 @@ impl Server {
 
 async fn handle_request(
     req: HyperRequest<Incoming>,
-    router: Arc<Router>,
-    handlers: Arc<HandlerRegistry>,
-    middleware: Arc<MiddlewareChain>,
-    metrics: Arc<ServerMetrics>,
-    dependency_container: Arc<crate::dependency::DependencyContainer>,
-    guards: Arc<crate::middleware::guards::GuardsMiddleware>,
-    prometheus: Arc<parking_lot::RwLock<Option<crate::middleware::prometheus::PrometheusMiddleware>>>,
+    router: &Arc<Router>,
+    handlers: &Arc<HandlerRegistry>,
+    middleware: &Arc<MiddlewareChain>,
+    metrics: &Arc<ServerMetrics>,
+    dependency_container: &Arc<crate::dependency::DependencyContainer>,
+    guards: &Arc<crate::middleware::guards::GuardsMiddleware>,
+    prometheus: &Arc<
+        parking_lot::RwLock<Option<crate::middleware::prometheus::PrometheusMiddleware>>,
+    >,
 ) -> Result<HyperResponse<Full<Bytes>>, Infallible> {
     metrics.inc_requests();
 
-    let method = req.method().to_string();
-    let path = req.uri().path().to_string();
+    let method = req.method().as_str().to_owned();
+    let path = req.uri().path().to_owned();
     let query_string = req.uri().query().unwrap_or("");
 
     // PERF: Lazy query parsing - only decode when query string exists
@@ -628,10 +642,7 @@ async fn handle_request(
     let header_count = req.headers().len();
     let mut headers: HashMap<String, String> = HashMap::with_capacity(header_count);
     for (k, v) in req.headers().iter() {
-        headers.insert(
-            k.as_str().to_owned(),
-            v.to_str().unwrap_or("").to_owned(),
-        );
+        headers.insert(k.as_str().to_owned(), v.to_str().unwrap_or("").to_owned());
     }
 
     // PERF: Lazy body reading - skip body collection for methods that typically have no body
@@ -678,20 +689,20 @@ async fn handle_request(
     };
 
     // Create request object
-    let mut request =
-        Request::from_http(method.clone(), path.clone(), params, query, headers, body_bytes);
+    // PERF: Avoid cloning method/path - move into Request, use references above for routing
+    let mut request = Request::from_http(method, path, params, query, headers, body_bytes);
 
     // PERF: Skip middleware execution if no middleware registered
     if !middleware.is_empty() {
         match middleware.execute_before(&mut request) {
             Ok(MiddlewareAction::Continue) => {}
             Ok(MiddlewareAction::Stop(response)) => {
-                return build_hyper_response(&response, &metrics);
+                return build_hyper_response(&response, metrics);
             }
             Err(e) => {
                 metrics.inc_errors();
                 let response = Response::error(e.status, &e.message);
-                return build_hyper_response(&response, &metrics);
+                return build_hyper_response(&response, metrics);
             }
         }
     }
@@ -701,12 +712,12 @@ async fn handle_request(
         match middleware.execute_before_async(&mut request).await {
             Ok(MiddlewareAction::Continue) => {}
             Ok(MiddlewareAction::Stop(response)) => {
-                return build_hyper_response(&response, &metrics);
+                return build_hyper_response(&response, metrics);
             }
             Err(e) => {
                 metrics.inc_errors();
                 let response = Response::error(e.status, &e.message);
-                return build_hyper_response(&response, &metrics);
+                return build_hyper_response(&response, metrics);
             }
         }
     }
@@ -719,12 +730,12 @@ async fn handle_request(
             match p.before(&mut request) {
                 Ok(MiddlewareAction::Continue) => {}
                 Ok(MiddlewareAction::Stop(response)) => {
-                    return build_hyper_response(&response, &metrics);
+                    return build_hyper_response(&response, metrics);
                 }
                 Err(e) => {
                     metrics.inc_errors();
                     let response = Response::error(e.status, &e.message);
-                    return build_hyper_response(&response, &metrics);
+                    return build_hyper_response(&response, metrics);
                 }
             }
         }
@@ -733,15 +744,15 @@ async fn handle_request(
     // PERF: Only execute Guards if guards are registered
     if guards.has_guards() {
         use crate::middleware::{Middleware, MiddlewareAction};
-        match Middleware::before(&*guards, &mut request) {
+        match Middleware::before(&**guards, &mut request) {
             Ok(MiddlewareAction::Continue) => {}
             Ok(MiddlewareAction::Stop(response)) => {
-                return build_hyper_response(&response, &metrics);
+                return build_hyper_response(&response, metrics);
             }
             Err(e) => {
                 metrics.inc_errors();
                 let response = Response::error(e.status, &e.message);
-                return build_hyper_response(&response, &metrics);
+                return build_hyper_response(&response, metrics);
             }
         }
     }
@@ -750,15 +761,22 @@ async fn handle_request(
     let mut response = match route_match {
         Some(RouteMatch { handler_id, .. }) => {
             // PERF: Pass request by value - no clone needed
-            let result = handlers.invoke_async(handler_id, request.clone(), dependency_container.clone()).await;
+            let result = handlers
+                .invoke_async(handler_id, request.clone(), dependency_container.clone())
+                .await;
 
             match result {
                 Ok(json_value) => {
                     // Check if this is a serialized Response object
                     if let Some(obj) = json_value.as_object() {
-                        if obj.get("__cello_response__").and_then(|v| v.as_bool()).unwrap_or(false) {
+                        if obj
+                            .get("__cello_response__")
+                            .and_then(|v| v.as_bool())
+                            .unwrap_or(false)
+                        {
                             // Reconstruct Response from serialized format
-                            let status = obj.get("status").and_then(|v| v.as_u64()).unwrap_or(200) as u16;
+                            let status =
+                                obj.get("status").and_then(|v| v.as_u64()).unwrap_or(200) as u16;
                             let body = obj.get("body").and_then(|v| v.as_str()).unwrap_or("");
 
                             let mut resp = Response::new(status);
@@ -789,21 +807,24 @@ async fn handle_request(
         }
         None => {
             // 404 Not Found
-            Response::not_found(&format!("Not Found: {} {}", method, path))
+            Response::not_found(&format!("Not Found: {} {}", request.method, request.path))
         }
     };
 
     // PERF: Skip after middleware if none registered
     if !middleware.is_async_empty() {
-        match middleware.execute_after_async(&request, &mut response).await {
+        match middleware
+            .execute_after_async(&request, &mut response)
+            .await
+        {
             Ok(MiddlewareAction::Continue) => {}
             Ok(MiddlewareAction::Stop(new_response)) => {
-                return build_hyper_response(&new_response, &metrics);
+                return build_hyper_response(&new_response, metrics);
             }
             Err(e) => {
                 metrics.inc_errors();
                 let error_response = Response::error(e.status, &e.message);
-                return build_hyper_response(&error_response, &metrics);
+                return build_hyper_response(&error_response, metrics);
             }
         }
     }
@@ -812,12 +833,12 @@ async fn handle_request(
         match middleware.execute_after(&request, &mut response) {
             Ok(MiddlewareAction::Continue) => {}
             Ok(MiddlewareAction::Stop(new_response)) => {
-                return build_hyper_response(&new_response, &metrics);
+                return build_hyper_response(&new_response, metrics);
             }
             Err(e) => {
                 metrics.inc_errors();
                 let error_response = Response::error(e.status, &e.message);
-                return build_hyper_response(&error_response, &metrics);
+                return build_hyper_response(&error_response, metrics);
             }
         }
     }
@@ -831,17 +852,17 @@ async fn handle_request(
         }
     }
 
-    build_hyper_response(&response, &metrics)
+    build_hyper_response(&response, metrics)
 }
 
 /// Build a Hyper response from our Response type.
 /// PERF: Avoid unnecessary copies - use Bytes::copy_from_slice directly.
+#[inline]
 fn build_hyper_response(
     response: &Response,
     metrics: &Arc<ServerMetrics>,
 ) -> Result<HyperResponse<Full<Bytes>>, Infallible> {
-    let status =
-        StatusCode::from_u16(response.status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+    let status = StatusCode::from_u16(response.status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
 
     let mut builder = HyperResponse::builder().status(status);
 
@@ -854,7 +875,9 @@ fn build_hyper_response(
     metrics.add_bytes_sent(body_slice.len() as u64);
     let body = Full::new(Bytes::copy_from_slice(body_slice));
 
-    Ok(builder.body(body).unwrap())
+    Ok(builder.body(body).unwrap_or_else(|_| {
+        HyperResponse::new(Full::new(Bytes::from_static(b"Internal Server Error")))
+    }))
 }
 
 #[cfg(test)]

@@ -40,18 +40,16 @@ impl HeaderMatchType {
     /// Check if a header value matches this pattern.
     pub fn matches(&self, value: Option<&str>) -> bool {
         match self {
-            HeaderMatchType::Exact(expected) => {
-                value.map(|v| v.eq_ignore_ascii_case(expected)).unwrap_or(false)
-            }
-            HeaderMatchType::Prefix(prefix) => {
-                value.map(|v| v.to_lowercase().starts_with(&prefix.to_lowercase())).unwrap_or(false)
-            }
-            HeaderMatchType::Contains(substr) => {
-                value.map(|v| v.to_lowercase().contains(&substr.to_lowercase())).unwrap_or(false)
-            }
-            HeaderMatchType::Regex(re) => {
-                value.map(|v| re.is_match(v)).unwrap_or(false)
-            }
+            HeaderMatchType::Exact(expected) => value
+                .map(|v| v.eq_ignore_ascii_case(expected))
+                .unwrap_or(false),
+            HeaderMatchType::Prefix(prefix) => value
+                .map(|v| v.to_lowercase().starts_with(&prefix.to_lowercase()))
+                .unwrap_or(false),
+            HeaderMatchType::Contains(substr) => value
+                .map(|v| v.to_lowercase().contains(&substr.to_lowercase()))
+                .unwrap_or(false),
+            HeaderMatchType::Regex(re) => value.map(|v| re.is_match(v)).unwrap_or(false),
             HeaderMatchType::Present => value.is_some(),
             HeaderMatchType::Absent => value.is_none(),
         }
@@ -84,12 +82,18 @@ impl HeaderMatcher {
 
     /// Create an Accept header matcher for content type.
     pub fn accept(content_type: &str) -> Self {
-        Self::new("accept", HeaderMatchType::Contains(content_type.to_string()))
+        Self::new(
+            "accept",
+            HeaderMatchType::Contains(content_type.to_string()),
+        )
     }
 
     /// Create a Content-Type header matcher.
     pub fn content_type(content_type: &str) -> Self {
-        Self::new("content-type", HeaderMatchType::Contains(content_type.to_string()))
+        Self::new(
+            "content-type",
+            HeaderMatchType::Contains(content_type.to_string()),
+        )
     }
 }
 
@@ -164,7 +168,7 @@ impl std::fmt::Display for ApiVersion {
 }
 
 /// Route metadata for advanced features.
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct RouteMetadata {
     /// Handler ID.
     pub handler_id: usize,
@@ -184,22 +188,6 @@ pub struct RouteMetadata {
     pub rate_limit_key: Option<String>,
     /// Skip global hooks.
     pub skip_hooks: bool,
-}
-
-impl Default for RouteMetadata {
-    fn default() -> Self {
-        Self {
-            handler_id: 0,
-            constraints: Vec::new(),
-            header_matchers: Vec::new(),
-            version: None,
-            priority: 0,
-            timeout_ms: None,
-            max_body_size: None,
-            rate_limit_key: None,
-            skip_hooks: false,
-        }
-    }
 }
 
 impl RouteMetadata {
@@ -263,7 +251,7 @@ impl RouteMetadata {
         match (&self.version, request_version) {
             (Some(route_version), Some(req_version)) => route_version.matches(req_version),
             (Some(_), None) => false, // Route requires version but none provided
-            (None, _) => true, // Route doesn't require version
+            (None, _) => true,        // Route doesn't require version
         }
     }
 }
@@ -323,7 +311,7 @@ impl AdvancedRouter {
         let matchit_path = self.convert_path(path);
 
         let mut routers = self.method_routers.write();
-        
+
         // We need to check if this path already exists
         // If it does, we need to rebuild the router with the updated routes
         let existing_routes = {
@@ -344,25 +332,21 @@ impl AdvancedRouter {
             routes.push(metadata);
             // Sort by priority (descending)
             routes.sort_by(|a, b| b.priority.cmp(&a.priority));
-            
+
             // Remove the old router and create a new one
             // Since matchit doesn't support updating, we store routes in the value directly
             // Note: For simplicity, we just insert and let matchit handle duplicates
             // In practice, you might need to rebuild the entire router
-            let router = routers
-                .entry(method.clone())
-                .or_insert_with(MatchitRouter::new);
-            
+            let router = routers.entry(method.clone()).or_default();
+
             // Unfortunately matchit doesn't support updating values
             // So we have to accept that this will fail if path already exists
             // A proper implementation would track all routes separately
             let _ = router.insert(&matchit_path, routes);
         } else {
             // Insert new route
-            let router = routers
-                .entry(method.clone())
-                .or_insert_with(MatchitRouter::new);
-            
+            let router = routers.entry(method.clone()).or_default();
+
             router
                 .insert(&matchit_path, vec![metadata])
                 .map_err(|e| e.to_string())?;
@@ -416,8 +400,13 @@ impl AdvancedRouter {
 
         // Check static routes first (if compiled)
         if *self.is_compiled.read() {
-            if let Some(metadata) = self.static_routes.read().get(&(method.clone(), path.to_string())) {
-                if metadata.validate_headers(headers) && metadata.validate_version(request_version) {
+            if let Some(metadata) = self
+                .static_routes
+                .read()
+                .get(&(method.clone(), path.to_string()))
+            {
+                if metadata.validate_headers(headers) && metadata.validate_version(request_version)
+                {
                     return Some(AdvancedRouteMatch {
                         handler_id: metadata.handler_id,
                         params: HashMap::new(),
@@ -469,14 +458,15 @@ impl AdvancedRouter {
             }
             Err(_) => {
                 // Try catch-all
-                self.catch_all.read().as_ref().map(|metadata| {
-                    AdvancedRouteMatch {
+                self.catch_all
+                    .read()
+                    .as_ref()
+                    .map(|metadata| AdvancedRouteMatch {
                         handler_id: metadata.handler_id,
                         params: HashMap::from([("path".to_string(), path.to_string())]),
                         matched_version: None,
                         metadata: metadata.clone(),
-                    }
-                })
+                    })
             }
         }
     }

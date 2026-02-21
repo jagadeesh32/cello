@@ -193,8 +193,8 @@ impl std::fmt::Display for JwtError {
         match self {
             JwtError::MissingToken => write!(f, "Missing authorization token"),
             JwtError::InvalidFormat => write!(f, "Invalid token format"),
-            JwtError::EncodingFailed(e) => write!(f, "Token encoding failed: {}", e),
-            JwtError::ValidationFailed(e) => write!(f, "Token validation failed: {}", e),
+            JwtError::EncodingFailed(e) => write!(f, "Token encoding failed: {e}"),
+            JwtError::ValidationFailed(e) => write!(f, "Token validation failed: {e}"),
             JwtError::Expired => write!(f, "Token has expired"),
         }
     }
@@ -305,19 +305,21 @@ impl Middleware for JwtAuth {
         }
 
         // Extract token
-        let token = self.extract_token(request).ok_or_else(|| {
-            MiddlewareError::unauthorized("Missing authentication token")
-        })?;
+        let token = self
+            .extract_token(request)
+            .ok_or_else(|| MiddlewareError::unauthorized("Missing authentication token"))?;
 
         // Validate token
-        let claims = self.config.decode(&token).map_err(|e| {
-            MiddlewareError::unauthorized(&e.to_string())
-        })?;
+        let claims = self
+            .config
+            .decode(&token)
+            .map_err(|e| MiddlewareError::unauthorized(&e.to_string()))?;
 
         // Store claims in request context
-        request
-            .context
-            .insert(self.claims_key.clone(), serde_json::to_value(&claims).unwrap());
+        request.context.insert(
+            self.claims_key.clone(),
+            serde_json::to_value(&claims).unwrap(),
+        );
 
         Ok(MiddlewareAction::Continue)
     }
@@ -435,10 +437,9 @@ impl Middleware for BasicAuth {
         }
 
         // Store username in context
-        request.context.insert(
-            self.user_key.clone(),
-            serde_json::Value::String(username),
-        );
+        request
+            .context
+            .insert(self.user_key.clone(), serde_json::Value::String(username));
 
         Ok(MiddlewareAction::Continue)
     }
@@ -569,12 +570,8 @@ impl ApiKeyAuth {
     /// Extract API key from request.
     fn extract_key(&self, request: &Request) -> Option<String> {
         match &self.location {
-            ApiKeyLocation::Header(name) => {
-                request.headers.get(&name.to_lowercase()).cloned()
-            }
-            ApiKeyLocation::Query(name) => {
-                request.query_params.get(name).cloned()
-            }
+            ApiKeyLocation::Header(name) => request.headers.get(&name.to_lowercase()).cloned(),
+            ApiKeyLocation::Query(name) => request.query_params.get(name).cloned(),
             ApiKeyLocation::Cookie(name) => {
                 if let Some(cookie_header) = request.headers.get("cookie") {
                     for cookie in cookie_header.split(';') {
@@ -600,14 +597,13 @@ impl Middleware for ApiKeyAuth {
         }
 
         // Extract key
-        let key = self.extract_key(request).ok_or_else(|| {
-            MiddlewareError::unauthorized("Missing API key")
-        })?;
+        let key = self
+            .extract_key(request)
+            .ok_or_else(|| MiddlewareError::unauthorized("Missing API key"))?;
 
         // Validate key
-        let client_id = (self.validator)(&key).ok_or_else(|| {
-            MiddlewareError::unauthorized("Invalid API key")
-        })?;
+        let client_id = (self.validator)(&key)
+            .ok_or_else(|| MiddlewareError::unauthorized("Invalid API key"))?;
 
         // Store client ID in context
         request.context.insert(

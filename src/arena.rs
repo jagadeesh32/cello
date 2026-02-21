@@ -12,7 +12,7 @@ thread_local! {
 }
 
 /// Request-scoped arena allocator.
-/// 
+///
 /// This arena is reset after each request, providing fast
 /// allocation without individual deallocation overhead.
 pub struct RequestArena {
@@ -22,9 +22,7 @@ pub struct RequestArena {
 impl RequestArena {
     /// Create a new request arena.
     pub fn new() -> Self {
-        RequestArena {
-            arena: Bump::new(),
-        }
+        RequestArena { arena: Bump::new() }
     }
 
     /// Create a new request arena with specified capacity.
@@ -162,7 +160,7 @@ mod tests {
         let arena = RequestArena::new();
         let s1 = arena.alloc_str("hello");
         let s2 = arena.alloc_str("world");
-        
+
         assert_eq!(s1, "hello");
         assert_eq!(s2, "world");
         assert!(arena.allocated_bytes() > 0);
@@ -171,12 +169,12 @@ mod tests {
     #[test]
     fn test_request_arena_reset() {
         let mut arena = RequestArena::with_capacity(1024);
-        
+
         let _ = arena.alloc_str("hello world");
         let _bytes_before = arena.allocated_bytes();
-        
+
         arena.reset();
-        
+
         // After reset, new allocations start fresh
         let _ = arena.alloc_str("new string");
         // The arena reuses memory, so allocated bytes might be similar
@@ -195,7 +193,7 @@ mod tests {
     fn test_arena_str() {
         let s = "hello";
         let arena_str = ArenaStr::new(s);
-        
+
         assert_eq!(arena_str.as_str(), "hello");
         assert_eq!(arena_str.len(), 5);
         assert!(!arena_str.is_empty());

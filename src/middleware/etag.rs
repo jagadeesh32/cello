@@ -18,37 +18,27 @@ use crate::response::Response;
 // ============================================================================
 
 /// ETag strength.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum EtagStrength {
     /// Strong ETag (byte-for-byte identical)
     Strong,
     /// Weak ETag (semantically equivalent)
+    #[default]
     Weak,
 }
 
-impl Default for EtagStrength {
-    fn default() -> Self {
-        EtagStrength::Weak
-    }
-}
-
 /// ETag generation method.
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub enum EtagMethod {
     /// Hash of response body (SHA-256)
     ContentHash,
     /// CRC32 checksum (faster, less collision resistant)
     Crc32,
     /// Length + hash prefix (very fast)
+    #[default]
     LengthHash,
     /// Custom generator function
     Custom(fn(&[u8]) -> String),
-}
-
-impl Default for EtagMethod {
-    fn default() -> Self {
-        EtagMethod::LengthHash
-    }
 }
 
 impl EtagMethod {
@@ -64,7 +54,7 @@ impl EtagMethod {
             }
             EtagMethod::Crc32 => {
                 let crc = crc32fast::hash(body);
-                format!("{:08x}", crc)
+                format!("{crc:08x}")
             }
             EtagMethod::LengthHash => {
                 // Fast: length + first 8 bytes of SHA-256
@@ -195,8 +185,8 @@ impl EtagConfig {
     /// Format ETag value with strength.
     pub fn format_etag(&self, value: &str) -> String {
         match self.strength {
-            EtagStrength::Strong => format!("\"{}\"", value),
-            EtagStrength::Weak => format!("W/\"{}\"", value),
+            EtagStrength::Strong => format!("\"{value}\""),
+            EtagStrength::Weak => format!("W/\"{value}\""),
         }
     }
 }
@@ -333,9 +323,9 @@ impl Middleware for EtagMiddleware {
             let client_etags = Self::parse_if_none_match(if_none_match);
 
             // Check for wildcard or matching ETag
-            let matches = client_etags.iter().any(|client_etag| {
-                client_etag == "*" || Self::etags_match(client_etag, &etag)
-            });
+            let matches = client_etags
+                .iter()
+                .any(|client_etag| client_etag == "*" || Self::etags_match(client_etag, &etag));
 
             if matches {
                 // Return 304 Not Modified

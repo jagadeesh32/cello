@@ -66,7 +66,7 @@ pub fn format_size(bytes: usize) -> String {
     } else if bytes >= 1024 {
         format!("{:.1}KB", bytes as f64 / 1024.0)
     } else {
-        format!("{}B", bytes)
+        format!("{bytes}B")
     }
 }
 
@@ -126,7 +126,8 @@ impl BodyLimitConfig {
     /// Set limit for specific Content-Type.
     pub fn content_type(mut self, content_type: &str, size: &str) -> Self {
         if let Some(bytes) = parse_size(size) {
-            self.content_type_limits.insert(content_type.to_string(), bytes);
+            self.content_type_limits
+                .insert(content_type.to_string(), bytes);
         }
         self
     }
@@ -444,7 +445,10 @@ mod tests {
             .json("1mb")
             .multipart("50mb");
 
-        assert_eq!(config.get_limit("/api/data", Some("application/json")), 1024 * 1024);
+        assert_eq!(
+            config.get_limit("/api/data", Some("application/json")),
+            1024 * 1024
+        );
         assert_eq!(config.get_limit("/upload/file", None), 100 * 1024 * 1024);
         assert_eq!(
             config.get_limit("/api/upload", Some("multipart/form-data; boundary=---")),

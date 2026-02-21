@@ -18,9 +18,10 @@ use crate::response::Response;
 // ============================================================================
 
 /// Request ID format.
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub enum IdFormat {
     /// UUID v4 format (e.g., "550e8400-e29b-41d4-a716-446655440000")
+    #[default]
     Uuid,
     /// Short hex format (e.g., "a1b2c3d4e5f6")
     ShortHex(usize),
@@ -30,12 +31,6 @@ pub enum IdFormat {
     PrefixedUuid(String),
     /// Custom format generator
     Custom(fn() -> String),
-}
-
-impl Default for IdFormat {
-    fn default() -> Self {
-        IdFormat::Uuid
-    }
 }
 
 /// Counter for timestamp-based IDs.

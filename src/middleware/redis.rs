@@ -275,14 +275,14 @@ pub enum RedisError {
 impl std::fmt::Display for RedisError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            RedisError::Connection(msg) => write!(f, "Redis connection error: {}", msg),
-            RedisError::Command(msg) => write!(f, "Redis command error: {}", msg),
+            RedisError::Connection(msg) => write!(f, "Redis connection error: {msg}"),
+            RedisError::Command(msg) => write!(f, "Redis command error: {msg}"),
             RedisError::PoolExhausted => write!(f, "Redis connection pool exhausted"),
             RedisError::Timeout => write!(f, "Redis connection timeout"),
-            RedisError::Serialization(msg) => write!(f, "Redis serialization error: {}", msg),
-            RedisError::NotFound(key) => write!(f, "Redis key not found: {}", key),
-            RedisError::Cluster(msg) => write!(f, "Redis cluster error: {}", msg),
-            RedisError::Unknown(msg) => write!(f, "Redis unknown error: {}", msg),
+            RedisError::Serialization(msg) => write!(f, "Redis serialization error: {msg}"),
+            RedisError::NotFound(key) => write!(f, "Redis key not found: {key}"),
+            RedisError::Cluster(msg) => write!(f, "Redis cluster error: {msg}"),
+            RedisError::Unknown(msg) => write!(f, "Redis unknown error: {msg}"),
         }
     }
 }
@@ -453,12 +453,7 @@ impl RedisClient for MockRedisClient {
         Ok(result)
     }
 
-    fn set(
-        &self,
-        key: &str,
-        value: RedisValue,
-        ttl: Option<Duration>,
-    ) -> Result<(), RedisError> {
+    fn set(&self, key: &str, value: RedisValue, ttl: Option<Duration>) -> Result<(), RedisError> {
         let start = Instant::now();
         self.data.write().insert(key.to_string(), value);
         if let Some(ttl) = ttl {
@@ -499,10 +494,7 @@ impl RedisClient for MockRedisClient {
 
     fn incr(&self, key: &str) -> Result<i64, RedisError> {
         let mut data = self.data.write();
-        let current = data
-            .get(key)
-            .and_then(|v| v.as_i64())
-            .unwrap_or(0);
+        let current = data.get(key).and_then(|v| v.as_i64()).unwrap_or(0);
         let new_val = current + 1;
         data.insert(key.to_string(), RedisValue::Integer(new_val));
         Ok(new_val)
@@ -510,10 +502,7 @@ impl RedisClient for MockRedisClient {
 
     fn decr(&self, key: &str) -> Result<i64, RedisError> {
         let mut data = self.data.write();
-        let current = data
-            .get(key)
-            .and_then(|v| v.as_i64())
-            .unwrap_or(0);
+        let current = data.get(key).and_then(|v| v.as_i64()).unwrap_or(0);
         let new_val = current - 1;
         data.insert(key.to_string(), RedisValue::Integer(new_val));
         Ok(new_val)
@@ -604,8 +593,16 @@ impl RedisClient for MockRedisClient {
         let data = self.data.read();
         if let Some(RedisValue::Array(arr)) = data.get(key) {
             let len = arr.len() as i64;
-            let start = if start < 0 { (len + start).max(0) } else { start } as usize;
-            let stop = if stop < 0 { (len + stop).max(0) } else { stop.min(len - 1) } as usize;
+            let start = if start < 0 {
+                (len + start).max(0)
+            } else {
+                start
+            } as usize;
+            let stop = if stop < 0 {
+                (len + stop).max(0)
+            } else {
+                stop.min(len - 1)
+            } as usize;
             if start > stop || start >= arr.len() {
                 Ok(Vec::new())
             } else {
@@ -705,9 +702,7 @@ mod tests {
         assert!(client.get("key1").unwrap().is_none());
 
         // Exists
-        client
-            .set("key2", RedisValue::Integer(42), None)
-            .unwrap();
+        client.set("key2", RedisValue::Integer(42), None).unwrap();
         assert!(client.exists("key2").unwrap());
         assert!(!client.exists("key3").unwrap());
     }

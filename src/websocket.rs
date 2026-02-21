@@ -14,11 +14,11 @@ pub struct WebSocketMessage {
     /// Message type: "text", "binary", "ping", "pong", "close"
     #[pyo3(get)]
     pub msg_type: String,
-    
+
     /// Text data (for text messages)
     #[pyo3(get)]
     pub text: Option<String>,
-    
+
     /// Binary data (for binary messages)
     #[pyo3(get)]
     pub data: Option<Vec<u8>>,
@@ -85,7 +85,7 @@ impl WebSocketMessage {
 }
 
 /// WebSocket connection handler for Python.
-/// 
+///
 /// Note: This is a placeholder for the WebSocket API.
 /// Full WebSocket support requires protocol upgrade handling.
 #[pyclass]
@@ -93,7 +93,7 @@ pub struct WebSocket {
     /// Connection state
     #[pyo3(get)]
     pub connected: bool,
-    
+
     /// Internal message queue (simulated)
     messages: Arc<RwLock<Vec<WebSocketMessage>>>,
 }

@@ -99,7 +99,7 @@ impl StreamingMultipart {
     /// Create new streaming multipart parser.
     pub fn new(boundary: &str) -> Self {
         Self {
-            boundary: format!("--{}", boundary).into_bytes(),
+            boundary: format!("--{boundary}").into_bytes(),
             state: ParserState::Preamble,
             buffer: BytesMut::new(),
             current_part: None,
@@ -175,11 +175,10 @@ impl StreamingMultipart {
     /// Parse headers for current part.
     fn parse_headers(&mut self) -> bool {
         // Find end of headers (blank line)
-        let header_end = self.find_header_end();
-        if header_end.is_none() {
-            return false;
-        }
-        let header_end = header_end.unwrap();
+        let header_end = match self.find_header_end() {
+            Some(pos) => pos,
+            None => return false,
+        };
 
         let header_bytes = self.buffer.split_to(header_end);
         // Skip CRLF CRLF
@@ -256,9 +255,7 @@ impl StreamingMultipart {
 
     /// Find end of headers (CRLF CRLF).
     fn find_header_end(&self) -> Option<usize> {
-        self.buffer
-            .windows(4)
-            .position(|w| w == b"\r\n\r\n")
+        self.buffer.windows(4).position(|w| w == b"\r\n\r\n")
     }
 
     /// Check for final boundary.
@@ -299,7 +296,7 @@ impl StreamingMultipart {
 
 /// Extract parameter from header value.
 fn extract_param(value: &str, param: &str) -> Option<String> {
-    let search = format!("{}=", param);
+    let search = format!("{param}=");
     value.find(&search).map(|pos| {
         let start = pos + search.len();
         let remaining = &value[start..];
@@ -357,10 +354,7 @@ impl StreamingPartReader {
             Some(self.buffer.split_to(body_len).freeze())
         } else {
             // No boundary found - return buffered data minus potential boundary
-            let safe_len = self
-                .buffer
-                .len()
-                .saturating_sub(self.boundary.len() + 2);
+            let safe_len = self.buffer.len().saturating_sub(self.boundary.len() + 2);
             if safe_len > 0 {
                 Some(self.buffer.split_to(safe_len).freeze())
             } else {
@@ -398,7 +392,7 @@ impl<R: AsyncRead + Unpin> AsyncMultipart<R> {
     pub fn new(reader: R, boundary: &str) -> Self {
         Self {
             reader,
-            boundary: format!("--{}", boundary).into_bytes(),
+            boundary: format!("--{boundary}").into_bytes(),
             buffer: BytesMut::with_capacity(8192),
         }
     }

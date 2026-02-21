@@ -1,6 +1,25 @@
 from typing import Any, List, Union, Callable, Dict
+import hmac
 import inspect
 from functools import wraps
+
+
+def constant_time_compare(a: str, b: str) -> bool:
+    """Compare two strings in constant time to prevent timing attacks.
+
+    SECURITY: Always use this function (or hmac.compare_digest) instead of
+    ``==`` when comparing auth tokens, passwords, API keys, or any other
+    secret values. Direct ``==`` comparison leaks information about how
+    many leading characters match, enabling timing-based attacks.
+
+    Args:
+        a: First string to compare.
+        b: Second string to compare.
+
+    Returns:
+        True if the strings are equal, False otherwise.
+    """
+    return hmac.compare_digest(a.encode("utf-8"), b.encode("utf-8"))
 
 class GuardError(Exception):
     """Base class for guard errors."""
@@ -131,10 +150,10 @@ class Or(Guard):
                 result = guard(request)
                 if result is not False and not isinstance(result, str):
                     return True
-            except Exception as e:
+            except GuardError as e:
                 last_error = e
-        
-        # If we get here, all failed
+
+        # If we get here, all guards failed
         if last_error:
             raise last_error
         raise ForbiddenError("All guards failed")
@@ -149,9 +168,9 @@ class Not(Guard):
             result = self.guard(request)
             if result is False or isinstance(result, str):
                  return True # Guard failed, so NOT Guard passes
-        except Exception:
-             return True # Guard raised exception, so NOT Guard passes
-        
+        except GuardError:
+             return True # Guard raised GuardError, so NOT Guard passes
+
         raise ForbiddenError("Guard succeeded but was expected to fail")
 
 def verify_guards(guards: List[Callable], request: Any):

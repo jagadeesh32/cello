@@ -5,7 +5,7 @@ description: GraphQL support in Cello Framework - queries, mutations, subscripti
 
 # GraphQL Integration
 
-Cello v0.9.0 introduces first-class GraphQL support with decorator-based schema definition, DataLoader for N+1 prevention, and WebSocket-based subscriptions.
+Cello provides first-class GraphQL support with decorator-based schema definition, DataLoader for N+1 prevention, and WebSocket-based subscriptions.
 
 ## Quick Start
 

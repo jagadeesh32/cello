@@ -13,14 +13,14 @@ pub struct UploadedFile {
     /// Original filename from the client
     #[pyo3(get)]
     pub filename: String,
-    
+
     /// Content type (MIME type)
     #[pyo3(get)]
     pub content_type: String,
-    
+
     /// File content as bytes
     content: Vec<u8>,
-    
+
     /// Temporary file path (if saved to disk)
     #[pyo3(get)]
     pub temp_path: Option<String>,
@@ -81,7 +81,7 @@ impl UploadedFile {
 pub struct FormData {
     /// Text fields
     fields: HashMap<String, String>,
-    
+
     /// File fields
     files: HashMap<String, Vec<UploadedFile>>,
 }
@@ -113,7 +113,9 @@ impl FormData {
 
     /// Get an uploaded file.
     pub fn get_file(&self, name: &str) -> Option<UploadedFile> {
-        self.files.get(name).and_then(|files| files.first().cloned())
+        self.files
+            .get(name)
+            .and_then(|files| files.first().cloned())
     }
 
     /// Get all uploaded files for a field.
@@ -172,31 +174,31 @@ impl FormData {
 
 /// Parse URL-encoded form data.
 pub fn parse_urlencoded(body: &[u8]) -> Result<HashMap<String, String>, String> {
-    let body_str = std::str::from_utf8(body)
-        .map_err(|e| format!("Invalid UTF-8 in form data: {}", e))?;
-    
+    let body_str =
+        std::str::from_utf8(body).map_err(|e| format!("Invalid UTF-8 in form data: {e}"))?;
+
     let mut fields = HashMap::new();
-    
+
     for pair in body_str.split('&') {
         if pair.is_empty() {
             continue;
         }
-        
+
         let mut parts = pair.splitn(2, '=');
         let key = parts.next().unwrap_or("");
         let value = parts.next().unwrap_or("");
-        
+
         // URL decode
         let key = urlencoding::decode(key)
-            .map_err(|e| format!("Failed to decode key: {}", e))?
+            .map_err(|e| format!("Failed to decode key: {e}"))?
             .to_string();
         let value = urlencoding::decode(&value.replace('+', " "))
-            .map_err(|e| format!("Failed to decode value: {}", e))?
+            .map_err(|e| format!("Failed to decode value: {e}"))?
             .to_string();
-        
+
         fields.insert(key, value);
     }
-    
+
     Ok(fields)
 }
 
@@ -217,7 +219,7 @@ mod tests {
             "text/plain".to_string(),
             b"Hello, World!".to_vec(),
         );
-        
+
         assert_eq!(file.filename, "test.txt");
         assert_eq!(file.size(), 13);
         assert_eq!(file.extension(), Some("txt".to_string()));
@@ -229,7 +231,7 @@ mod tests {
         let mut form = FormData::new();
         form.add_field("name".to_string(), "John".to_string());
         form.add_field("email".to_string(), "john@example.com".to_string());
-        
+
         assert_eq!(form.get("name"), Some("John".to_string()));
         assert_eq!(form.get("email"), Some("john@example.com".to_string()));
         assert_eq!(form.get("missing"), None);
@@ -240,7 +242,7 @@ mod tests {
     fn test_parse_urlencoded() {
         let body = b"name=John&email=john%40example.com&message=Hello+World";
         let result = parse_urlencoded(body).unwrap();
-        
+
         assert_eq!(result.get("name"), Some(&"John".to_string()));
         assert_eq!(result.get("email"), Some(&"john@example.com".to_string()));
         assert_eq!(result.get("message"), Some(&"Hello World".to_string()));

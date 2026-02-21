@@ -134,9 +134,17 @@ class Database:
         """
         Execute a query and return all rows as dictionaries.
 
+        SECURITY: Always use parameterized queries with $1, $2, ... placeholders.
+        Never use string formatting (f-strings, %, .format()) to build queries,
+        as this creates SQL injection vulnerabilities.
+
+        Good:  await db.fetch_all("SELECT * FROM users WHERE id = $1", user_id)
+        Bad:   await db.fetch_all(f"SELECT * FROM users WHERE id = {user_id}")
+
         Args:
-            query: SQL query string with $1, $2 placeholders.
-            *params: Query parameters.
+            query: SQL query string with $1, $2 placeholders for parameters.
+                   Never interpolate user input directly into this string.
+            *params: Query parameters (positional, matching $1, $2, ... placeholders).
 
         Returns:
             List of row dictionaries.
@@ -148,9 +156,13 @@ class Database:
         """
         Execute a query and return a single row.
 
+        SECURITY: Always use parameterized queries with $1, $2, ... placeholders.
+        Never use string formatting to build queries.
+
         Args:
-            query: SQL query string.
-            *params: Query parameters.
+            query: SQL query string with $1, $2 placeholders for parameters.
+                   Never interpolate user input directly into this string.
+            *params: Query parameters (positional, matching $1, $2, ... placeholders).
 
         Returns:
             Row dictionary or None.
@@ -162,9 +174,13 @@ class Database:
         """
         Execute a query that doesn't return rows.
 
+        SECURITY: Always use parameterized queries with $1, $2, ... placeholders.
+        Never use string formatting to build queries.
+
         Args:
-            query: SQL query string.
-            *params: Query parameters.
+            query: SQL query string with $1, $2 placeholders for parameters.
+                   Never interpolate user input directly into this string.
+            *params: Query parameters (positional, matching $1, $2, ... placeholders).
 
         Returns:
             Number of affected rows.
@@ -193,15 +209,27 @@ class Transaction:
         self._rolled_back = False
 
     async def execute(self, query: str, *params) -> int:
-        """Execute a query within this transaction."""
+        """Execute a query within this transaction.
+
+        SECURITY: Always use parameterized queries ($1, $2, ...).
+        Never interpolate user input directly into the query string.
+        """
         return await self._db.execute(query, *params)
 
     async def fetch_all(self, query: str, *params) -> list[dict]:
-        """Fetch all rows within this transaction."""
+        """Fetch all rows within this transaction.
+
+        SECURITY: Always use parameterized queries ($1, $2, ...).
+        Never interpolate user input directly into the query string.
+        """
         return await self._db.fetch_all(query, *params)
 
     async def fetch_one(self, query: str, *params) -> Optional[dict]:
-        """Fetch a single row within this transaction."""
+        """Fetch a single row within this transaction.
+
+        SECURITY: Always use parameterized queries ($1, $2, ...).
+        Never interpolate user input directly into the query string.
+        """
         return await self._db.fetch_one(query, *params)
 
     async def commit(self):

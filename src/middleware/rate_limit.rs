@@ -84,7 +84,6 @@ impl HealthMonitor {
     }
 }
 
-
 // ============================================================================
 // Rate Limit Store Trait
 // ============================================================================
@@ -193,7 +192,6 @@ impl AdaptiveConfig {
     }
 }
 
-
 /// Token bucket state.
 struct TokenBucketState {
     tokens: f64,
@@ -214,7 +212,6 @@ impl TokenBucketStore {
         }
     }
 }
-
 
 impl Default for TokenBucketStore {
     fn default() -> Self {
@@ -255,12 +252,13 @@ impl RateLimitStore for TokenBucketStore {
             .as_secs()
             + 60; // Reset in ~1 minute
 
-        let mut entry = self.buckets.entry(key.to_string()).or_insert_with(|| {
-            TokenBucketState {
+        let mut entry = self
+            .buckets
+            .entry(key.to_string())
+            .or_insert_with(|| TokenBucketState {
                 tokens: capacity as f64,
                 last_refill: now,
-            }
-        });
+            });
 
         // Refill tokens
         let elapsed = now.duration_since(entry.last_refill).as_secs_f64();
@@ -349,7 +347,10 @@ pub struct SlidingWindowConfig {
 impl SlidingWindowConfig {
     /// Create new sliding window config.
     pub fn new(max_requests: u64, window: Duration) -> Self {
-        Self { max_requests, window }
+        Self {
+            max_requests,
+            window,
+        }
     }
 
     /// Create config with requests per minute.
@@ -425,12 +426,13 @@ impl RateLimitStore for SlidingWindowStore {
         let window_start = now - window_config.window.as_secs();
         let reset_time = now + window_config.window.as_secs();
 
-        let mut entry = self.windows.entry(key.to_string()).or_insert_with(|| {
-            SlidingWindowState {
+        let mut entry = self
+            .windows
+            .entry(key.to_string())
+            .or_insert_with(|| SlidingWindowState {
                 timestamps: Vec::new(),
                 window_start,
-            }
-        });
+            });
 
         // Remove old timestamps
         entry.timestamps.retain(|&ts| ts >= window_start);
@@ -561,12 +563,13 @@ impl RateLimitStore for FixedWindowStore {
         let current_window = self.current_window();
         let reset_time = (current_window + 1) * self.window_seconds;
 
-        let entry = self.windows.entry(key.to_string()).or_insert_with(|| {
-            FixedWindowState {
+        let entry = self
+            .windows
+            .entry(key.to_string())
+            .or_insert_with(|| FixedWindowState {
                 count: AtomicU64::new(0),
                 window_start: current_window,
-            }
-        });
+            });
 
         // Check if window has changed
         if entry.window_start != current_window {
@@ -630,7 +633,8 @@ impl RateLimitStore for FixedWindowStore {
 
     fn cleanup(&self) {
         let current_window = self.current_window();
-        self.windows.retain(|_, state| state.window_start >= current_window - 1);
+        self.windows
+            .retain(|_, state| state.window_start >= current_window - 1);
     }
 }
 
@@ -769,7 +773,7 @@ impl RateLimitMiddleware {
     pub fn adaptive(config: AdaptiveConfig) -> Self {
         let store = TokenBucketStore::new();
         let health = store.health.clone();
-        
+
         Self {
             store: Arc::new(store),
             config: RateLimitConfig::Adaptive(config),
@@ -966,7 +970,8 @@ mod tests {
     #[test]
     fn test_sliding_window_store() {
         let store = SlidingWindowStore::new();
-        let config = RateLimitConfig::SlidingWindow(SlidingWindowConfig::new(5, Duration::from_secs(60)));
+        let config =
+            RateLimitConfig::SlidingWindow(SlidingWindowConfig::new(5, Duration::from_secs(60)));
 
         // First 5 requests should succeed
         for i in 0..5 {

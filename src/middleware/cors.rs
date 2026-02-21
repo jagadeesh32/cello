@@ -17,9 +17,10 @@ use crate::response::Response;
 // ============================================================================
 
 /// Allowed origins configuration.
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub enum AllowedOrigins {
     /// Allow all origins (*)
+    #[default]
     Any,
     /// Allow specific origins
     List(HashSet<String>),
@@ -27,12 +28,6 @@ pub enum AllowedOrigins {
     Pattern(fn(&str) -> bool),
     /// Mirror the request origin (with credentials)
     Mirror,
-}
-
-impl Default for AllowedOrigins {
-    fn default() -> Self {
-        AllowedOrigins::Any
-    }
 }
 
 impl AllowedOrigins {
@@ -149,7 +144,10 @@ impl CorsConfig {
         I: IntoIterator<Item = S>,
         S: AsRef<str>,
     {
-        let list: HashSet<String> = origins.into_iter().map(|s| s.as_ref().to_string()).collect();
+        let list: HashSet<String> = origins
+            .into_iter()
+            .map(|s| s.as_ref().to_string())
+            .collect();
         self.origins = AllowedOrigins::List(list);
         self
     }
@@ -303,15 +301,16 @@ impl CorsMiddleware {
     /// Create permissive CORS (allow all).
     pub fn permissive() -> Self {
         Self {
-            config: CorsConfig::new()
-                .allow_any_origin()
-                .allow_any_header(),
+            config: CorsConfig::new().allow_any_origin().allow_any_header(),
         }
     }
 
     /// Check if request is a preflight request.
     fn is_preflight(&self, request: &Request) -> bool {
-        request.method == "OPTIONS" && request.headers.contains_key("access-control-request-method")
+        request.method == "OPTIONS"
+            && request
+                .headers
+                .contains_key("access-control-request-method")
     }
 
     /// Get origin from request.
@@ -327,13 +326,28 @@ impl CorsMiddleware {
         let origin = self.get_origin(request).unwrap_or_default();
 
         // Access-Control-Allow-Origin
+        // Per spec: when credentials is true, MUST NOT use wildcard "*"
         if let Some(allowed_origin) = self.config.origins.header_value(&origin) {
-            response.set_header("Access-Control-Allow-Origin", &allowed_origin);
+            if self.config.credentials && allowed_origin == "*" {
+                // Reflect the actual origin instead of wildcard when credentials are enabled
+                if !origin.is_empty() {
+                    response.set_header("Access-Control-Allow-Origin", &origin);
+                }
+            } else {
+                response.set_header("Access-Control-Allow-Origin", &allowed_origin);
+            }
         }
 
         // Access-Control-Allow-Methods
         let methods: Vec<&String> = self.config.methods.iter().collect();
-        response.set_header("Access-Control-Allow-Methods", &methods.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", "));
+        response.set_header(
+            "Access-Control-Allow-Methods",
+            &methods
+                .iter()
+                .map(|s| s.as_str())
+                .collect::<Vec<_>>()
+                .join(", "),
+        );
 
         // Access-Control-Allow-Headers
         if self.config.allowed_headers.contains("*") {
@@ -343,7 +357,14 @@ impl CorsMiddleware {
             }
         } else if !self.config.allowed_headers.is_empty() {
             let headers: Vec<&String> = self.config.allowed_headers.iter().collect();
-            response.set_header("Access-Control-Allow-Headers", &headers.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", "));
+            response.set_header(
+                "Access-Control-Allow-Headers",
+                &headers
+                    .iter()
+                    .map(|s| s.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", "),
+            );
         }
 
         // Access-Control-Allow-Credentials
@@ -357,7 +378,10 @@ impl CorsMiddleware {
         }
 
         // Vary header
-        response.set_header("Vary", "Origin, Access-Control-Request-Method, Access-Control-Request-Headers");
+        response.set_header(
+            "Vary",
+            "Origin, Access-Control-Request-Method, Access-Control-Request-Headers",
+        );
 
         response
     }
@@ -375,8 +399,14 @@ impl CorsMiddleware {
         }
 
         // Access-Control-Allow-Origin
+        // Per spec: when credentials is true, MUST NOT use wildcard "*"
         if let Some(allowed_origin) = self.config.origins.header_value(&origin) {
-            response.set_header("Access-Control-Allow-Origin", &allowed_origin);
+            if self.config.credentials && allowed_origin == "*" {
+                // Reflect the actual origin instead of wildcard when credentials are enabled
+                response.set_header("Access-Control-Allow-Origin", &origin);
+            } else {
+                response.set_header("Access-Control-Allow-Origin", &allowed_origin);
+            }
         }
 
         // Access-Control-Allow-Credentials
@@ -387,14 +417,21 @@ impl CorsMiddleware {
         // Access-Control-Expose-Headers
         if !self.config.exposed_headers.is_empty() {
             let headers: Vec<&String> = self.config.exposed_headers.iter().collect();
-            response.set_header("Access-Control-Expose-Headers", &headers.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", "));
+            response.set_header(
+                "Access-Control-Expose-Headers",
+                &headers
+                    .iter()
+                    .map(|s| s.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", "),
+            );
         }
 
         // Vary header
         let vary = response
             .headers
             .get("Vary")
-            .map(|v| format!("{}, Origin", v))
+            .map(|v| format!("{v}, Origin"))
             .unwrap_or_else(|| "Origin".to_string());
         response.set_header("Vary", &vary);
     }
@@ -446,8 +483,7 @@ impl Middleware for CorsMiddleware {
 
 /// Check if domain matches pattern (e.g., *.example.com).
 pub fn domain_matches(pattern: &str, domain: &str) -> bool {
-    if pattern.starts_with("*.") {
-        let suffix = &pattern[2..];
+    if let Some(suffix) = pattern.strip_prefix("*.") {
         domain.ends_with(suffix) || domain == &suffix[1..]
     } else {
         pattern == domain
@@ -471,7 +507,10 @@ mod tests {
     fn test_allowed_origins_any() {
         let origins = AllowedOrigins::Any;
         assert!(origins.is_allowed("https://example.com"));
-        assert_eq!(origins.header_value("https://example.com"), Some("*".to_string()));
+        assert_eq!(
+            origins.header_value("https://example.com"),
+            Some("*".to_string())
+        );
     }
 
     #[test]
@@ -510,7 +549,10 @@ mod tests {
     #[test]
     fn test_extract_domain() {
         assert_eq!(extract_domain("https://example.com"), Some("example.com"));
-        assert_eq!(extract_domain("https://example.com:8080"), Some("example.com"));
+        assert_eq!(
+            extract_domain("https://example.com:8080"),
+            Some("example.com")
+        );
         assert_eq!(extract_domain("http://localhost:3000"), Some("localhost"));
     }
 }

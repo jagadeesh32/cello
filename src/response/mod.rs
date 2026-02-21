@@ -16,7 +16,7 @@ use std::path::Path;
 
 use crate::json::python_to_json;
 
-pub use streaming::{StreamingResponse, ChunkedBody, FileBody, StreamItem};
+pub use streaming::{ChunkedBody, FileBody, StreamItem, StreamingResponse};
 pub use xml::{XmlResponse, XmlSerializer};
 
 // ============================================================================
@@ -24,11 +24,12 @@ pub use xml::{XmlResponse, XmlSerializer};
 // ============================================================================
 
 /// Response body variants for different content types.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub enum ResponseBody {
     /// Standard bytes body
     Bytes(Vec<u8>),
     /// Empty body
+    #[default]
     Empty,
     /// Marker for streaming (actual stream handled separately)
     Streaming,
@@ -36,12 +37,6 @@ pub enum ResponseBody {
     File(String),
     /// Marker for chunked transfer
     Chunked,
-}
-
-impl Default for ResponseBody {
-    fn default() -> Self {
-        ResponseBody::Empty
-    }
 }
 
 // ============================================================================
@@ -102,8 +97,8 @@ impl Response {
     #[staticmethod]
     #[pyo3(signature = (data, status=None))]
     pub fn json(py: Python<'_>, data: &PyAny, status: Option<u16>) -> PyResult<Self> {
-        let json_value = python_to_json(py, data)
-            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e))?;
+        let json_value =
+            python_to_json(py, data).map_err(pyo3::exceptions::PyValueError::new_err)?;
         let body = serde_json::to_vec(&json_value)
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
 
@@ -180,8 +175,8 @@ impl Response {
     #[staticmethod]
     #[pyo3(signature = (path, filename=None, content_type=None))]
     pub fn file(path: &str, filename: Option<&str>, content_type: Option<&str>) -> PyResult<Self> {
-        let data = std::fs::read(path)
-            .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+        let data =
+            std::fs::read(path).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
 
         let ct = content_type.map(|s| s.to_string()).unwrap_or_else(|| {
             mime_guess::from_path(path)
@@ -200,7 +195,7 @@ impl Response {
         headers.insert("Content-Type".to_string(), ct.clone());
         headers.insert(
             "Content-Disposition".to_string(),
-            format!("attachment; filename=\"{}\"", download_name),
+            format!("attachment; filename=\"{download_name}\""),
         );
         headers.insert("Content-Length".to_string(), data.len().to_string());
 
@@ -261,7 +256,7 @@ impl Response {
 
         // Parse range header (bytes=start-end)
         let (start, end) = parse_range_header(range_header, file_size)
-            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e))?;
+            .map_err(pyo3::exceptions::PyValueError::new_err)?;
 
         let content_length = end - start + 1;
 
@@ -270,7 +265,7 @@ impl Response {
         headers.insert("Content-Length".to_string(), content_length.to_string());
         headers.insert(
             "Content-Range".to_string(),
-            format!("bytes {}-{}/{}", start, end, file_size),
+            format!("bytes {start}-{end}/{file_size}"),
         );
         headers.insert("Accept-Ranges".to_string(), "bytes".to_string());
         headers.insert("X-Sendfile-Path".to_string(), path.to_string());
@@ -343,7 +338,7 @@ impl Response {
         root_name: Option<&str>,
     ) -> PyResult<Self> {
         let xml_content = xml::python_to_xml(py, data, root_name.unwrap_or("root"))
-            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e))?;
+            .map_err(pyo3::exceptions::PyValueError::new_err)?;
 
         let mut headers = HashMap::new();
         headers.insert(
@@ -361,8 +356,15 @@ impl Response {
     }
 
     /// Set a response header.
+    /// Strips CR and LF characters from values to prevent CRLF injection / HTTP response splitting.
+    #[inline]
     pub fn set_header(&mut self, key: &str, value: &str) {
-        self.headers.insert(key.to_string(), value.to_string());
+        // Strip control characters (CR, LF, null) to prevent header injection
+        let sanitized: String = value
+            .chars()
+            .filter(|c| *c != '\r' && *c != '\n' && *c != '\0')
+            .collect();
+        self.headers.insert(key.to_string(), sanitized);
     }
 
     /// Get the response body as bytes.
@@ -376,6 +378,7 @@ impl Response {
     }
 
     /// Get the content length.
+    #[inline]
     pub fn content_length(&self) -> usize {
         self.body.len()
     }
@@ -383,6 +386,7 @@ impl Response {
 
 impl Response {
     /// Create a new response with status code (Rust API).
+    #[inline]
     pub fn new(status: u16) -> Self {
         Response {
             status,
@@ -394,32 +398,38 @@ impl Response {
     }
 
     /// Get the body bytes (internal use).
+    #[inline]
     pub fn body_bytes(&self) -> &[u8] {
         &self.body
     }
 
     /// Set the body (internal use).
+    #[inline]
     pub fn set_body(&mut self, body: Vec<u8>) {
         self.body = body;
         self.body_type = ResponseBody::Bytes(Vec::new());
     }
 
     /// Get body type.
+    #[inline]
     pub fn body_type(&self) -> &ResponseBody {
         &self.body_type
     }
 
     /// Check if this is a streaming response.
+    #[inline]
     pub fn is_streaming(&self) -> bool {
         matches!(self.body_type, ResponseBody::Streaming)
     }
 
     /// Check if this is a file response.
+    #[inline]
     pub fn is_file(&self) -> bool {
         matches!(self.body_type, ResponseBody::File(_))
     }
 
     /// Check if this is a chunked response.
+    #[inline]
     pub fn is_chunked(&self) -> bool {
         matches!(self.body_type, ResponseBody::Chunked)
     }
@@ -439,9 +449,11 @@ impl Response {
     }
 
     /// Create a response from JSON value (internal use).
+    #[inline]
     pub fn from_json_value(value: serde_json::Value, status: u16) -> Self {
         let body = serde_json::to_vec(&value).unwrap_or_default();
-        let mut headers = HashMap::new();
+        // PERF: Pre-allocate with known capacity (1 Content-Type header)
+        let mut headers = HashMap::with_capacity(1);
         headers.insert("Content-Type".to_string(), "application/json".to_string());
 
         Response {
@@ -454,6 +466,7 @@ impl Response {
     }
 
     /// Create an error response (internal use).
+    #[inline]
     pub fn error(status: u16, message: &str) -> Self {
         let body = serde_json::json!({
             "error": message,
@@ -509,9 +522,7 @@ fn parse_range_header(header: &str, file_size: u64) -> Result<(u64, u64), String
 
     let start = if parts[0].is_empty() {
         // Suffix range: -500 means last 500 bytes
-        let suffix: u64 = parts[1]
-            .parse()
-            .map_err(|_| "Invalid suffix range")?;
+        let suffix: u64 = parts[1].parse().map_err(|_| "Invalid suffix range")?;
         file_size.saturating_sub(suffix)
     } else {
         parts[0].parse().map_err(|_| "Invalid start range")?

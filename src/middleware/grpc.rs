@@ -26,10 +26,10 @@
 //!     app.state.grpc = server
 //! ```
 
+use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
-use parking_lot::RwLock;
 
 // ============================================================================
 // gRPC Configuration
@@ -146,7 +146,12 @@ pub struct GrpcMethodDef {
 
 impl GrpcMethodDef {
     /// Create a new gRPC method definition.
-    pub fn new(name: &str, method_type: GrpcMethodType, input_type: &str, output_type: &str) -> Self {
+    pub fn new(
+        name: &str,
+        method_type: GrpcMethodType,
+        input_type: &str,
+        output_type: &str,
+    ) -> Self {
         Self {
             name: name.to_string(),
             method_type,
@@ -162,17 +167,32 @@ impl GrpcMethodDef {
 
     /// Create a server streaming method definition.
     pub fn server_streaming(name: &str, input_type: &str, output_type: &str) -> Self {
-        Self::new(name, GrpcMethodType::ServerStreaming, input_type, output_type)
+        Self::new(
+            name,
+            GrpcMethodType::ServerStreaming,
+            input_type,
+            output_type,
+        )
     }
 
     /// Create a client streaming method definition.
     pub fn client_streaming(name: &str, input_type: &str, output_type: &str) -> Self {
-        Self::new(name, GrpcMethodType::ClientStreaming, input_type, output_type)
+        Self::new(
+            name,
+            GrpcMethodType::ClientStreaming,
+            input_type,
+            output_type,
+        )
     }
 
     /// Create a bidirectional streaming method definition.
     pub fn bidi_streaming(name: &str, input_type: &str, output_type: &str) -> Self {
-        Self::new(name, GrpcMethodType::BidirectionalStreaming, input_type, output_type)
+        Self::new(
+            name,
+            GrpcMethodType::BidirectionalStreaming,
+            input_type,
+            output_type,
+        )
     }
 }
 
@@ -292,7 +312,7 @@ impl std::fmt::Display for GrpcError {
             GrpcError::Cancelled => write!(f, "gRPC error: operation cancelled"),
             GrpcError::PermissionDenied => write!(f, "gRPC error: permission denied"),
             GrpcError::Unauthenticated => write!(f, "gRPC error: unauthenticated"),
-            GrpcError::Unknown(msg) => write!(f, "gRPC error: unknown: {}", msg),
+            GrpcError::Unknown(msg) => write!(f, "gRPC error: unknown: {msg}"),
         }
     }
 }
@@ -526,7 +546,11 @@ impl GrpcServer {
     /// Look up a specific method within a service.
     ///
     /// Returns an error if the service or method is not found.
-    pub fn resolve_method(&self, service_name: &str, method_name: &str) -> Result<GrpcMethodDef, GrpcError> {
+    pub fn resolve_method(
+        &self,
+        service_name: &str,
+        method_name: &str,
+    ) -> Result<GrpcMethodDef, GrpcError> {
         let services = self.services.read();
         let service = services
             .get(service_name)
@@ -670,8 +694,14 @@ mod tests {
     #[test]
     fn test_grpc_method_type_display() {
         assert_eq!(GrpcMethodType::Unary.to_string(), "UNARY");
-        assert_eq!(GrpcMethodType::ClientStreaming.to_string(), "CLIENT_STREAMING");
-        assert_eq!(GrpcMethodType::ServerStreaming.to_string(), "SERVER_STREAMING");
+        assert_eq!(
+            GrpcMethodType::ClientStreaming.to_string(),
+            "CLIENT_STREAMING"
+        );
+        assert_eq!(
+            GrpcMethodType::ServerStreaming.to_string(),
+            "SERVER_STREAMING"
+        );
         assert_eq!(
             GrpcMethodType::BidirectionalStreaming.to_string(),
             "BIDIRECTIONAL_STREAMING"
@@ -700,7 +730,11 @@ mod tests {
     fn test_grpc_service_def() {
         let service = GrpcServiceDef::new("helloworld.Greeter")
             .with_description("The greeting service definition")
-            .add_method(GrpcMethodDef::unary("SayHello", "HelloRequest", "HelloReply"))
+            .add_method(GrpcMethodDef::unary(
+                "SayHello",
+                "HelloRequest",
+                "HelloReply",
+            ))
             .add_method(GrpcMethodDef::server_streaming(
                 "SayHelloStream",
                 "HelloRequest",
@@ -708,7 +742,10 @@ mod tests {
             ));
 
         assert_eq!(service.name, "helloworld.Greeter");
-        assert_eq!(service.description, Some("The greeting service definition".to_string()));
+        assert_eq!(
+            service.description,
+            Some("The greeting service definition".to_string())
+        );
         assert_eq!(service.methods.len(), 2);
 
         let method = service.get_method("SayHello");
@@ -788,7 +825,10 @@ mod tests {
         assert_eq!(request.service, "helloworld.Greeter");
         assert_eq!(request.method, "SayHello");
         assert_eq!(request.payload, payload);
-        assert_eq!(request.get_metadata("authorization"), Some("Bearer token123"));
+        assert_eq!(
+            request.get_metadata("authorization"),
+            Some("Bearer token123")
+        );
         assert_eq!(request.get_metadata("x-request-id"), Some("abc-123"));
         assert_eq!(request.get_metadata("missing"), None);
         assert_eq!(request.full_path(), "/helloworld.Greeter/SayHello");
@@ -797,12 +837,14 @@ mod tests {
     #[test]
     fn test_grpc_response_ok() {
         let payload = vec![0x0a, 0x0d, 0x48, 0x65, 0x6c, 0x6c, 0x6f];
-        let response = GrpcResponse::ok(payload.clone())
-            .with_metadata("x-trace-id", "trace-456");
+        let response = GrpcResponse::ok(payload.clone()).with_metadata("x-trace-id", "trace-456");
 
         assert!(response.is_ok());
         assert_eq!(response.payload, payload);
-        assert_eq!(response.metadata.get("x-trace-id"), Some(&"trace-456".to_string()));
+        assert_eq!(
+            response.metadata.get("x-trace-id"),
+            Some(&"trace-456".to_string())
+        );
     }
 
     #[test]
@@ -825,12 +867,19 @@ mod tests {
         let config = GrpcConfig::new().with_reflection(true);
         let server = GrpcServer::new(config);
 
-        let greeter = GrpcServiceDef::new("helloworld.Greeter")
-            .add_method(GrpcMethodDef::unary("SayHello", "HelloRequest", "HelloReply"));
+        let greeter = GrpcServiceDef::new("helloworld.Greeter").add_method(GrpcMethodDef::unary(
+            "SayHello",
+            "HelloRequest",
+            "HelloReply",
+        ));
 
         let route_guide = GrpcServiceDef::new("routeguide.RouteGuide")
             .add_method(GrpcMethodDef::unary("GetFeature", "Point", "Feature"))
-            .add_method(GrpcMethodDef::server_streaming("ListFeatures", "Rectangle", "Feature"));
+            .add_method(GrpcMethodDef::server_streaming(
+                "ListFeatures",
+                "Rectangle",
+                "Feature",
+            ));
 
         server.register_service(greeter);
         server.register_service(route_guide);
@@ -848,7 +897,11 @@ mod tests {
 
         let service = GrpcServiceDef::new("test.Service")
             .with_description("A test service")
-            .add_method(GrpcMethodDef::unary("DoWork", "WorkRequest", "WorkResponse"));
+            .add_method(GrpcMethodDef::unary(
+                "DoWork",
+                "WorkRequest",
+                "WorkResponse",
+            ));
 
         server.register_service(service);
 
@@ -865,8 +918,11 @@ mod tests {
     fn test_grpc_server_resolve_method() {
         let server = GrpcServer::new(GrpcConfig::new());
 
-        let service = GrpcServiceDef::new("test.Service")
-            .add_method(GrpcMethodDef::unary("Ping", "PingRequest", "PingResponse"));
+        let service = GrpcServiceDef::new("test.Service").add_method(GrpcMethodDef::unary(
+            "Ping",
+            "PingRequest",
+            "PingResponse",
+        ));
 
         server.register_service(service);
 
@@ -887,8 +943,11 @@ mod tests {
     fn test_grpc_server_handle_request() {
         let server = GrpcServer::new(GrpcConfig::new());
 
-        let service = GrpcServiceDef::new("test.Service")
-            .add_method(GrpcMethodDef::unary("Echo", "EchoRequest", "EchoResponse"));
+        let service = GrpcServiceDef::new("test.Service").add_method(GrpcMethodDef::unary(
+            "Echo",
+            "EchoRequest",
+            "EchoResponse",
+        ));
 
         server.register_service(service);
 
@@ -915,8 +974,11 @@ mod tests {
         let config = GrpcConfig::new().with_max_message_size(10);
         let server = GrpcServer::new(config);
 
-        let service = GrpcServiceDef::new("test.Service")
-            .add_method(GrpcMethodDef::unary("Echo", "EchoRequest", "EchoResponse"));
+        let service = GrpcServiceDef::new("test.Service").add_method(GrpcMethodDef::unary(
+            "Echo",
+            "EchoRequest",
+            "EchoResponse",
+        ));
         server.register_service(service);
 
         // Payload exceeds max message size
@@ -931,8 +993,11 @@ mod tests {
     fn test_grpc_server_stats() {
         let server = GrpcServer::new(GrpcConfig::new());
 
-        let service = GrpcServiceDef::new("test.Service")
-            .add_method(GrpcMethodDef::unary("Echo", "EchoRequest", "EchoResponse"));
+        let service = GrpcServiceDef::new("test.Service").add_method(GrpcMethodDef::unary(
+            "Echo",
+            "EchoRequest",
+            "EchoResponse",
+        ));
         server.register_service(service);
 
         // Initial stats
@@ -1001,6 +1066,9 @@ mod tests {
         assert_eq!(service.name(), "mock.MockService");
         assert_eq!(service.methods().len(), 2);
         assert_eq!(service.methods()[0].name, "Ping");
-        assert_eq!(service.methods()[1].method_type, GrpcMethodType::ServerStreaming);
+        assert_eq!(
+            service.methods()[1].method_type,
+            GrpcMethodType::ServerStreaming
+        );
     }
 }

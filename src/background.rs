@@ -3,10 +3,10 @@
 //! This module provides FastAPI-style background task execution.
 //! Tasks are executed after the response is sent to the client.
 
+use parking_lot::Mutex;
 use pyo3::prelude::*;
 use std::collections::VecDeque;
 use std::sync::Arc;
-use parking_lot::Mutex;
 use tokio::sync::mpsc;
 
 // ============================================================================
@@ -17,7 +17,7 @@ use tokio::sync::mpsc;
 pub trait BackgroundTask: Send + Sync + 'static {
     /// Execute the task.
     fn execute(&self);
-    
+
     /// Get task name for logging.
     fn name(&self) -> &str {
         "anonymous_task"
@@ -190,14 +190,14 @@ impl BackgroundTaskRunner {
     pub fn schedule<T: BackgroundTask>(&self, task: T) -> Result<(), String> {
         self.sender
             .send(TaskMessage::Execute(Box::new(task)))
-            .map_err(|e| format!("Failed to schedule task: {}", e))
+            .map_err(|e| format!("Failed to schedule task: {e}"))
     }
 
     /// Shutdown the runner.
     pub fn shutdown(&self) -> Result<(), String> {
         self.sender
             .send(TaskMessage::Shutdown)
-            .map_err(|e| format!("Failed to shutdown: {}", e))
+            .map_err(|e| format!("Failed to shutdown: {e}"))
     }
 }
 
@@ -216,7 +216,7 @@ pub async fn run_task_executor(mut receiver: mpsc::UnboundedReceiver<TaskMessage
                     if let Err(e) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                         task.execute();
                     })) {
-                        eprintln!("Background task panicked: {:?}", e);
+                        eprintln!("Background task panicked: {e:?}");
                     }
                 });
             }
@@ -314,7 +314,7 @@ mod tests {
     #[test]
     fn test_panic_handling() {
         let tasks = BackgroundTasks::new();
-        
+
         tasks.add_fn("panicking", || {
             panic!("Test panic");
         });

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Streaming Responses Demo for Cello v0.9.0.
+Streaming Responses Demo for Cello v1.0.0.
 
 This example demonstrates streaming capabilities including:
 - Server-Sent Events (SSE)

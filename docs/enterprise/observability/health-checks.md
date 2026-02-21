@@ -5,7 +5,7 @@ description: Kubernetes-compatible health check endpoints for Cello (v0.7.0)
 
 # Health Checks
 
-Cello v0.7.0 adds built-in health check endpoints compatible with Kubernetes liveness, readiness, and startup probes.
+Cello provides built-in health check endpoints compatible with Kubernetes liveness, readiness, and startup probes.
 
 ---
 

@@ -5,7 +5,7 @@ description: Circuit breaker middleware for fault tolerance in Cello Framework
 
 # Circuit Breaker
 
-Cello v0.6.0 includes a circuit breaker middleware implemented in Rust. It monitors response failures and temporarily stops processing requests when a failure threshold is exceeded, giving downstream services time to recover.
+Cello includes a circuit breaker middleware implemented in Rust. It monitors response failures and temporarily stops processing requests when a failure threshold is exceeded, giving downstream services time to recover.
 
 ## Quick Start
 

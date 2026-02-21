@@ -7,6 +7,7 @@
 //! - Session security options
 
 use parking_lot::RwLock;
+use rand::rngs::OsRng;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -54,12 +55,17 @@ impl SessionData {
 
     /// Get a value from the session.
     pub fn get<T: for<'de> Deserialize<'de>>(&self, key: &str) -> Option<T> {
-        self.data.get(key).and_then(|v| serde_json::from_value(v.clone()).ok())
+        self.data
+            .get(key)
+            .and_then(|v| serde_json::from_value(v.clone()).ok())
     }
 
     /// Get a string value from the session.
     pub fn get_string(&self, key: &str) -> Option<String> {
-        self.data.get(key).and_then(|v| v.as_str()).map(|s| s.to_string())
+        self.data
+            .get(key)
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
     }
 
     /// Set a value in the session.
@@ -137,10 +143,9 @@ pub trait SessionStore: Send + Sync {
     /// Cleanup expired sessions.
     fn cleanup(&self);
 
-    /// Generate a new session ID.
+    /// Generate a new session ID using cryptographically secure randomness.
     fn generate_id(&self) -> String {
-        let mut rng = rand::thread_rng();
-        let bytes: [u8; 32] = rng.gen();
+        let bytes: [u8; 32] = OsRng.gen();
         hex::encode(bytes)
     }
 }
@@ -222,7 +227,9 @@ impl SessionStore for InMemorySessionStore {
 
     fn cleanup(&self) {
         let now = Instant::now();
-        self.sessions.write().retain(|_, entry| entry.expires_at > now);
+        self.sessions
+            .write()
+            .retain(|_, entry| entry.expires_at > now);
     }
 }
 
@@ -324,7 +331,7 @@ impl CookieConfig {
         cookie.push_str(&format!("; Path={}", self.path));
 
         if let Some(ref domain) = self.domain {
-            cookie.push_str(&format!("; Domain={}", domain));
+            cookie.push_str(&format!("; Domain={domain}"));
         }
 
         if self.secure {
@@ -338,7 +345,7 @@ impl CookieConfig {
         cookie.push_str(&format!("; SameSite={}", self.same_site));
 
         if let Some(max_age) = self.max_age {
-            cookie.push_str(&format!("; Max-Age={}", max_age));
+            cookie.push_str(&format!("; Max-Age={max_age}"));
         }
 
         cookie
@@ -346,10 +353,21 @@ impl CookieConfig {
 
     /// Build cookie for deletion.
     pub fn build_delete_cookie(&self) -> String {
-        format!(
+        let mut cookie = format!(
             "{}=; Path={}; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT",
             self.name, self.path
-        )
+        );
+
+        // Preserve security flags on deletion cookie to match the original cookie attributes
+        if self.secure {
+            cookie.push_str("; Secure");
+        }
+        if self.http_only {
+            cookie.push_str("; HttpOnly");
+        }
+        cookie.push_str(&format!("; SameSite={}", self.same_site));
+
+        cookie
     }
 }
 
@@ -476,9 +494,10 @@ impl Middleware for SessionMiddleware {
         let (session_id, session_data, is_new) = self.get_or_create_session(request);
 
         // Store session in request context
-        request
-            .context
-            .insert("session_id".to_string(), serde_json::Value::String(session_id));
+        request.context.insert(
+            "session_id".to_string(),
+            serde_json::Value::String(session_id),
+        );
         request.context.insert(
             "session".to_string(),
             serde_json::to_value(&session_data).unwrap_or_default(),
@@ -525,10 +544,7 @@ impl Middleware for SessionMiddleware {
 
             // Set cookie for new sessions
             if is_new {
-                response.set_header(
-                    "Set-Cookie",
-                    &self.cookie_config.build_cookie(&session_id),
-                );
+                response.set_header("Set-Cookie", &self.cookie_config.build_cookie(&session_id));
             }
         }
 
@@ -570,9 +586,10 @@ pub fn regenerate_session(
     }
 
     // Update context with new session ID
-    request
-        .context
-        .insert("session_id".to_string(), serde_json::Value::String(new_id.clone()));
+    request.context.insert(
+        "session_id".to_string(),
+        serde_json::Value::String(new_id.clone()),
+    );
     request.context.insert(
         "session".to_string(),
         serde_json::to_value(&old_data).unwrap_or_default(),
@@ -585,10 +602,7 @@ pub fn regenerate_session(
 }
 
 /// Destroy session.
-pub fn destroy_session(
-    request: &mut Request,
-    store: &dyn SessionStore,
-) {
+pub fn destroy_session(request: &mut Request, store: &dyn SessionStore) {
     if let Some(session_id) = request.context.get("session_id").and_then(|v| v.as_str()) {
         store.delete(session_id);
     }

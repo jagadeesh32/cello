@@ -484,14 +484,14 @@ impl std::fmt::Display for CqrsError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             CqrsError::CommandNotFound(cmd) => {
-                write!(f, "No handler registered for command: {}", cmd)
+                write!(f, "No handler registered for command: {cmd}")
             }
             CqrsError::QueryNotFound(qry) => {
-                write!(f, "No handler registered for query: {}", qry)
+                write!(f, "No handler registered for query: {qry}")
             }
-            CqrsError::HandlerError(msg) => write!(f, "Handler error: {}", msg),
-            CqrsError::TimeoutError(msg) => write!(f, "Timeout: {}", msg),
-            CqrsError::ValidationError(msg) => write!(f, "Validation error: {}", msg),
+            CqrsError::HandlerError(msg) => write!(f, "Handler error: {msg}"),
+            CqrsError::TimeoutError(msg) => write!(f, "Timeout: {msg}"),
+            CqrsError::ValidationError(msg) => write!(f, "Validation error: {msg}"),
         }
     }
 }
@@ -696,9 +696,7 @@ mod tests {
     fn test_command_bus_stats() {
         let bus = CommandBus::new();
 
-        bus.register("TestCmd", |_| {
-            CommandResult::Success(serde_json::json!({}))
-        });
+        bus.register("TestCmd", |_| CommandResult::Success(serde_json::json!({})));
 
         let cmd = Command::new("TestCmd", serde_json::json!({}));
         bus.dispatch(&cmd).unwrap();
@@ -744,9 +742,7 @@ mod tests {
     fn test_query_bus_stats() {
         let bus = QueryBus::new();
 
-        bus.register("TestQuery", |_| {
-            QueryResult::Success(serde_json::json!({}))
-        });
+        bus.register("TestQuery", |_| QueryResult::Success(serde_json::json!({})));
 
         let query = QueryDef::new("TestQuery", serde_json::json!({}));
         bus.execute(&query).unwrap();

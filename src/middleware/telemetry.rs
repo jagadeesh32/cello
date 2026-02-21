@@ -28,6 +28,7 @@ use crate::response::Response;
 use opentelemetry::global;
 #[allow(unused_imports)]
 use opentelemetry_sdk::trace::Sampler;
+use parking_lot::RwLock;
 use serde_json;
 use std::collections::HashMap;
 use std::future::Future;
@@ -35,7 +36,6 @@ use std::pin::Pin;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Instant;
-use parking_lot::RwLock;
 
 /// Configuration for OpenTelemetry middleware.
 #[derive(Clone)]
@@ -100,7 +100,8 @@ impl OpenTelemetryConfig {
     }
 
     pub fn with_attribute(mut self, key: &str, value: &str) -> Self {
-        self.resource_attributes.insert(key.to_string(), value.to_string());
+        self.resource_attributes
+            .insert(key.to_string(), value.to_string());
         self
     }
 }
@@ -211,7 +212,11 @@ impl OpenTelemetryMiddleware {
 
     /// Check if a path should be traced.
     fn should_trace(&self, path: &str) -> bool {
-        !self.config.excluded_paths.iter().any(|p| path.starts_with(p))
+        !self
+            .config
+            .excluded_paths
+            .iter()
+            .any(|p| path.starts_with(p))
     }
 
     /// Extract trace context from request headers (W3C Trace Context).
@@ -261,10 +266,22 @@ impl AsyncMiddleware for OpenTelemetryMiddleware {
             let span_id = Self::generate_span_id();
 
             // Store trace context in request for later use
-            request.context.insert("trace_id".to_string(), serde_json::Value::String(trace_id.clone()));
-            request.context.insert("span_id".to_string(), serde_json::Value::String(span_id.clone()));
-            request.context.insert("parent_span_id".to_string(), serde_json::Value::String(parent_span_id));
-            request.context.insert("trace_start_time".to_string(), serde_json::Value::String(format!("{}", Instant::now().elapsed().as_nanos())));
+            request.context.insert(
+                "trace_id".to_string(),
+                serde_json::Value::String(trace_id.clone()),
+            );
+            request.context.insert(
+                "span_id".to_string(),
+                serde_json::Value::String(span_id.clone()),
+            );
+            request.context.insert(
+                "parent_span_id".to_string(),
+                serde_json::Value::String(parent_span_id),
+            );
+            request.context.insert(
+                "trace_start_time".to_string(),
+                serde_json::Value::String(format!("{}", Instant::now().elapsed().as_nanos())),
+            );
 
             // Log span start
             tracing::info!(
@@ -290,11 +307,15 @@ impl AsyncMiddleware for OpenTelemetryMiddleware {
             }
 
             // Get trace context as strings
-            let trace_id = request.context.get("trace_id")
+            let trace_id = request
+                .context
+                .get("trace_id")
                 .and_then(|v| v.as_str())
                 .unwrap_or("")
                 .to_string();
-            let span_id = request.context.get("span_id")
+            let span_id = request
+                .context
+                .get("span_id")
                 .and_then(|v| v.as_str())
                 .unwrap_or("")
                 .to_string();
@@ -303,7 +324,8 @@ impl AsyncMiddleware for OpenTelemetryMiddleware {
             let latency_ms = 1; // Placeholder - would calculate from start time
 
             // Record metrics
-            self.metrics.record_request(response.status, latency_ms, &request.path);
+            self.metrics
+                .record_request(response.status, latency_ms, &request.path);
 
             // Add trace headers to response
             if self.config.propagate_context && !trace_id.is_empty() {
@@ -312,7 +334,11 @@ impl AsyncMiddleware for OpenTelemetryMiddleware {
             }
 
             // Log span end
-            let status = if response.status >= 400 { "ERROR" } else { "OK" };
+            let status = if response.status >= 400 {
+                "ERROR"
+            } else {
+                "OK"
+            };
             tracing::info!(
                 trace_id = %trace_id,
                 span_id = %span_id,
@@ -405,7 +431,10 @@ mod tests {
             .exclude_path("/ping");
 
         assert_eq!(config.service_name, "test-service");
-        assert_eq!(config.otlp_endpoint, Some("http://localhost:4317".to_string()));
+        assert_eq!(
+            config.otlp_endpoint,
+            Some("http://localhost:4317".to_string())
+        );
         assert_eq!(config.sampling_rate, 0.5);
         assert!(config.excluded_paths.contains(&"/ping".to_string()));
     }
@@ -431,7 +460,10 @@ mod tests {
         };
 
         let header = ctx.to_traceparent();
-        assert_eq!(header, "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01");
+        assert_eq!(
+            header,
+            "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01"
+        );
 
         let parsed = TraceContext::from_traceparent(&header).unwrap();
         assert_eq!(parsed.trace_id, ctx.trace_id);

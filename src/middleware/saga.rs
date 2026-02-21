@@ -326,10 +326,7 @@ pub struct SagaExecution {
 impl SagaExecution {
     /// Create a new saga execution in pending state.
     pub fn new(id: &str, saga_name: &str, step_names: &[String]) -> Self {
-        let steps = step_names
-            .iter()
-            .map(|name| SagaStep::new(name))
-            .collect();
+        let steps = step_names.iter().map(|name| SagaStep::new(name)).collect();
 
         Self {
             id: id.to_string(),
@@ -346,7 +343,9 @@ impl SagaExecution {
 
     /// Get the current step index (first non-completed step).
     pub fn current_step_index(&self) -> Option<usize> {
-        self.steps.iter().position(|s| s.status != StepStatus::Completed && s.status != StepStatus::Compensated)
+        self.steps
+            .iter()
+            .position(|s| s.status != StepStatus::Completed && s.status != StepStatus::Compensated)
     }
 
     /// Check if all steps are completed.
@@ -433,7 +432,7 @@ impl SagaOrchestrator {
             .ok_or_else(|| SagaError::SagaNotFound(saga_name.to_string()))?;
 
         let counter = self.execution_counter.fetch_add(1, Ordering::Relaxed);
-        let execution_id = format!("exec-{}-{}", saga_name, counter);
+        let execution_id = format!("exec-{saga_name}-{counter}");
 
         let step_names: Vec<String> = saga.steps.iter().map(|s| s.name.clone()).collect();
         let mut execution = SagaExecution::new(&execution_id, saga_name, &step_names);
@@ -446,10 +445,7 @@ impl SagaOrchestrator {
         self.metrics.record_execution_started();
 
         if self.config.enable_logging {
-            println!(
-                "Saga '{}' execution started: {}",
-                saga_name, execution_id
-            );
+            println!("Saga '{saga_name}' execution started: {execution_id}");
         }
 
         Ok(execution_id)
@@ -643,29 +639,25 @@ pub enum SagaError {
     /// The saga execution timed out.
     TimeoutError(String),
     /// Maximum retry attempts have been exhausted.
-    MaxRetriesExceeded {
-        step: String,
-        attempts: u32,
-    },
+    MaxRetriesExceeded { step: String, attempts: u32 },
 }
 
 impl std::fmt::Display for SagaError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            SagaError::SagaNotFound(name) => write!(f, "Saga not found: {}", name),
-            SagaError::StepNotFound(name) => write!(f, "Step not found: {}", name),
+            SagaError::SagaNotFound(name) => write!(f, "Saga not found: {name}"),
+            SagaError::StepNotFound(name) => write!(f, "Step not found: {name}"),
             SagaError::ExecutionNotFound(id) => {
-                write!(f, "Saga execution not found: {}", id)
+                write!(f, "Saga execution not found: {id}")
             }
             SagaError::CompensationFailed(msg) => {
-                write!(f, "Compensation failed: {}", msg)
+                write!(f, "Compensation failed: {msg}")
             }
-            SagaError::TimeoutError(msg) => write!(f, "Saga timeout: {}", msg),
+            SagaError::TimeoutError(msg) => write!(f, "Saga timeout: {msg}"),
             SagaError::MaxRetriesExceeded { step, attempts } => {
                 write!(
                     f,
-                    "Max retries exceeded for step '{}' after {} attempts",
-                    step, attempts
+                    "Max retries exceeded for step '{step}' after {attempts} attempts"
                 )
             }
         }
@@ -801,7 +793,10 @@ mod tests {
             .with_timeout(5000);
 
         assert_eq!(step.name, "create_order");
-        assert_eq!(step.description, Some("Create the order record".to_string()));
+        assert_eq!(
+            step.description,
+            Some("Create the order record".to_string())
+        );
         assert!(step.has_compensation);
         assert_eq!(step.timeout_ms, Some(5000));
     }
@@ -922,9 +917,7 @@ mod tests {
         assert_eq!(execution.steps[0].status, StepStatus::Completed);
         assert_eq!(execution.status, SagaStatus::Running);
 
-        orchestrator
-            .complete_step(&exec_id, "step2", None)
-            .unwrap();
+        orchestrator.complete_step(&exec_id, "step2", None).unwrap();
 
         let execution = orchestrator.get_execution(&exec_id).unwrap();
         assert_eq!(execution.status, SagaStatus::Completed);

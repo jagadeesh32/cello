@@ -177,10 +177,10 @@ impl Http2Config {
     pub fn new() -> Self {
         Self {
             max_concurrent_streams: 100,
-            initial_connection_window_size: 1024 * 1024,      // 1MB
-            initial_stream_window_size: 1024 * 1024,          // 1MB
-            max_frame_size: 16384,                            // 16KB (minimum)
-            max_header_list_size: 16 * 1024,                  // 16KB
+            initial_connection_window_size: 1024 * 1024, // 1MB
+            initial_stream_window_size: 1024 * 1024,     // 1MB
+            max_frame_size: 16384,                       // 16KB (minimum)
+            max_header_list_size: 16 * 1024,             // 16KB
             enable_push: false,
             ping_interval: Some(Duration::from_secs(30)),
             ping_timeout: Duration::from_secs(10),
@@ -284,9 +284,9 @@ impl Http3Config {
         Self {
             max_idle_timeout: Duration::from_secs(30),
             max_udp_payload_size: 1350,
-            initial_max_data: 10 * 1024 * 1024,           // 10MB
-            initial_max_stream_data_bidi: 1024 * 1024,    // 1MB
-            initial_max_stream_data_uni: 1024 * 1024,     // 1MB
+            initial_max_data: 10 * 1024 * 1024,        // 10MB
+            initial_max_stream_data_bidi: 1024 * 1024, // 1MB
+            initial_max_stream_data_uni: 1024 * 1024,  // 1MB
             initial_max_streams_bidi: 100,
             initial_max_streams_uni: 100,
             enable_0rtt: false,
@@ -515,8 +515,7 @@ mod tests {
 
     #[test]
     fn test_push_promise() {
-        let promise = PushPromise::new("/style.css")
-            .header("Content-Type", "text/css");
+        let promise = PushPromise::new("/style.css").header("Content-Type", "text/css");
 
         assert_eq!(promise.path, "/style.css");
         assert_eq!(promise.method, "GET");

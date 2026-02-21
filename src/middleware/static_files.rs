@@ -238,7 +238,8 @@ impl StaticFilesConfig {
 
     /// Add custom header.
     pub fn header(mut self, name: &str, value: &str) -> Self {
-        self.custom_headers.insert(name.to_string(), value.to_string());
+        self.custom_headers
+            .insert(name.to_string(), value.to_string());
         self
     }
 
@@ -280,25 +281,40 @@ impl StaticFilesMiddleware {
             .unwrap_or("")
             .trim_start_matches('/');
 
-        // Check for hidden patterns
+        // Block null bytes (can truncate paths on some OSes)
+        if relative.contains('\0') {
+            return None;
+        }
+
+        // URL-decode the path to catch encoded traversal attempts (%2e%2e, %2f, etc.)
+        let decoded = urlencoding::decode(relative).ok()?;
+        let decoded = decoded.as_ref();
+
+        // Check for hidden patterns (on decoded path)
         for pattern in &self.config.hidden_patterns {
-            if relative.contains(pattern) || relative.starts_with(pattern) {
+            if decoded.contains(pattern.as_str()) || decoded.starts_with(pattern.as_str()) {
                 return None;
             }
         }
 
-        // Prevent directory traversal
-        if relative.contains("..") {
+        // Prevent directory traversal: reject any path component that is ".."
+        // Check both raw and decoded forms
+        if relative.contains("..") || decoded.contains("..") {
+            return None;
+        }
+
+        // Also reject backslashes (Windows-style traversal on some systems)
+        if decoded.contains('\\') {
             return None;
         }
 
         // Build absolute path
         let mut path = self.config.root_dir.clone();
-        if !relative.is_empty() {
-            path.push(relative);
+        if !decoded.is_empty() {
+            path.push(decoded);
         }
 
-        // Canonicalize to prevent traversal
+        // Canonicalize to prevent traversal via symlinks or other tricks
         let canonical = path.canonicalize().ok()?;
         let root_canonical = self.config.root_dir.canonicalize().ok()?;
 
@@ -329,11 +345,15 @@ impl StaticFilesMiddleware {
             .map(|d| d.as_secs())
             .unwrap_or(0);
         let size = metadata.len();
-        format!("\"{:x}-{:x}\"", modified, size)
+        format!("\"{modified:x}-{size:x}\"")
     }
 
     /// Check if precompressed file exists.
-    fn find_precompressed(&self, path: &Path, accept_encoding: &str) -> Option<(PathBuf, &'static str)> {
+    fn find_precompressed(
+        &self,
+        path: &Path,
+        accept_encoding: &str,
+    ) -> Option<(PathBuf, &'static str)> {
         if !self.config.precompressed {
             return None;
         }
@@ -433,7 +453,10 @@ impl StaticFilesMiddleware {
         let mut response = Response::new(200);
         response.set_header("Content-Type", content_type);
         response.set_header("Content-Length", &body.len().to_string());
-        response.set_header("Cache-Control", &self.get_cache_control(path).to_header_value());
+        response.set_header(
+            "Cache-Control",
+            &self.get_cache_control(path).to_header_value(),
+        );
 
         // Add ETag
         if self.config.etag {
@@ -485,8 +508,7 @@ impl StaticFilesMiddleware {
             let suffix = if is_dir { "/" } else { "" };
 
             html.push_str(&format!(
-                "<li><a href=\"{}{}\" class=\"{}\">{}{}</a></li>",
-                name, suffix, class, name, suffix
+                "<li><a href=\"{name}{suffix}\" class=\"{class}\">{name}{suffix}</a></li>"
             ));
         }
 
@@ -536,7 +558,7 @@ fn format_http_date(time: SystemTime) -> String {
     let secs = duration.as_secs();
     // Simple RFC 7231 date format
     // In production, use proper HTTP date formatting
-    format!("{}", secs)
+    format!("{secs}")
 }
 
 #[cfg(test)]
@@ -565,9 +587,15 @@ mod tests {
     fn test_mime_types() {
         assert_eq!(mime_type_for_extension("html"), "text/html; charset=utf-8");
         assert_eq!(mime_type_for_extension("css"), "text/css; charset=utf-8");
-        assert_eq!(mime_type_for_extension("js"), "text/javascript; charset=utf-8");
+        assert_eq!(
+            mime_type_for_extension("js"),
+            "text/javascript; charset=utf-8"
+        );
         assert_eq!(mime_type_for_extension("png"), "image/png");
-        assert_eq!(mime_type_for_extension("unknown"), "application/octet-stream");
+        assert_eq!(
+            mime_type_for_extension("unknown"),
+            "application/octet-stream"
+        );
     }
 
     #[test]

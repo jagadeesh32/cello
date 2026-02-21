@@ -5,7 +5,7 @@ description: Database connection pooling and Redis integration in Cello Framewor
 
 # Database Integration
 
-Cello v0.8.0 introduced async database connection pooling, Redis integration, and automatic transaction management.
+Cello provides async database connection pooling, Redis integration, and automatic transaction management.
 
 ## Database Connection Pooling
 

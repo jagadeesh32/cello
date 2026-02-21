@@ -164,7 +164,8 @@ impl Stream for StreamingResponse {
         match Pin::new(&mut self.receiver).poll_recv(cx) {
             Poll::Ready(Some(item)) => match item {
                 StreamItem::Data(data) => {
-                    self.bytes_sent.fetch_add(data.len() as u64, Ordering::SeqCst);
+                    self.bytes_sent
+                        .fetch_add(data.len() as u64, Ordering::SeqCst);
                     Poll::Ready(Some(Ok(data)))
                 }
                 StreamItem::End => {
@@ -173,10 +174,7 @@ impl Stream for StreamingResponse {
                 }
                 StreamItem::Error(msg) => {
                     self.complete.store(true, Ordering::SeqCst);
-                    Poll::Ready(Some(Err(std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        msg,
-                    ))))
+                    Poll::Ready(Some(Err(std::io::Error::other(msg))))
                 }
             },
             Poll::Ready(None) => {
@@ -260,7 +258,7 @@ impl std::fmt::Display for StreamError {
         match self {
             StreamError::Closed => write!(f, "Stream closed"),
             StreamError::BufferFull => write!(f, "Buffer full"),
-            StreamError::Other(msg) => write!(f, "{}", msg),
+            StreamError::Other(msg) => write!(f, "{msg}"),
         }
     }
 }
@@ -418,16 +416,16 @@ pub fn sse_event(event: Option<&str>, data: &str, id: Option<&str>) -> String {
     let mut output = String::new();
 
     if let Some(event_name) = event {
-        output.push_str(&format!("event: {}\n", event_name));
+        output.push_str(&format!("event: {event_name}\n"));
     }
 
     if let Some(event_id) = id {
-        output.push_str(&format!("id: {}\n", event_id));
+        output.push_str(&format!("id: {event_id}\n"));
     }
 
     // Data can be multi-line
     for line in data.lines() {
-        output.push_str(&format!("data: {}\n", line));
+        output.push_str(&format!("data: {line}\n"));
     }
 
     output.push('\n');
@@ -442,12 +440,12 @@ pub fn sse_json(event: Option<&str>, data: &serde_json::Value, id: Option<&str>)
 
 /// Format a retry directive for SSE.
 pub fn sse_retry(milliseconds: u64) -> String {
-    format!("retry: {}\n\n", milliseconds)
+    format!("retry: {milliseconds}\n\n")
 }
 
 /// Format a comment for SSE (used as keepalive).
 pub fn sse_comment(comment: &str) -> String {
-    format!(": {}\n\n", comment)
+    format!(": {comment}\n\n")
 }
 
 // ============================================================================

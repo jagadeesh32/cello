@@ -269,7 +269,10 @@ impl PrometheusMiddleware {
 
     /// Check if path should be excluded from metrics.
     fn should_exclude(&self, path: &str) -> bool {
-        self.config.exclude_paths.iter().any(|p| path.starts_with(p))
+        self.config
+            .exclude_paths
+            .iter()
+            .any(|p| path.starts_with(p))
     }
 
     /// Get normalized path for label (to prevent cardinality explosion).
@@ -332,7 +335,7 @@ impl PrometheusMiddleware {
             }
             Err(e) => {
                 let mut response = Response::new(500);
-                response.set_body(format!("Error encoding metrics: {}", e).into_bytes());
+                response.set_body(format!("Error encoding metrics: {e}").into_bytes());
                 response
             }
         }
@@ -458,12 +461,13 @@ mod tests {
     fn test_encode() {
         let config = PrometheusConfig::default();
         let metrics = PrometheusMetrics::new(&config).unwrap();
-        
+
         // Record something
-        metrics.http_requests_total
+        metrics
+            .http_requests_total
             .with_label_values(&["GET", "/", "200"])
             .inc();
-            
+
         let encoded = metrics.encode().unwrap();
         println!("Encoded metrics:\n{}", encoded);
         assert!(encoded.contains("http_requests_total"));

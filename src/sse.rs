@@ -13,15 +13,15 @@ pub struct SseEvent {
     /// Event type (optional)
     #[pyo3(get)]
     pub event: Option<String>,
-    
+
     /// Event data (required)
     #[pyo3(get)]
     pub data: String,
-    
+
     /// Event ID (optional)
     #[pyo3(get)]
     pub id: Option<String>,
-    
+
     /// Retry interval in milliseconds (optional)
     #[pyo3(get)]
     pub retry: Option<u32>,
@@ -32,12 +32,7 @@ impl SseEvent {
     /// Create a new SSE event with data.
     #[new]
     #[pyo3(signature = (data, event=None, id=None, retry=None))]
-    pub fn new(
-        data: &str,
-        event: Option<&str>,
-        id: Option<&str>,
-        retry: Option<u32>,
-    ) -> Self {
+    pub fn new(data: &str, event: Option<&str>, id: Option<&str>, retry: Option<u32>) -> Self {
         SseEvent {
             event: event.map(|s| s.to_string()),
             data: data.to_string(),
@@ -73,27 +68,27 @@ impl SseEvent {
     /// Format the event as SSE text.
     pub fn to_sse_string(&self) -> String {
         let mut result = String::new();
-        
+
         if let Some(ref id) = self.id {
-            result.push_str(&format!("id: {}\n", id));
+            result.push_str(&format!("id: {id}\n"));
         }
-        
+
         if let Some(ref event) = self.event {
-            result.push_str(&format!("event: {}\n", event));
+            result.push_str(&format!("event: {event}\n"));
         }
-        
+
         if let Some(retry) = self.retry {
-            result.push_str(&format!("retry: {}\n", retry));
+            result.push_str(&format!("retry: {retry}\n"));
         }
-        
+
         // Data can be multi-line, each line prefixed with "data: "
         for line in self.data.lines() {
-            result.push_str(&format!("data: {}\n", line));
+            result.push_str(&format!("data: {line}\n"));
         }
-        
+
         // Empty line to end the event
         result.push('\n');
-        
+
         result
     }
 }
@@ -229,7 +224,7 @@ mod tests {
         let mut stream = SseStream::new();
         stream.add_data("event1");
         stream.add_event("update", "event2");
-        
+
         assert_eq!(stream.len(), 2);
         assert!(!stream.is_empty());
     }

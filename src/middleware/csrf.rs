@@ -7,6 +7,7 @@
 //! - Origin/Referer validation
 
 use hmac::{Hmac, Mac};
+use rand::rngs::OsRng;
 use rand::Rng;
 use sha2::Sha256;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -41,10 +42,9 @@ pub struct CsrfToken {
 }
 
 impl CsrfToken {
-    /// Generate a new CSRF token.
+    /// Generate a new CSRF token using cryptographically secure randomness.
     pub fn generate() -> Self {
-        let mut rng = rand::thread_rng();
-        let bytes: [u8; 32] = rng.gen();
+        let bytes: [u8; 32] = OsRng.gen();
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
@@ -56,10 +56,9 @@ impl CsrfToken {
         }
     }
 
-    /// Generate signed token with secret.
+    /// Generate signed token with secret using cryptographically secure randomness.
     pub fn generate_signed(secret: &[u8]) -> Self {
-        let mut rng = rand::thread_rng();
-        let random_bytes: [u8; 16] = rng.gen();
+        let random_bytes: [u8; 16] = OsRng.gen();
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
@@ -125,23 +124,15 @@ impl CsrfToken {
 // ============================================================================
 
 /// CSRF protection method.
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub enum CsrfMethod {
     /// Double-submit cookie (stateless)
+    #[default]
     DoubleSubmit,
     /// Signed tokens (stateless with expiration)
-    SignedToken {
-        secret: Vec<u8>,
-        max_age: Duration,
-    },
+    SignedToken { secret: Vec<u8>, max_age: Duration },
     /// Origin/Referer header validation only
     OriginCheck,
-}
-
-impl Default for CsrfMethod {
-    fn default() -> Self {
-        CsrfMethod::DoubleSubmit
-    }
 }
 
 /// CSRF middleware configuration.
@@ -378,7 +369,11 @@ impl CsrfMiddleware {
             if self.config.allowed_origins.is_empty() {
                 return referer.contains(&host);
             }
-            return self.config.allowed_origins.iter().any(|o| referer.starts_with(o));
+            return self
+                .config
+                .allowed_origins
+                .iter()
+                .any(|o| referer.starts_with(o));
         }
 
         // No origin or referer - reject for unsafe methods
@@ -413,9 +408,7 @@ impl Middleware for CsrfMiddleware {
         if self.is_safe_method(&request.method) {
             // Generate token for safe methods (for use in forms)
             let token = match &self.config.method {
-                CsrfMethod::SignedToken { secret, .. } => {
-                    CsrfToken::generate_signed(secret).token
-                }
+                CsrfMethod::SignedToken { secret, .. } => CsrfToken::generate_signed(secret).token,
                 _ => CsrfToken::generate().token,
             };
             request.context.insert(
@@ -495,7 +488,7 @@ pub fn get_csrf_token(request: &Request) -> Option<String> {
 /// Generate hidden form field HTML for CSRF token.
 pub fn csrf_hidden_field(request: &Request) -> String {
     if let Some(token) = get_csrf_token(request) {
-        format!(r#"<input type="hidden" name="_csrf" value="{}">"#, token)
+        format!(r#"<input type="hidden" name="_csrf" value="{token}">"#)
     } else {
         String::new()
     }
@@ -504,7 +497,7 @@ pub fn csrf_hidden_field(request: &Request) -> String {
 /// Generate meta tag for CSRF token (for AJAX).
 pub fn csrf_meta_tag(request: &Request) -> String {
     if let Some(token) = get_csrf_token(request) {
-        format!(r#"<meta name="csrf-token" content="{}">"#, token)
+        format!(r#"<meta name="csrf-token" content="{token}">"#)
     } else {
         String::new()
     }
@@ -551,7 +544,9 @@ mod tests {
         assert_eq!(config.cookie_name, "my_csrf");
         assert_eq!(config.header_name, "X-My-CSRF");
         assert!(config.skip_paths.contains(&"/api/webhook".to_string()));
-        assert!(config.allowed_origins.contains(&"https://example.com".to_string()));
+        assert!(config
+            .allowed_origins
+            .contains(&"https://example.com".to_string()));
     }
 
     #[test]

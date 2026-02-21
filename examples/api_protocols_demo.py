@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-API Protocols Demo for Cello v0.9.0.
+API Protocols Demo for Cello v1.0.0.
 
-This example demonstrates the new API Protocol features introduced in v0.9.0:
+This example demonstrates the API Protocol features:
   - GraphQL support with Query, Mutation, and Subscription decorators
   - gRPC service definitions with streaming support
   - Kafka messaging with consumers and producers
@@ -317,7 +317,7 @@ user_producer = Producer(topic="user-events", config=kafka_config)
 def home(request):
     """Root endpoint with feature overview."""
     return {
-        "message": "Cello v0.9.0 - API Protocols Demo",
+        "message": "Cello v1.0.0 - API Protocols Demo",
         "features": {
             "graphql": "Schema-first GraphQL with Query, Mutation, Subscription",
             "grpc": "gRPC services with reflection and gRPC-Web support",
@@ -574,7 +574,7 @@ def show_config(request):
 
 
 if __name__ == "__main__":
-    print("Cello v0.9.0 - API Protocols Demo")
+    print("Cello v1.0.0 - API Protocols Demo")
     print()
     print("  REST endpoints:")
     print("  - GET  /                   - Feature overview")

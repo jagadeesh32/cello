@@ -5,7 +5,7 @@ description: gRPC support in Cello Framework - services, methods, streaming, and
 
 # gRPC Integration
 
-Cello v0.9.0 provides gRPC support with class-based service definitions, automatic method discovery, and Rust-powered serialization.
+Cello provides gRPC support with class-based service definitions, automatic method discovery, and Rust-powered serialization.
 
 ## Quick Start
 

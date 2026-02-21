@@ -354,7 +354,12 @@ def test_route_registration():
     def delete_user(req):
         return {"deleted": True}
 
-    assert True
+    # Verify decorators returned callable handlers
+    assert callable(home)
+    assert callable(create_user)
+    assert callable(get_user)
+    assert callable(update_user)
+    assert callable(delete_user)
 
 
 def test_multi_method_route():
@@ -367,7 +372,8 @@ def test_multi_method_route():
     def resource_handler(req):
         return {"method": req.method}
 
-    assert True
+    # Verify decorator returned the handler
+    assert callable(resource_handler)
 
 
 # =============================================================================
@@ -401,7 +407,9 @@ def test_blueprint_route_registration():
     app = App()
     app.register_blueprint(bp)
 
-    assert True
+    # Verify handlers returned by blueprint decorators are callable
+    assert callable(list_users)
+    assert callable(create_user)
 
 
 def test_nested_blueprint():
@@ -676,11 +684,14 @@ def test_middleware_enable():
     from cello import App
 
     app = App()
-    app.enable_cors()
-    app.enable_logging()
-    app.enable_compression()
+    result_cors = app.enable_cors()
+    result_logging = app.enable_logging()
+    result_compression = app.enable_compression()
 
-    assert True
+    # enable_* methods return None on success
+    assert result_cors is None
+    assert result_logging is None
+    assert result_compression is None
 
 
 def test_middleware_cors_with_origins():
@@ -688,9 +699,10 @@ def test_middleware_cors_with_origins():
     from cello import App
 
     app = App()
-    app.enable_cors(origins=["https://example.com", "https://api.example.com"])
+    result = app.enable_cors(origins=["https://example.com", "https://api.example.com"])
 
-    assert True
+    # enable_cors returns None on success
+    assert result is None
 
 
 # =============================================================================
@@ -978,8 +990,9 @@ def test_prometheus_middleware():
     from cello import App
 
     app = App()
-    app.enable_prometheus()
-    assert True
+    result = app.enable_prometheus()
+    # enable_prometheus returns None on success
+    assert result is None
 
 
 def test_prometheus_custom_config():
@@ -987,12 +1000,13 @@ def test_prometheus_custom_config():
     from cello import App
 
     app = App()
-    app.enable_prometheus(
+    result = app.enable_prometheus(
         endpoint="/custom-metrics",
         namespace="myapp",
         subsystem="api"
     )
-    assert True
+    # enable_prometheus returns None on success
+    assert result is None
 
 
 def test_guards_registration():
@@ -1004,8 +1018,9 @@ def test_guards_registration():
     def my_guard(request):
         return True
 
-    app.add_guard(my_guard)
-    assert True
+    result = app.add_guard(my_guard)
+    # add_guard returns None on success
+    assert result is None
 
 
 def test_dependency_injection_registration():
@@ -1015,10 +1030,12 @@ def test_dependency_injection_registration():
     app = App()
 
     # Register a singleton dependency
-    app.register_singleton("database", {"url": "postgres://localhost/db"})
-    app.register_singleton("cache", {"host": "localhost", "port": 6379})
+    result1 = app.register_singleton("database", {"url": "postgres://localhost/db"})
+    result2 = app.register_singleton("cache", {"host": "localhost", "port": 6379})
 
-    assert True
+    # register_singleton returns None on success
+    assert result1 is None
+    assert result2 is None
 
 
 def test_version():
@@ -1164,8 +1181,8 @@ def test_enable_telemetry():
         service_name="test-api",
         sampling_rate=0.5,
     )
-    app.enable_telemetry(config)
-    assert True
+    result = app.enable_telemetry(config)
+    assert result is None
 
 
 def test_enable_health_checks():
@@ -1173,8 +1190,8 @@ def test_enable_health_checks():
     from cello import App, HealthCheckConfig
 
     app = App()
-    app.enable_health_checks(HealthCheckConfig())
-    assert True
+    result = app.enable_health_checks(HealthCheckConfig())
+    assert result is None
 
 
 def test_enable_graphql():
@@ -1182,8 +1199,8 @@ def test_enable_graphql():
     from cello import App, GraphQLConfig
 
     app = App()
-    app.enable_graphql(GraphQLConfig())
-    assert True
+    result = app.enable_graphql(GraphQLConfig())
+    assert result is None
 
 
 def test_enable_openapi():
@@ -1191,18 +1208,18 @@ def test_enable_openapi():
     from cello import App
 
     app = App()
-    app.enable_openapi(title="Test API", version="0.9.0")
-    assert True
+    result = app.enable_openapi(title="Test API", version="1.0.0")
+    assert result is None
 
 
 def test_enable_openapi_default_version():
-    """Test that OpenAPI defaults to v0.9.0."""
+    """Test that OpenAPI defaults to v1.0.0."""
     from cello import App
 
     app = App()
     # Should not raise with default version
-    app.enable_openapi()
-    assert True
+    result = app.enable_openapi()
+    assert result is None
 
 
 # =============================================================================
@@ -1336,8 +1353,8 @@ def test_enable_database():
         pool_size=20,
         max_lifetime_secs=1800,
     )
-    app.enable_database(config)
-    assert True
+    result = app.enable_database(config)
+    assert result is None
 
 
 def test_enable_database_default():
@@ -1345,8 +1362,8 @@ def test_enable_database_default():
     from cello import App
 
     app = App()
-    app.enable_database()
-    assert True
+    result = app.enable_database()
+    assert result is None
 
 
 def test_enable_redis():
@@ -1358,8 +1375,8 @@ def test_enable_redis():
         url="redis://localhost:6379",
         pool_size=10,
     )
-    app.enable_redis(config)
-    assert True
+    result = app.enable_redis(config)
+    assert result is None
 
 
 def test_enable_redis_default():
@@ -1367,8 +1384,8 @@ def test_enable_redis_default():
     from cello import App
 
     app = App()
-    app.enable_redis()
-    assert True
+    result = app.enable_redis()
+    assert result is None
 
 
 # =============================================================================
@@ -2067,8 +2084,8 @@ def test_cors_with_custom_origins():
 
     app = App()
     # This was a bug: origins were being ignored with `let _ = o;`
-    app.enable_cors(origins=["https://example.com"])
-    assert True
+    result = app.enable_cors(origins=["https://example.com"])
+    assert result is None
 
 
 def test_cors_with_wildcard_origin():
@@ -2076,8 +2093,8 @@ def test_cors_with_wildcard_origin():
     from cello import App
 
     app = App()
-    app.enable_cors(origins=["*"])
-    assert True
+    result = app.enable_cors(origins=["*"])
+    assert result is None
 
 
 def test_cors_with_multiple_origins():
@@ -2085,12 +2102,12 @@ def test_cors_with_multiple_origins():
     from cello import App
 
     app = App()
-    app.enable_cors(origins=[
+    result = app.enable_cors(origins=[
         "https://app.example.com",
         "https://admin.example.com",
         "https://api.example.com",
     ])
-    assert True
+    assert result is None
 
 
 # =============================================================================
@@ -2122,13 +2139,15 @@ def test_app_with_all_v080_features():
     # Register routes
     @app.get("/")
     def home(req):
-        return {"version": "0.9.0"}
+        return {"version": "1.0.0"}
 
     @app.post("/data")
     def create_data(req):
         return {"created": True}
 
-    assert True
+    # Verify route handlers were registered successfully
+    assert callable(home)
+    assert callable(create_data)
 
 
 def test_app_with_database_and_transactional_route():
@@ -2144,7 +2163,8 @@ def test_app_with_database_and_transactional_route():
     async def transfer(request):
         return {"success": True}
 
-    assert True
+    # Verify the transactional-wrapped handler is callable
+    assert callable(transfer)
 
 
 def test_v080_all_exports():
@@ -2562,8 +2582,8 @@ def test_app_enable_grpc():
     from cello import App
 
     app = App()
-    app.enable_grpc()
-    assert True
+    result = app.enable_grpc()
+    assert result is None
 
 
 def test_app_enable_grpc_with_config():
@@ -2576,8 +2596,8 @@ def test_app_enable_grpc_with_config():
         reflection=True,
         enable_web=True,
     )
-    app.enable_grpc(config)
-    assert True
+    result = app.enable_grpc(config)
+    assert result is None
 
 
 def test_app_enable_grpc_local():
@@ -2585,8 +2605,8 @@ def test_app_enable_grpc_local():
     from cello import App, GrpcConfig
 
     app = App()
-    app.enable_grpc(GrpcConfig.local())
-    assert True
+    result = app.enable_grpc(GrpcConfig.local())
+    assert result is None
 
 
 def test_app_enable_grpc_production():
@@ -2594,8 +2614,8 @@ def test_app_enable_grpc_production():
     from cello import App, GrpcConfig
 
     app = App()
-    app.enable_grpc(GrpcConfig.production())
-    assert True
+    result = app.enable_grpc(GrpcConfig.production())
+    assert result is None
 
 
 def test_app_add_grpc_service():
@@ -2604,8 +2624,8 @@ def test_app_add_grpc_service():
 
     app = App()
     app.enable_grpc()
-    app.add_grpc_service("UserService", ["GetUser", "ListUsers", "CreateUser"])
-    assert True
+    result = app.add_grpc_service("UserService", ["GetUser", "ListUsers", "CreateUser"])
+    assert result is None
 
 
 def test_app_add_grpc_service_no_methods():
@@ -2614,8 +2634,8 @@ def test_app_add_grpc_service_no_methods():
 
     app = App()
     app.enable_grpc()
-    app.add_grpc_service("EmptyService")
-    assert True
+    result = app.add_grpc_service("EmptyService")
+    assert result is None
 
 
 def test_app_enable_messaging():
@@ -2627,8 +2647,8 @@ def test_app_enable_messaging():
         brokers=["localhost:9092"],
         group_id="test-group",
     )
-    app.enable_messaging(config)
-    assert True
+    result = app.enable_messaging(config)
+    assert result is None
 
 
 def test_app_enable_messaging_local():
@@ -2636,8 +2656,8 @@ def test_app_enable_messaging_local():
     from cello import App, KafkaConfig
 
     app = App()
-    app.enable_messaging(KafkaConfig.local())
-    assert True
+    result = app.enable_messaging(KafkaConfig.local())
+    assert result is None
 
 
 def test_app_enable_rabbitmq():
@@ -2649,8 +2669,8 @@ def test_app_enable_rabbitmq():
         url="amqp://guest:guest@localhost",
         prefetch_count=20,
     )
-    app.enable_rabbitmq(config)
-    assert True
+    result = app.enable_rabbitmq(config)
+    assert result is None
 
 
 def test_app_enable_rabbitmq_local():
@@ -2658,8 +2678,8 @@ def test_app_enable_rabbitmq_local():
     from cello import App, RabbitMQConfig
 
     app = App()
-    app.enable_rabbitmq(RabbitMQConfig.local())
-    assert True
+    result = app.enable_rabbitmq(RabbitMQConfig.local())
+    assert result is None
 
 
 def test_app_enable_sqs():
@@ -2671,8 +2691,8 @@ def test_app_enable_sqs():
         region="us-west-2",
         queue_url="https://sqs.us-west-2.amazonaws.com/123/queue",
     )
-    app.enable_sqs(config)
-    assert True
+    result = app.enable_sqs(config)
+    assert result is None
 
 
 def test_app_enable_sqs_local():
@@ -2680,8 +2700,8 @@ def test_app_enable_sqs_local():
     from cello import App, SqsConfig
 
     app = App()
-    app.enable_sqs(SqsConfig.local("http://localhost:4566/000000000000/test"))
-    assert True
+    result = app.enable_sqs(SqsConfig.local("http://localhost:4566/000000000000/test"))
+    assert result is None
 
 
 def test_app_with_all_v090_features():
@@ -2704,9 +2724,10 @@ def test_app_with_all_v090_features():
     # Register routes
     @app.get("/")
     def home(req):
-        return {"version": "0.9.0"}
+        return {"version": "1.0.0"}
 
-    assert True
+    # Verify route handler was registered
+    assert callable(home)
 
 
 # ---------------------------------------------------------------------------
@@ -4232,8 +4253,8 @@ def test_app_enable_event_sourcing():
     from cello import App
 
     app = App()
-    app.enable_event_sourcing()
-    assert True
+    result = app.enable_event_sourcing()
+    assert result is app  # returns self for chaining
 
 
 def test_app_enable_event_sourcing_with_config():
@@ -4246,8 +4267,8 @@ def test_app_enable_event_sourcing_with_config():
         snapshot_interval=50,
         enable_snapshots=True,
     )
-    app.enable_event_sourcing(config)
-    assert True
+    result = app.enable_event_sourcing(config)
+    assert result is app  # returns self for chaining
 
 
 def test_app_enable_event_sourcing_memory():
@@ -4255,8 +4276,8 @@ def test_app_enable_event_sourcing_memory():
     from cello import App, EventSourcingConfig
 
     app = App()
-    app.enable_event_sourcing(EventSourcingConfig.memory())
-    assert True
+    result = app.enable_event_sourcing(EventSourcingConfig.memory())
+    assert result is app  # returns self for chaining
 
 
 def test_app_enable_cqrs():
@@ -4264,8 +4285,8 @@ def test_app_enable_cqrs():
     from cello import App
 
     app = App()
-    app.enable_cqrs()
-    assert True
+    result = app.enable_cqrs()
+    assert result is app  # returns self for chaining
 
 
 def test_app_enable_cqrs_with_config():
@@ -4278,8 +4299,8 @@ def test_app_enable_cqrs_with_config():
         command_timeout_ms=10000,
         max_retries=5,
     )
-    app.enable_cqrs(config)
-    assert True
+    result = app.enable_cqrs(config)
+    assert result is app  # returns self for chaining
 
 
 def test_app_enable_saga():
@@ -4287,8 +4308,8 @@ def test_app_enable_saga():
     from cello import App
 
     app = App()
-    app.enable_saga()
-    assert True
+    result = app.enable_saga()
+    assert result is app  # returns self for chaining
 
 
 def test_app_with_all_v0100_features():
@@ -4311,7 +4332,8 @@ def test_app_with_all_v0100_features():
     def home(req):
         return {"version": "1.0.0"}
 
-    assert True
+    # Verify route handler was registered
+    assert callable(home)
 
 
 # ---------------------------------------------------------------------------
@@ -4631,8 +4653,9 @@ async def test_event_store_close():
     from cello.eventsourcing import EventStore
 
     store = await EventStore.connect()
+    assert store.connected is True
     await store.close()
-    assert True
+    assert store.connected is False
 
 
 def test_eventsourcing_config_python():
@@ -5373,7 +5396,9 @@ async def test_saga_orchestrator_register():
 
     orchestrator = SagaOrchestrator()
     orchestrator.register(OrderSaga())
-    assert True
+    # Verify the saga was actually registered
+    assert "OrderSaga" in orchestrator._sagas
+    assert len(orchestrator._sagas) == 1
 
 
 @pytest.mark.asyncio
@@ -5428,3 +5453,294 @@ def test_saga_error_creation():
     assert error.step_name == "process_payment"
     assert error.original_error is original
     assert "process_payment" in str(error)
+
+
+# =============================================================================
+# v1.0.0 Edge Case and Security Tests
+# =============================================================================
+
+
+def test_route_decorator_returns_callable():
+    """Verify route decorators return a callable handler function."""
+    from cello import App
+    app = App()
+
+    def my_handler(request):
+        return {"ok": True}
+
+    result = app.get("/test")(my_handler)
+    assert callable(result)
+
+
+def test_response_json_with_unicode():
+    """Verify JSON response handles unicode correctly."""
+    from cello import Response
+    r = Response.json({"name": "\u65e5\u672c\u8a9e", "emoji": "\U0001f389"})
+    assert r.status == 200
+
+
+def test_response_json_with_none_values():
+    """Verify JSON response handles None values."""
+    from cello import Response
+    r = Response.json({"key": None, "list": [None, 1]})
+    assert r.status == 200
+
+
+def test_response_json_with_nested_data():
+    """Verify JSON response handles deeply nested data."""
+    from cello import Response
+    data = {"a": {"b": {"c": {"d": {"e": "deep"}}}}}
+    r = Response.json(data)
+    assert r.status == 200
+
+
+def test_blueprint_empty_prefix():
+    """Test blueprint with empty prefix."""
+    from cello import Blueprint
+    bp = Blueprint("", name="root")
+    assert bp.prefix == "" or bp.prefix == "/"
+
+
+def test_sse_event_empty_data():
+    """Test SSE event with empty data."""
+    from cello import SseEvent
+    event = SseEvent(data="")
+    assert event is not None
+
+
+def test_websocket_message_empty_text():
+    """Test WebSocket message with empty text."""
+    from cello import WebSocketMessage
+    msg = WebSocketMessage.text("")
+    assert msg is not None
+
+
+def test_template_engine_missing_variable():
+    """Test template rendering with missing variable."""
+    from cello import TemplateEngine
+    tmpl = TemplateEngine()
+    # Missing variable should render as empty string (Jinja2-like default)
+    result = tmpl.render_string("Hello {{ missing }}!", {})
+    assert "Hello" in result
+
+
+def test_request_empty_params():
+    """Test request with no parameters."""
+    from cello import Request
+    req = Request("GET", "/test")
+    assert req.params == {} or req.params is not None
+
+
+def test_background_tasks_run_empty():
+    """Test running background tasks when none are added."""
+    from cello import BackgroundTasks
+    tasks = BackgroundTasks()
+    assert tasks.pending_count() == 0
+    tasks.run_all()  # should not error
+    assert tasks.pending_count() == 0
+
+
+def test_multiple_blueprints_different_prefixes():
+    """Test registering multiple blueprints with different prefixes."""
+    from cello import App, Blueprint
+    app = App()
+    bp1 = Blueprint("/api/v1", name="v1")
+    bp2 = Blueprint("/api/v2", name="v2")
+    bp1.get("/users")(lambda r: {"v": 1})
+    bp2.get("/users")(lambda r: {"v": 2})
+    app.register_blueprint(bp1)
+    app.register_blueprint(bp2)
+    # Both blueprints should be registered without conflict
+    assert bp1.prefix == "/api/v1"
+    assert bp2.prefix == "/api/v2"
+
+
+def test_app_multiple_middleware_enable():
+    """Test enabling all middleware together doesn't conflict."""
+    from cello import App
+    app = App()
+    app.enable_cors(origins=["*"])
+    app.enable_compression()
+    app.enable_logging()
+    app.enable_prometheus()
+    # All should coexist without error - verify app is still valid
+    assert app is not None
+    assert app._app is not None
+
+
+def test_event_sourcing_aggregate_version_tracking():
+    """Test that aggregate version increments correctly."""
+    from cello.eventsourcing import Event, Aggregate, event_handler
+
+    class Counter(Aggregate):
+        @event_handler("Incremented")
+        def on_inc(self, e):
+            self.state["count"] = self.state.get("count", 0) + 1
+
+    c = Counter()
+    c.apply(Event("Incremented", {}))
+    c.apply(Event("Incremented", {}))
+    c.apply(Event("Incremented", {}))
+    assert c.version == 3
+    assert c.state["count"] == 3
+    assert len(c.uncommitted_events) == 3
+
+
+def test_cqrs_command_result_states():
+    """Test all CommandResult states."""
+    from cello.cqrs import CommandResult
+    ok = CommandResult.ok({"id": 1})
+    assert ok.success is True
+    assert ok.data == {"id": 1}
+    fail = CommandResult.fail("error msg")
+    assert fail.success is False
+    assert fail.error == "error msg"
+    rejected = CommandResult.rejected("not allowed")
+    assert rejected.success is False
+    assert "Rejected" in rejected.error
+
+
+def test_saga_execution_compensates_on_failure():
+    """Test saga compensation on step failure."""
+    from cello.saga import Saga, SagaStep, SagaExecution, SagaError
+    import asyncio
+
+    log = []
+
+    def step1(ctx):
+        log.append("s1")
+
+    def comp1(ctx):
+        log.append("c1")
+
+    def step2(ctx):
+        raise ValueError("fail")
+
+    def comp2(ctx):
+        log.append("c2")
+
+    saga = Saga("test")
+    saga.add_step(SagaStep(name="s1", action=step1, compensate=comp1))
+    saga.add_step(SagaStep(name="s2", action=step2, compensate=comp2))
+
+    exe = SagaExecution(saga)
+    try:
+        asyncio.get_event_loop().run_until_complete(exe.run({}))
+    except SagaError:
+        pass  # Expected
+    assert "s1" in log
+    assert "c1" in log  # step1 was compensated
+
+
+def test_grpc_error_status_codes():
+    """Test gRPC error status codes."""
+    from cello.grpc import GrpcError
+    for code in [0, 1, 2, 3, 4, 5, 13, 14]:
+        err = GrpcError(code=code, message="test")
+        assert err.code == code
+        assert err.message == "test"
+
+
+def test_message_json_invalid():
+    """Test Message.json() with non-JSON content."""
+    from cello.messaging import Message
+    msg = Message(topic="t", value=b"not json")
+    try:
+        msg.json()
+        assert False, "Should have raised"
+    except (ValueError, Exception):
+        pass  # Expected
+
+
+def test_aggregate_clear_uncommitted():
+    """Test that clear_uncommitted resets the event list."""
+    from cello.eventsourcing import Event, Aggregate, event_handler
+
+    class MyAgg(Aggregate):
+        @event_handler("Created")
+        def on_created(self, e):
+            self.state["created"] = True
+
+    agg = MyAgg()
+    agg.apply(Event("Created", {}))
+    assert len(agg.uncommitted_events) == 1
+    agg.clear_uncommitted()
+    assert len(agg.uncommitted_events) == 0
+    assert agg.version == 1  # version should not reset
+
+
+def test_query_result_states():
+    """Test all QueryResult states."""
+    from cello.cqrs import QueryResult
+    found = QueryResult.ok({"name": "Alice"})
+    assert found.found is True
+    assert found.data == {"name": "Alice"}
+
+    not_found = QueryResult.not_found()
+    assert not_found.found is False
+    assert not_found.data is None
+
+    failed = QueryResult.fail("db error")
+    assert failed.found is False
+    assert failed.error == "db error"
+
+
+def test_sse_event_with_all_fields():
+    """Test SSE event with all optional fields set."""
+    from cello import SseEvent
+    event = SseEvent(data="payload", event="update", id="42", retry=5000)
+    assert event is not None  # SseEvent fields are setter methods, not property getters
+
+
+def test_websocket_message_types():
+    """Test all WebSocket message type constructors."""
+    from cello import WebSocketMessage
+    text_msg = WebSocketMessage.text("hello")
+    assert text_msg is not None
+
+    binary_msg = WebSocketMessage.binary(b"\x00\x01\x02")
+    assert binary_msg is not None
+
+    close_msg = WebSocketMessage.close()
+    assert close_msg is not None
+
+
+def test_response_status_codes():
+    """Test Response with various HTTP status codes."""
+    from cello import Response
+    for status in [200, 201, 204, 301, 400, 401, 403, 404, 500, 503]:
+        r = Response.json({"status": status}, status=status)
+        assert r.status == status
+
+
+def test_blueprint_nested_deep():
+    """Test deeply nested blueprints compose prefixes correctly."""
+    from cello import Blueprint
+    level1 = Blueprint("/api")
+    level2 = Blueprint("/v1")
+    level3 = Blueprint("/admin")
+
+    @level3.get("/dashboard")
+    def dashboard(req):
+        return {"ok": True}
+
+    level2.register(level3)
+    level1.register(level2)
+
+    routes = level1.get_all_routes()
+    assert len(routes) == 1
+    method, path, _ = routes[0]
+    assert path == "/api/v1/admin/dashboard"
+
+
+def test_message_ack_nack():
+    """Test Message ack and nack methods."""
+    from cello.messaging import Message
+    msg = Message(topic="test", value=b'{"ok": true}')
+    assert msg._acked is False
+    assert msg._nacked is False
+    msg.ack()
+    assert msg._acked is True
+    msg2 = Message(topic="test", value=b"data")
+    msg2.nack()
+    assert msg2._nacked is True

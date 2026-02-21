@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Security Features Example for Cello v0.9.0.
+Security Features Example for Cello v1.0.0.
 
 This example demonstrates security-focused features including:
 - Security headers configuration

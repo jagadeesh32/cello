@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Enterprise Configuration Example for Cello v0.9.0.
+Enterprise Configuration Example for Cello v1.0.0.
 
 This example demonstrates the enterprise-grade configuration classes
 available in Cello for production deployments.

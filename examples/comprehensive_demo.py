@@ -1,7 +1,7 @@
 """
 Cello Advanced Features Demo
 
-This example demonstrates all the new middleware features implemented in Cello v0.9.0:
+This example demonstrates all the new middleware features implemented in Cello v1.0.0:
 
 🎯 Features Demonstrated:
 1. ✅ Dependency Injection (FastAPI-inspired)
@@ -97,7 +97,7 @@ user_service = UserService(database)
 def home(request):
     """Home page with feature overview"""
     return {
-        "message": "🎸 Cello v0.9.0 - Advanced Features Demo",
+        "message": "🎸 Cello v1.0.0 - Advanced Features Demo",
         "features": {
             "dependency_injection": "FastAPI-style DI container",
             "guards": "Role-based access control (RBAC)",

@@ -27,27 +27,23 @@ pub enum ParamError {
         actual: String,
     },
     /// Parameter validation failed
-    Validation {
-        param: String,
-        message: String,
-    },
+    Validation { param: String, message: String },
 }
 
 impl std::fmt::Display for ParamError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ParamError::Missing(name) => write!(f, "Missing required parameter: {}", name),
+            ParamError::Missing(name) => write!(f, "Missing required parameter: {name}"),
             ParamError::InvalidType {
                 param,
                 expected,
                 actual,
             } => write!(
                 f,
-                "Invalid type for '{}': expected {}, got '{}'",
-                param, expected, actual
+                "Invalid type for '{param}': expected {expected}, got '{actual}'"
             ),
             ParamError::Validation { param, message } => {
-                write!(f, "Validation failed for '{}': {}", param, message)
+                write!(f, "Validation failed for '{param}': {message}")
             }
         }
     }
@@ -167,12 +163,11 @@ impl TypedParams {
 
     /// Get required UUID parameter.
     pub fn require_uuid(&self, key: &str) -> Result<String, ParamError> {
-        self.get_uuid(key)
-            .ok_or_else(|| ParamError::InvalidType {
-                param: key.to_string(),
-                expected: "UUID",
-                actual: self.raw.get(key).cloned().unwrap_or_default(),
-            })
+        self.get_uuid(key).ok_or_else(|| ParamError::InvalidType {
+            param: key.to_string(),
+            expected: "UUID",
+            actual: self.raw.get(key).cloned().unwrap_or_default(),
+        })
     }
 
     /// Check if parameter exists.
@@ -315,7 +310,7 @@ impl Validators {
             if *value >= min {
                 Ok(())
             } else {
-                Err(format!("Value must be >= {}", min))
+                Err(format!("Value must be >= {min}"))
             }
         }
     }
@@ -326,7 +321,7 @@ impl Validators {
             if *value <= max {
                 Ok(())
             } else {
-                Err(format!("Value must be <= {}", max))
+                Err(format!("Value must be <= {max}"))
             }
         }
     }
@@ -340,7 +335,7 @@ impl Validators {
             if *value >= min && *value <= max {
                 Ok(())
             } else {
-                Err(format!("Value must be between {} and {}", min, max))
+                Err(format!("Value must be between {min} and {max}"))
             }
         }
     }
@@ -351,7 +346,7 @@ impl Validators {
             if value.len() >= min {
                 Ok(())
             } else {
-                Err(format!("Value must be at least {} characters", min))
+                Err(format!("Value must be at least {min} characters"))
             }
         }
     }
@@ -362,7 +357,7 @@ impl Validators {
             if value.len() <= max {
                 Ok(())
             } else {
-                Err(format!("Value must be at most {} characters", max))
+                Err(format!("Value must be at most {max} characters"))
             }
         }
     }
@@ -381,8 +376,7 @@ impl Validators {
 
     /// Validate email format.
     pub fn email() -> impl Fn(&String) -> Result<(), String> {
-        let regex =
-            regex::Regex::new(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$").unwrap();
+        let regex = regex::Regex::new(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$").unwrap();
         move |value| {
             if regex.is_match(value) {
                 Ok(())

@@ -1,8 +1,8 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use parking_lot::RwLock;
 use dashmap::DashMap;
+use parking_lot::RwLock;
 
 use super::{Middleware, MiddlewareAction, MiddlewareResult};
 use crate::request::Request;
@@ -95,17 +95,17 @@ impl CircuitBreakerMiddleware {
 impl Middleware for CircuitBreakerMiddleware {
     fn before(&self, request: &mut Request) -> MiddlewareResult {
         let key = self.get_key(request);
-        
+
         // Check if key exists, if not continue (state created in after or lazily?)
         // Better to check state.
-        
+
         // This relies on states being present. If new, default is Closed.
         // DashMap entry API avoids lock text contention on misses if we don't insert.
         // But if we want to BLOCK, we need to read state.
-        
+
         if let Some(state_entry) = self.states.get(&key) {
             let mut state = state_entry.write();
-            
+
             match state.state {
                 State::Open => {
                     // Check if reset timeout passed
@@ -117,17 +117,17 @@ impl Middleware for CircuitBreakerMiddleware {
                             return Ok(MiddlewareAction::Continue); // Allow probe
                         }
                     }
-                    
+
                     // Circuit is Open -> Fail Fast
                     let response = Response::error(503, "Service Unavailable (Circuit Open)");
                     return Ok(MiddlewareAction::Stop(response));
-                },
+                }
                 State::HalfOpen => {
                     // In Half-Open, allow requests. (Maybe limit concurrency?)
                     // For simplicity, we allow all.
                     // Failures will reopen it. Successes will close it.
-                    return Ok(MiddlewareAction::Continue); 
-                },
+                    return Ok(MiddlewareAction::Continue);
+                }
                 State::Closed => {
                     return Ok(MiddlewareAction::Continue);
                 }
@@ -142,7 +142,10 @@ impl Middleware for CircuitBreakerMiddleware {
         let is_failure = self.config.failure_codes.contains(&response.status);
 
         // We insert on first access here
-        let state_entry = self.states.entry(key).or_insert_with(|| RwLock::new(CircuitBreakerState::default()));
+        let state_entry = self
+            .states
+            .entry(key)
+            .or_insert_with(|| RwLock::new(CircuitBreakerState::default()));
         let mut state = state_entry.write();
 
         match state.state {
@@ -150,7 +153,7 @@ impl Middleware for CircuitBreakerMiddleware {
                 if is_failure {
                     state.failure_count += 1;
                     state.last_failure = Some(Instant::now());
-                    
+
                     if state.failure_count >= self.config.failure_threshold {
                         state.state = State::Open;
                         state.opened_at = Some(Instant::now());
@@ -159,7 +162,7 @@ impl Middleware for CircuitBreakerMiddleware {
                     }
                 } else {
                     // Success, maybe decay failure count?
-                    // Simple logic: reset on success? 
+                    // Simple logic: reset on success?
                     // Usually we reset only after a Time Window, but here we keep count.
                     // Let's reset count on success if we want STRICT consecutive failures?
                     // Or keep count accumulating until timeout?

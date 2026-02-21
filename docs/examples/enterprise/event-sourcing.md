@@ -5,7 +5,7 @@ description: Event sourcing example with aggregates, event store, CQRS projectio
 
 # Event Sourcing Example
 
-This example demonstrates event sourcing with Cello's v0.10.0 features. Instead of storing current state directly, all changes are recorded as immutable events. State is reconstructed by replaying events, and sagas coordinate multi-step workflows with automatic compensation.
+This example demonstrates event sourcing with Cello's event sourcing features. Instead of storing current state directly, all changes are recorded as immutable events. State is reconstructed by replaying events, and sagas coordinate multi-step workflows with automatic compensation.
 
 ---
 

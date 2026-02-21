@@ -8,11 +8,11 @@
 
 use parking_lot::RwLock;
 use pyo3::prelude::*;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
-use crate::request::Request;
 use crate::json::python_to_json;
+use crate::request::Request;
 
 /// Cached metadata for a handler to avoid per-request introspection.
 struct HandlerMeta {
@@ -65,12 +65,14 @@ impl HandlerRegistry {
     }
 
     /// Get a handler by its ID.
+    #[inline]
     pub fn get(&self, id: usize) -> Option<PyObject> {
         let handlers = self.handlers.read();
         handlers.get(id).map(|m| m.handler.clone())
     }
 
     /// Get handler metadata by ID.
+    #[inline]
     fn get_meta(&self, id: usize) -> Option<Arc<HandlerMeta>> {
         let handlers = self.handlers.read();
         handlers.get(id).cloned()
@@ -96,7 +98,7 @@ impl HandlerRegistry {
     ) -> Result<serde_json::Value, String> {
         let meta = self
             .get_meta(handler_id)
-            .ok_or_else(|| format!("Handler {} not found", handler_id))?;
+            .ok_or_else(|| format!("Handler {handler_id} not found"))?;
 
         // PERF: Fast atomic check instead of RwLock read on dependency container
         let has_dependencies = self.has_dependencies.load(Ordering::Relaxed)
@@ -109,22 +111,28 @@ impl HandlerRegistry {
                     // First call: introspect and cache DI params
                     let mut di_params = Vec::new();
                     if let Ok(inspect) = py.import("inspect") {
-                        if let Ok(sig) = inspect.call_method1("signature", (meta.handler.as_ref(py),)) {
+                        if let Ok(sig) =
+                            inspect.call_method1("signature", (meta.handler.as_ref(py),))
+                        {
                             if let Ok(parameters) = sig.getattr("parameters") {
                                 let cello_module = py.import("cello").ok();
-                                let depends_type = cello_module.and_then(|m| m.getattr("Depends").ok());
+                                let depends_type =
+                                    cello_module.and_then(|m| m.getattr("Depends").ok());
 
                                 if let Ok(items) = parameters.call_method0("items") {
                                     if let Ok(iter) = items.iter() {
                                         for item in iter.flatten() {
                                             if let (Ok(name), Ok(param)) = (
-                                                item.get_item(0).and_then(|v| v.extract::<String>()),
-                                                item.get_item(1)
+                                                item.get_item(0)
+                                                    .and_then(|v| v.extract::<String>()),
+                                                item.get_item(1),
                                             ) {
                                                 if let Ok(default) = param.getattr("default") {
                                                     if let Some(dt) = &depends_type {
-                                                        if default.is_instance(dt).unwrap_or(false) {
-                                                            if let Ok(dep_name) = default.getattr("dependency")
+                                                        if default.is_instance(dt).unwrap_or(false)
+                                                        {
+                                                            if let Ok(dep_name) = default
+                                                                .getattr("dependency")
                                                                 .and_then(|d| d.extract::<String>())
                                                             {
                                                                 di_params.push((name, dep_name));
@@ -145,12 +153,23 @@ impl HandlerRegistry {
 
                 // Use cached DI params
                 let di_guard = meta.di_params.read();
-                let di_params = di_guard.as_ref().unwrap();
+                let di_params = match di_guard.as_ref() {
+                    Some(params) => params,
+                    None => {
+                        // Fallback: DI params not yet cached (should not happen), use fast path
+                        return meta
+                            .handler
+                            .call1(py, (request,))
+                            .map_err(|e| format!("Handler error: {e}"))
+                            .and_then(|result| python_to_json(py, result.as_ref(py)));
+                    }
+                };
 
                 if di_params.is_empty() {
                     // No DI params found - fast path
-                    meta.handler.call1(py, (request,))
-                        .map_err(|e| format!("Handler error: {}", e))?
+                    meta.handler
+                        .call1(py, (request,))
+                        .map_err(|e| format!("Handler error: {e}"))?
                 } else {
                     let kwargs = pyo3::types::PyDict::new(py);
                     for (param_name, dep_name) in di_params {
@@ -158,13 +177,15 @@ impl HandlerRegistry {
                             let _ = kwargs.set_item(param_name, dep_value);
                         }
                     }
-                    meta.handler.call(py, (request,), Some(kwargs))
-                        .map_err(|e| format!("Handler error: {}", e))?
+                    meta.handler
+                        .call(py, (request,), Some(kwargs))
+                        .map_err(|e| format!("Handler error: {e}"))?
                 }
             } else {
                 // FAST PATH: Direct call without DI - no locks, no introspection
-                meta.handler.call1(py, (request,))
-                    .map_err(|e| format!("Handler error: {}", e))?
+                meta.handler
+                    .call1(py, (request,))
+                    .map_err(|e| format!("Handler error: {e}"))?
             };
 
             // PERF: Cache async detection per handler
@@ -172,8 +193,11 @@ impl HandlerRegistry {
                 meta.is_async.load(Ordering::Relaxed)
             } else {
                 // First call: detect and cache
-                let is_async = py.import("inspect")
-                    .and_then(|inspect| inspect.call_method1("iscoroutine", (call_result.as_ref(py),)))
+                let is_async = py
+                    .import("inspect")
+                    .and_then(|inspect| {
+                        inspect.call_method1("iscoroutine", (call_result.as_ref(py),))
+                    })
                     .and_then(|r| r.is_true())
                     .unwrap_or(false);
                 meta.is_async.store(is_async, Ordering::Relaxed);
@@ -184,7 +208,7 @@ impl HandlerRegistry {
             let final_result = if is_coroutine {
                 py.import("asyncio")
                     .and_then(|asyncio| asyncio.call_method1("run", (call_result.as_ref(py),)))
-                    .map_err(|e| format!("Async handler error: {}", e))?
+                    .map_err(|e| format!("Async handler error: {e}"))?
             } else {
                 call_result.as_ref(py)
             };
@@ -199,20 +223,16 @@ impl HandlerRegistry {
     /// the result as a JSON-serializable value.
     ///
     /// Note: This does NOT support async handlers. Use invoke_async instead.
-    pub fn invoke(
-        &self,
-        handler_id: usize,
-        request: Request,
-    ) -> Result<serde_json::Value, String> {
+    pub fn invoke(&self, handler_id: usize, request: Request) -> Result<serde_json::Value, String> {
         let handler = self
             .get(handler_id)
-            .ok_or_else(|| format!("Handler {} not found", handler_id))?;
+            .ok_or_else(|| format!("Handler {handler_id} not found"))?;
 
         Python::with_gil(|py| {
             // Call the Python handler with the request
             let result = handler
                 .call1(py, (request,))
-                .map_err(|e| format!("Handler error: {}", e))?;
+                .map_err(|e| format!("Handler error: {e}"))?;
 
             // Convert the result to a JSON value using SIMD-accelerated conversion
             python_to_json(py, result.as_ref(py))

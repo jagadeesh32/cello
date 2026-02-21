@@ -2,11 +2,11 @@
 //!
 //! This module provides Django/Jinja2-style template rendering support.
 
+use parking_lot::RwLock;
 use pyo3::prelude::*;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
-use parking_lot::RwLock;
 
 // ============================================================================
 // Template Types
@@ -113,12 +113,12 @@ impl TemplateEngine {
         let mut path = self.config.template_dir.clone();
         path.push(name);
         if !name.ends_with(&self.config.extension) {
-            path.set_extension(&self.config.extension.trim_start_matches('.'));
+            path.set_extension(self.config.extension.trim_start_matches('.'));
         }
 
         // Read file
         let content = std::fs::read_to_string(&path)
-            .map_err(|e| format!("Failed to load template '{}': {}", name, e))?;
+            .map_err(|e| format!("Failed to load template '{name}': {e}"))?;
 
         // Cache if not auto-reload
         if !self.config.auto_reload {
@@ -135,12 +135,16 @@ impl TemplateEngine {
     }
 
     /// Render a template string with context.
-    pub fn render_string(&self, template: &str, context: &TemplateContext) -> Result<String, String> {
+    pub fn render_string(
+        &self,
+        template: &str,
+        context: &TemplateContext,
+    ) -> Result<String, String> {
         let mut result = template.to_string();
 
         // Simple variable substitution: {{ variable }}
         for (key, value) in &context.data {
-            let pattern = format!("{{{{ {} }}}}", key);
+            let pattern = format!("{{{{ {key} }}}}");
             let replacement = match value {
                 serde_json::Value::String(s) => s.clone(),
                 serde_json::Value::Number(n) => n.to_string(),
@@ -153,7 +157,7 @@ impl TemplateEngine {
 
         // Also handle {{ variable }} without spaces
         for (key, value) in &context.data {
-            let pattern = format!("{{{{{}}}}}", key);
+            let pattern = format!("{{{{{key}}}}}");
             let replacement = match value {
                 serde_json::Value::String(s) => s.clone(),
                 serde_json::Value::Number(n) => n.to_string(),
@@ -200,9 +204,14 @@ impl PyTemplateEngine {
     }
 
     /// Render a template with context.
-    pub fn render(&self, name: &str, context: HashMap<String, PyObject>, py: Python<'_>) -> PyResult<String> {
+    pub fn render(
+        &self,
+        name: &str,
+        context: HashMap<String, PyObject>,
+        py: Python<'_>,
+    ) -> PyResult<String> {
         let mut ctx = TemplateContext::new();
-        
+
         for (key, value) in context {
             if let Ok(s) = value.extract::<String>(py) {
                 ctx.insert(&key, s);
@@ -220,13 +229,18 @@ impl PyTemplateEngine {
 
         self.inner
             .render(name, &ctx)
-            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e))
+            .map_err(pyo3::exceptions::PyValueError::new_err)
     }
 
     /// Render a template string with context.
-    pub fn render_string(&self, template: &str, context: HashMap<String, PyObject>, py: Python<'_>) -> PyResult<String> {
+    pub fn render_string(
+        &self,
+        template: &str,
+        context: HashMap<String, PyObject>,
+        py: Python<'_>,
+    ) -> PyResult<String> {
         let mut ctx = TemplateContext::new();
-        
+
         for (key, value) in context {
             if let Ok(s) = value.extract::<String>(py) {
                 ctx.insert(&key, s);
@@ -241,7 +255,7 @@ impl PyTemplateEngine {
 
         self.inner
             .render_string(template, &ctx)
-            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e))
+            .map_err(pyo3::exceptions::PyValueError::new_err)
     }
 
     /// Clear template cache.

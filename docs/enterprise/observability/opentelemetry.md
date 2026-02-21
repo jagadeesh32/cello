@@ -5,7 +5,7 @@ description: Distributed tracing and metrics with OpenTelemetry in Cello (v0.7.0
 
 # OpenTelemetry Integration
 
-Cello v0.7.0 introduces native OpenTelemetry support for distributed tracing, metrics, and context propagation across microservices.
+Cello provides native OpenTelemetry support for distributed tracing, metrics, and context propagation across microservices.
 
 ---
 

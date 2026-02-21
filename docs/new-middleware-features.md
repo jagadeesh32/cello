@@ -1,8 +1,8 @@
-# New Middleware Features in Cello v0.4.0
+# New Middleware Features in Cello v1.0.0
 
 ## Overview
 
-Cello v0.4.0 introduces powerful new middleware features inspired by the best aspects of Robyn, Litestar, and FastAPI, all implemented in Rust for maximum performance.
+Cello v1.0.0 includes powerful middleware features inspired by the best aspects of Robyn, Litestar, and FastAPI, all implemented in Rust for maximum performance.
 
 ## 🎯 Features Implemented
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Cluster Mode & Production Deployment Demo for Cello v0.9.0.
+Cluster Mode & Production Deployment Demo for Cello v1.0.0.
 
 This example demonstrates production deployment configurations including:
 - Cluster mode (multi-worker processes)

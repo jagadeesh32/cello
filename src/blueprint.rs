@@ -24,17 +24,17 @@ pub struct Blueprint {
     /// URL prefix for all routes in this blueprint
     #[pyo3(get)]
     pub prefix: String,
-    
+
     /// Name of the blueprint
     #[pyo3(get)]
     pub name: String,
-    
+
     /// Routes defined in this blueprint
     routes: Arc<RwLock<Vec<RouteDefinition>>>,
-    
+
     /// Nested blueprints
     children: Arc<RwLock<Vec<Blueprint>>>,
-    
+
     /// Blueprint-specific middleware
     middleware: Arc<MiddlewareChain>,
 }
@@ -48,9 +48,9 @@ impl Blueprint {
         let normalized_prefix = if prefix.starts_with('/') {
             prefix.to_string()
         } else {
-            format!("/{}", prefix)
+            format!("/{prefix}")
         };
-        
+
         Blueprint {
             prefix: normalized_prefix.clone(),
             name: name.unwrap_or(&normalized_prefix).to_string(),
@@ -94,14 +94,14 @@ impl Blueprint {
     /// Get all routes including from nested blueprints.
     pub fn get_all_routes(&self) -> Vec<(String, String, PyObject)> {
         let mut all_routes = Vec::new();
-        
+
         // Add routes from this blueprint
         let routes = self.routes.read();
         for route in routes.iter() {
             let full_path = format!("{}{}", self.prefix, route.path);
             all_routes.push((route.method.clone(), full_path, route.handler.clone()));
         }
-        
+
         // Add routes from nested blueprints
         let children = self.children.read();
         for child in children.iter() {
@@ -111,7 +111,7 @@ impl Blueprint {
                 all_routes.push((method, full_path, handler));
             }
         }
-        
+
         all_routes
     }
 
@@ -120,15 +120,15 @@ impl Blueprint {
         let normalized_path = if path.starts_with('/') || path.is_empty() {
             path.to_string()
         } else {
-            format!("/{}", path)
+            format!("/{path}")
         };
-        
+
         let route = RouteDefinition {
             method: method.to_string(),
             path: normalized_path,
             handler,
         };
-        
+
         self.routes.write().push(route);
         Ok(())
     }

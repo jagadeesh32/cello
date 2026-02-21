@@ -50,8 +50,10 @@ impl ContentSecurityPolicy {
 
     /// Add directive.
     pub fn directive(mut self, name: &str, values: Vec<&str>) -> Self {
-        self.directives
-            .insert(name.to_string(), values.iter().map(|s| s.to_string()).collect());
+        self.directives.insert(
+            name.to_string(),
+            values.iter().map(|s| s.to_string()).collect(),
+        );
         self
     }
 
@@ -197,7 +199,7 @@ impl ContentSecurityPolicy {
             .collect();
 
         if let Some(ref uri) = self.report_uri {
-            parts.push(format!("report-uri {}", uri));
+            parts.push(format!("report-uri {uri}"));
         }
 
         parts.join("; ")
@@ -285,11 +287,12 @@ impl Default for HstsConfig {
 // ============================================================================
 
 /// X-Frame-Options configuration.
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub enum XFrameOptions {
     /// Prevent all framing
     Deny,
     /// Allow same origin only
+    #[default]
     SameOrigin,
     /// Allow specific origin (deprecated in browsers)
     AllowFrom(String),
@@ -301,14 +304,8 @@ impl XFrameOptions {
         match self {
             XFrameOptions::Deny => "DENY".to_string(),
             XFrameOptions::SameOrigin => "SAMEORIGIN".to_string(),
-            XFrameOptions::AllowFrom(origin) => format!("ALLOW-FROM {}", origin),
+            XFrameOptions::AllowFrom(origin) => format!("ALLOW-FROM {origin}"),
         }
-    }
-}
-
-impl Default for XFrameOptions {
-    fn default() -> Self {
-        XFrameOptions::SameOrigin
     }
 }
 
@@ -317,7 +314,7 @@ impl Default for XFrameOptions {
 // ============================================================================
 
 /// Referrer-Policy configuration.
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub enum ReferrerPolicy {
     NoReferrer,
     NoReferrerWhenDowngrade,
@@ -325,6 +322,7 @@ pub enum ReferrerPolicy {
     OriginWhenCrossOrigin,
     SameOrigin,
     StrictOrigin,
+    #[default]
     StrictOriginWhenCrossOrigin,
     UnsafeUrl,
 }
@@ -342,12 +340,6 @@ impl ReferrerPolicy {
             ReferrerPolicy::StrictOriginWhenCrossOrigin => "strict-origin-when-cross-origin",
             ReferrerPolicy::UnsafeUrl => "unsafe-url",
         }
-    }
-}
-
-impl Default for ReferrerPolicy {
-    fn default() -> Self {
-        ReferrerPolicy::StrictOriginWhenCrossOrigin
     }
 }
 
@@ -379,8 +371,10 @@ impl PermissionsPolicy {
 
     /// Set directive.
     pub fn directive(mut self, name: &str, values: Vec<&str>) -> Self {
-        self.directives
-            .insert(name.to_string(), values.iter().map(|s| s.to_string()).collect());
+        self.directives.insert(
+            name.to_string(),
+            values.iter().map(|s| s.to_string()).collect(),
+        );
         self
     }
 
@@ -440,7 +434,7 @@ impl PermissionsPolicy {
             .iter()
             .map(|(name, values)| {
                 if values.is_empty() {
-                    format!("{}=()", name)
+                    format!("{name}=()")
                 } else {
                     format!("{}=({})", name, values.join(" "))
                 }
@@ -762,8 +756,7 @@ mod tests {
 
     #[test]
     fn test_csp_with_nonce() {
-        let csp = ContentSecurityPolicy::new()
-            .script_src_nonce(vec!["'self'"]);
+        let csp = ContentSecurityPolicy::new().script_src_nonce(vec!["'self'"]);
 
         let header = csp.build(Some("abc123"));
         assert!(header.contains("'nonce-abc123'"));
@@ -772,10 +765,7 @@ mod tests {
     #[test]
     fn test_hsts_config() {
         let hsts = HstsConfig::two_years().preload();
-        assert_eq!(
-            hsts.build(),
-            "max-age=63072000; includeSubDomains; preload"
-        );
+        assert_eq!(hsts.build(), "max-age=63072000; includeSubDomains; preload");
     }
 
     #[test]

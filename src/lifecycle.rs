@@ -33,9 +33,8 @@ pub enum HookAction {
 pub type HookResult = Result<HookAction, String>;
 
 /// Async hook function type.
-pub type AsyncHookFn = Arc<
-    dyn Fn() -> Pin<Box<dyn Future<Output = Result<(), String>> + Send>> + Send + Sync,
->;
+pub type AsyncHookFn =
+    Arc<dyn Fn() -> Pin<Box<dyn Future<Output = Result<(), String>> + Send>> + Send + Sync>;
 
 /// Sync hook function type.
 pub type SyncHookFn = Arc<dyn Fn() -> Result<(), String> + Send + Sync>;
@@ -213,7 +212,7 @@ impl PyHook {
 
         // Dict means JSON response
         if let Ok(_dict) = result.downcast::<pyo3::types::PyDict>() {
-            let json_value = crate::json::python_to_json(py, result).map_err(|e| e)?;
+            let json_value = crate::json::python_to_json(py, result)?;
             let body = serde_json::to_vec(&json_value).unwrap_or_default();
             let mut response = Response::new(200);
             response.set_body(body);
@@ -264,32 +263,44 @@ impl LifecycleHooks {
 
     /// Register a shutdown hook.
     pub fn add_shutdown_hook(&self, handler: PyObject) {
-        self.on_shutdown.write().push(Arc::new(PyHook::new(handler)));
+        self.on_shutdown
+            .write()
+            .push(Arc::new(PyHook::new(handler)));
     }
 
     /// Register a before request hook.
     pub fn add_before_request_hook(&self, handler: PyObject) {
-        self.before_request.write().push(Arc::new(PyHook::new(handler)));
+        self.before_request
+            .write()
+            .push(Arc::new(PyHook::new(handler)));
     }
 
     /// Register an after request hook.
     pub fn add_after_request_hook(&self, handler: PyObject) {
-        self.after_request.write().push(Arc::new(PyHook::new(handler)));
+        self.after_request
+            .write()
+            .push(Arc::new(PyHook::new(handler)));
     }
 
     /// Register an exception hook.
     pub fn add_exception_hook(&self, handler: PyObject) {
-        self.on_exception.write().push(Arc::new(PyHook::new(handler)));
+        self.on_exception
+            .write()
+            .push(Arc::new(PyHook::new(handler)));
     }
 
     /// Register a worker start hook.
     pub fn add_worker_start_hook(&self, handler: PyObject) {
-        self.on_worker_start.write().push(Arc::new(PyHook::new(handler)));
+        self.on_worker_start
+            .write()
+            .push(Arc::new(PyHook::new(handler)));
     }
 
     /// Register a worker shutdown hook.
     pub fn add_worker_shutdown_hook(&self, handler: PyObject) {
-        self.on_worker_shutdown.write().push(Arc::new(PyHook::new(handler)));
+        self.on_worker_shutdown
+            .write()
+            .push(Arc::new(PyHook::new(handler)));
     }
 
     /// Execute all startup hooks.
@@ -305,7 +316,7 @@ impl LifecycleHooks {
         for hook in self.on_shutdown.read().iter() {
             if let Err(e) = hook.execute() {
                 // Log but don't fail on shutdown hook errors
-                eprintln!("Shutdown hook error: {}", e);
+                eprintln!("Shutdown hook error: {e}");
             }
         }
         Ok(())
@@ -437,7 +448,7 @@ impl SignalHandlers {
         if let Some(handlers) = self.handlers.read().get(&signal) {
             for hook in handlers {
                 if let Err(e) = hook.execute() {
-                    eprintln!("Signal handler error: {}", e);
+                    eprintln!("Signal handler error: {e}");
                 }
             }
         }
@@ -547,8 +558,9 @@ impl PyLifecycleHooks {
 
     /// Register a signal handler.
     pub fn on_signal(&self, signal: &str, handler: PyObject) -> PyResult<()> {
-        let sig = Signal::from_str(signal)
-            .ok_or_else(|| pyo3::exceptions::PyValueError::new_err(format!("Unknown signal: {}", signal)))?;
+        let sig = Signal::from_str(signal).ok_or_else(|| {
+            pyo3::exceptions::PyValueError::new_err(format!("Unknown signal: {signal}"))
+        })?;
         self.signals.register(sig, handler);
         Ok(())
     }

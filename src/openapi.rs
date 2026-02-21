@@ -3,10 +3,10 @@
 //! This module provides automatic OpenAPI 3.0 schema generation from routes,
 //! similar to FastAPI's approach but implemented in Rust for maximum performance.
 
+use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
-use parking_lot::RwLock;
 
 // ============================================================================
 // OpenAPI Schema Types
@@ -227,7 +227,7 @@ impl OpenAPIGenerator {
         Self {
             info: Info {
                 title: title.to_string(),
-                description: Some(format!("{} - Powered by Cello Framework", title)),
+                description: Some(format!("{title} - Powered by Cello Framework")),
                 version: version.to_string(),
                 contact: None,
                 license: Some(License {
@@ -322,7 +322,10 @@ impl OpenAPIGenerator {
                 } else {
                     Some(path_params)
                 },
-                request_body: if route.method == "POST" || route.method == "PUT" || route.method == "PATCH" {
+                request_body: if route.method == "POST"
+                    || route.method == "PUT"
+                    || route.method == "PATCH"
+                {
                     Some(RequestBody {
                         description: Some("Request body".to_string()),
                         content: {
@@ -423,7 +426,7 @@ fn extract_path_params(path: &str) -> Vec<Parameter> {
         static PATH_PARAM_RE: regex::Regex = regex::Regex::new(r"\{([^}]+)\}").unwrap();
     }
     let re = PATH_PARAM_RE.with(|re| re.clone());
-    
+
     for cap in re.captures_iter(path) {
         params.push(Parameter {
             name: cap[1].to_string(),
@@ -441,7 +444,7 @@ fn extract_path_params(path: &str) -> Vec<Parameter> {
             }),
         });
     }
-    
+
     params
 }
 
@@ -449,11 +452,10 @@ fn extract_path_params(path: &str) -> Vec<Parameter> {
 fn generate_operation_id(method: &str, path: &str) -> String {
     let clean_path = path
         .replace('/', "_")
-        .replace('{', "")
-        .replace('}', "")
+        .replace(['{', '}'], "")
         .trim_matches('_')
         .to_string();
-    
+
     format!("{}_{}", method.to_lowercase(), clean_path)
 }
 
@@ -491,9 +493,7 @@ pub fn swagger_ui_html(openapi_url: &str, title: &str) -> String {
         }};
     </script>
 </body>
-</html>"#,
-        title = title,
-        openapi_url = openapi_url
+</html>"#
     )
 }
 
@@ -513,9 +513,7 @@ pub fn redoc_html(openapi_url: &str, title: &str) -> String {
     <redoc spec-url="{openapi_url}"></redoc>
     <script src="https://cdn.redoc.ly/redoc/latest/bundles/redoc.standalone.js"></script>
 </body>
-</html>"#,
-        title = title,
-        openapi_url = openapi_url
+</html>"#
     )
 }
 

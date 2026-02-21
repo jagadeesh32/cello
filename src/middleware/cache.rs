@@ -102,10 +102,10 @@ pub enum CacheError {
 impl std::fmt::Display for CacheError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            CacheError::BackendError(msg) => write!(f, "Cache backend error: {}", msg),
-            CacheError::SerializationError(msg) => write!(f, "Serialization error: {}", msg),
-            CacheError::ConnectionError(msg) => write!(f, "Connection error: {}", msg),
-            CacheError::TimeoutError(msg) => write!(f, "Timeout error: {}", msg),
+            CacheError::BackendError(msg) => write!(f, "Cache backend error: {msg}"),
+            CacheError::SerializationError(msg) => write!(f, "Serialization error: {msg}"),
+            CacheError::ConnectionError(msg) => write!(f, "Connection error: {msg}"),
+            CacheError::TimeoutError(msg) => write!(f, "Timeout error: {msg}"),
         }
     }
 }
@@ -164,7 +164,7 @@ impl CacheKeyBuilder for DefaultCacheKeyBuilder {
             sorted_query.sort_by_key(|(k, _)| *k);
             let query_str = sorted_query
                 .iter()
-                .map(|(k, v)| format!("{}={}", k, v))
+                .map(|(k, v)| format!("{k}={v}"))
                 .collect::<Vec<_>>()
                 .join("&");
             key_parts.push(query_str);
@@ -173,7 +173,7 @@ impl CacheKeyBuilder for DefaultCacheKeyBuilder {
         // Include specified headers
         for header_name in &self.include_headers {
             if let Some(value) = request.headers.get(header_name) {
-                key_parts.push(format!("{}:{}", header_name, value));
+                key_parts.push(format!("{header_name}:{value}"));
             }
         }
 
@@ -181,7 +181,7 @@ impl CacheKeyBuilder for DefaultCacheKeyBuilder {
         if self.include_user {
             if let Some(user) = request.context.get("user") {
                 if let Some(user_id) = user.get("id") {
-                    key_parts.push(format!("user:{}", user_id));
+                    key_parts.push(format!("user:{user_id}"));
                 }
             }
         }
@@ -204,6 +204,12 @@ impl Default for DefaultCacheKeyBuilder {
 pub struct InMemoryCacheStore {
     store: Arc<parking_lot::RwLock<HashMap<String, CachedResponse>>>,
     max_size: usize,
+}
+
+impl Default for InMemoryCacheStore {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl InMemoryCacheStore {
@@ -263,35 +269,35 @@ impl CacheStore for InMemoryCacheStore {
         let mut store = self.store.write();
         store.insert(key.to_string(), response);
 
-                // Cleanup in a separate task to avoid blocking
-                let store_clone = Arc::clone(&self.store);
-                let max_size = self.max_size;
-                tokio::spawn(async move {
-                    let mut store = store_clone.write();
-                    if store.len() > max_size {
-                        // Remove expired entries first
-                        let mut valid_entries: HashMap<String, CachedResponse> = store
-                            .iter()
-                            .filter(|(_, entry)| !entry.is_expired())
-                            .map(|(k, v)| (k.clone(), v.clone()))
-                            .collect();
+        // Cleanup in a separate task to avoid blocking
+        let store_clone = Arc::clone(&self.store);
+        let max_size = self.max_size;
+        tokio::spawn(async move {
+            let mut store = store_clone.write();
+            if store.len() > max_size {
+                // Remove expired entries first
+                let mut valid_entries: HashMap<String, CachedResponse> = store
+                    .iter()
+                    .filter(|(_, entry)| !entry.is_expired())
+                    .map(|(k, v)| (k.clone(), v.clone()))
+                    .collect();
 
-                        // If still over limit, remove oldest
-                        if valid_entries.len() > max_size {
-                            let mut entries: Vec<_> = valid_entries.iter().collect();
-                            entries.sort_by_key(|(_, entry)| entry.cached_at);
-                            let to_keep: Vec<String> = entries
-                                .iter()
-                                .skip(valid_entries.len() - max_size)
-                                .map(|(key, _)| (*key).clone())
-                                .collect();
+                // If still over limit, remove oldest
+                if valid_entries.len() > max_size {
+                    let mut entries: Vec<_> = valid_entries.iter().collect();
+                    entries.sort_by_key(|(_, entry)| entry.cached_at);
+                    let to_keep: Vec<String> = entries
+                        .iter()
+                        .skip(valid_entries.len() - max_size)
+                        .map(|(key, _)| (*key).clone())
+                        .collect();
 
-                            valid_entries.retain(|key, _| to_keep.contains(key));
-                        }
+                    valid_entries.retain(|key, _| to_keep.contains(key));
+                }
 
-                        *store = valid_entries;
-                    }
-                });
+                *store = valid_entries;
+            }
+        });
 
         Ok(())
     }
@@ -465,13 +471,22 @@ impl CacheMiddleware {
         }
 
         // Check excluded paths
-        if self.config.exclude_paths.iter().any(|p| request.path.starts_with(p)) {
+        if self
+            .config
+            .exclude_paths
+            .iter()
+            .any(|p| request.path.starts_with(p))
+        {
             return false;
         }
 
         // If include_paths is specified, only cache those
         if !self.config.include_paths.is_empty() {
-            return self.config.include_paths.iter().any(|p| request.path.starts_with(p));
+            return self
+                .config
+                .include_paths
+                .iter()
+                .any(|p| request.path.starts_with(p));
         }
 
         true
@@ -507,7 +522,11 @@ impl CacheMiddleware {
 
     /// Check conditional request headers.
     #[allow(dead_code)]
-    fn check_conditional_request(&self, request: &Request, cached: &CachedResponse) -> Option<Response> {
+    fn check_conditional_request(
+        &self,
+        request: &Request,
+        cached: &CachedResponse,
+    ) -> Option<Response> {
         // Check If-None-Match (ETag)
         if let Some(request_etag) = request.headers.get("if-none-match") {
             if let Some(cached_etag) = &cached.etag {
@@ -554,7 +573,9 @@ impl CacheMiddleware {
         };
 
         // Extract tags from X-Cache-Tags header
-        let tags_str = response.headers.get("x-cache-tags")
+        let tags_str = response
+            .headers
+            .get("x-cache-tags")
             .or_else(|| response.headers.get("X-Cache-Tags"));
 
         let tags = if let Some(tags_str) = tags_str {
@@ -573,7 +594,7 @@ impl CacheMiddleware {
             last_modified,
             tags,
         }
-        }
+    }
 
     /// Restore Response from cached response.
     #[allow(dead_code)]
@@ -592,7 +613,10 @@ impl CacheMiddleware {
         response.set_header("X-Cache", "HIT");
 
         if cached.remaining_ttl() > 0 {
-            response.set_header("Cache-Control", &format!("max-age={}", cached.remaining_ttl()));
+            response.set_header(
+                "Cache-Control",
+                &format!("max-age={}", cached.remaining_ttl()),
+            );
         }
 
         // Add ETag and Last-Modified if available
@@ -640,18 +664,18 @@ impl AsyncMiddleware for CacheMiddleware {
                     if cached.is_expired() {
                         return Ok(MiddlewareAction::Continue);
                     }
-                    
-                     // Return cached response
+
+                    // Return cached response
                     let response = self.restore_response(&cached);
                     return Ok(MiddlewareAction::Stop(response));
                 }
                 Ok(None) => {}
                 Err(e) => {
                     // Log error but continue
-                    eprintln!("Cache error: {}", e);
+                    eprintln!("Cache error: {e}");
                 }
             }
-            
+
             Ok(MiddlewareAction::Continue)
         })
     }
@@ -672,9 +696,11 @@ impl AsyncMiddleware for CacheMiddleware {
                 // Check if response should be cached
                 if self.should_cache_response(response) {
                     // Check for per-response TTL
-                    let ttl_str = response.headers.get("x-cache-ttl")
+                    let ttl_str = response
+                        .headers
+                        .get("x-cache-ttl")
                         .or_else(|| response.headers.get("X-Cache-TTL"));
-                        
+
                     let ttl = if let Some(s) = ttl_str {
                         s.parse::<u64>().unwrap_or(self.config.default_ttl)
                     } else {
@@ -695,7 +721,10 @@ impl AsyncMiddleware for CacheMiddleware {
 
                     // Add cache headers to response
                     response.set_header("X-Cache", "MISS");
-                    response.set_header("Cache-Control", &format!("max-age={}", self.config.default_ttl));
+                    response.set_header(
+                        "Cache-Control",
+                        &format!("max-age={}", self.config.default_ttl),
+                    );
                 } else {
                     response.set_header("X-Cache", "BYPASS");
                 }
@@ -725,8 +754,9 @@ pub fn create_cache_key(request: &Request) -> String {
     if !request.query_params.is_empty() {
         let mut sorted: Vec<_> = request.query_params.iter().collect();
         sorted.sort_by_key(|(k, _)| *k);
-        let query = sorted.iter()
-            .map(|(k, v)| format!("{}={}", k, v))
+        let query = sorted
+            .iter()
+            .map(|(k, v)| format!("{k}={v}"))
             .collect::<Vec<_>>()
             .join("&");
         parts.push(query);
@@ -751,8 +781,12 @@ mod tests {
         assert_eq!(key, "GET|/api/users");
 
         // With query params
-        request.query_params.insert("limit".to_string(), "10".to_string());
-        request.query_params.insert("offset".to_string(), "0".to_string());
+        request
+            .query_params
+            .insert("limit".to_string(), "10".to_string());
+        request
+            .query_params
+            .insert("offset".to_string(), "0".to_string());
 
         let key = builder.build_key(&request);
         assert!(key.contains("GET|/api/users"));
@@ -822,8 +856,12 @@ mod tests {
         let mut request = Request::default();
         request.method = "GET".to_string();
         request.path = "/users".to_string();
-        request.query_params.insert("sort".to_string(), "name".to_string());
-        request.query_params.insert("limit".to_string(), "10".to_string());
+        request
+            .query_params
+            .insert("sort".to_string(), "name".to_string());
+        request
+            .query_params
+            .insert("limit".to_string(), "10".to_string());
 
         let key = create_cache_key(&request);
         assert!(key.contains("GET|/users"));

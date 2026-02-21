@@ -111,7 +111,10 @@ impl Default for ProblemDetails {
 #[derive(Error, Debug, Clone)]
 pub enum AppError {
     #[error("Validation error: {message}")]
-    Validation { message: String, errors: Vec<FieldError> },
+    Validation {
+        message: String,
+        errors: Vec<FieldError>,
+    },
 
     #[error("Not found: {0}")]
     NotFound(String),
@@ -246,7 +249,11 @@ pub struct FieldError {
 }
 
 impl FieldError {
-    pub fn new(field: impl Into<String>, message: impl Into<String>, code: impl Into<String>) -> Self {
+    pub fn new(
+        field: impl Into<String>,
+        message: impl Into<String>,
+        code: impl Into<String>,
+    ) -> Self {
         Self {
             field: field.into(),
             message: message.into(),
@@ -409,13 +416,18 @@ impl ErrorHandlerRegistry {
 
     /// Register a handler for a specific exception type.
     pub fn set_exception_handler(&self, exception_type: impl Into<String>, handler: PyObject) {
-        self.exception_handlers
-            .write()
-            .insert(exception_type.into(), Arc::new(PyErrorHandler::new(handler)));
+        self.exception_handlers.write().insert(
+            exception_type.into(),
+            Arc::new(PyErrorHandler::new(handler)),
+        );
     }
 
     /// Register a blueprint-scoped handler registry.
-    pub fn set_blueprint_handlers(&self, blueprint: impl Into<String>, registry: Arc<ErrorHandlerRegistry>) {
+    pub fn set_blueprint_handlers(
+        &self,
+        blueprint: impl Into<String>,
+        registry: Arc<ErrorHandlerRegistry>,
+    ) {
         self.blueprint_handlers
             .write()
             .insert(blueprint.into(), registry);
@@ -460,7 +472,9 @@ impl ErrorHandlerRegistry {
             if let AppError::PythonException(info) = error {
                 if let Some(tb) = &info.traceback {
                     let mut problem = error.to_problem_details();
-                    problem.extensions.insert("traceback".to_string(), serde_json::json!(tb));
+                    problem
+                        .extensions
+                        .insert("traceback".to_string(), serde_json::json!(tb));
                     response = problem.to_response();
                 }
             }

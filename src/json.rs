@@ -7,39 +7,40 @@ use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyTuple};
 
 /// Parse JSON string to serde_json::Value using SIMD acceleration.
+#[inline]
 pub fn parse_json(input: &str) -> Result<serde_json::Value, String> {
     // simd-json requires mutable input, so we need to copy
     let mut input_bytes = input.as_bytes().to_vec();
-    
-    simd_json::serde::from_slice(&mut input_bytes)
-        .map_err(|e| format!("JSON parse error: {}", e))
+
+    simd_json::serde::from_slice(&mut input_bytes).map_err(|e| format!("JSON parse error: {e}"))
 }
 
 /// Parse JSON bytes to serde_json::Value using SIMD acceleration.
+#[inline]
 pub fn parse_json_bytes(input: &mut [u8]) -> Result<serde_json::Value, String> {
-    simd_json::serde::from_slice(input)
-        .map_err(|e| format!("JSON parse error: {}", e))
+    simd_json::serde::from_slice(input).map_err(|e| format!("JSON parse error: {e}"))
 }
 
 /// Serialize a serde_json::Value to JSON string.
+#[inline]
 pub fn serialize_json(value: &serde_json::Value) -> Result<String, String> {
-    serde_json::to_string(value)
-        .map_err(|e| format!("JSON serialize error: {}", e))
+    serde_json::to_string(value).map_err(|e| format!("JSON serialize error: {e}"))
 }
 
 /// Serialize a serde_json::Value to JSON bytes.
+#[inline]
 pub fn serialize_json_bytes(value: &serde_json::Value) -> Result<Vec<u8>, String> {
-    serde_json::to_vec(value)
-        .map_err(|e| format!("JSON serialize error: {}", e))
+    serde_json::to_vec(value).map_err(|e| format!("JSON serialize error: {e}"))
 }
 
 /// Serialize a serde_json::Value to pretty JSON string.
+#[inline]
 pub fn serialize_json_pretty(value: &serde_json::Value) -> Result<String, String> {
-    serde_json::to_string_pretty(value)
-        .map_err(|e| format!("JSON serialize error: {}", e))
+    serde_json::to_string_pretty(value).map_err(|e| format!("JSON serialize error: {e}"))
 }
 
 /// Convert a Python object to serde_json::Value.
+#[inline]
 pub fn python_to_json(py: Python<'_>, obj: &PyAny) -> Result<serde_json::Value, String> {
     // Handle None
     if obj.is_none() {
@@ -68,14 +69,18 @@ pub fn python_to_json(py: Python<'_>, obj: &PyAny) -> Result<serde_json::Value, 
 
     // Handle list
     if let Ok(list) = obj.downcast::<PyList>() {
-        let items: Result<Vec<serde_json::Value>, String> =
-            list.iter().map(|item| python_to_json(py, item)).collect();
-        return Ok(serde_json::Value::Array(items?));
+        // PERF: Pre-allocate vec with known capacity
+        let mut items = Vec::with_capacity(list.len());
+        for item in list.iter() {
+            items.push(python_to_json(py, item)?);
+        }
+        return Ok(serde_json::Value::Array(items));
     }
 
     // Handle dict
     if let Ok(dict) = obj.downcast::<PyDict>() {
-        let mut map = serde_json::Map::new();
+        // PERF: Pre-allocate map with known capacity
+        let mut map = serde_json::Map::with_capacity(dict.len());
         for (key, value) in dict.iter() {
             let key_str = key
                 .extract::<String>()
@@ -88,23 +93,29 @@ pub fn python_to_json(py: Python<'_>, obj: &PyAny) -> Result<serde_json::Value, 
 
     // Handle tuple
     if let Ok(tuple) = obj.downcast::<PyTuple>() {
-        let items: Result<Vec<serde_json::Value>, String> =
-            tuple.iter().map(|item| python_to_json(py, item)).collect();
-        return Ok(serde_json::Value::Array(items?));
+        // PERF: Pre-allocate vec with known capacity
+        let mut items = Vec::with_capacity(tuple.len());
+        for item in tuple.iter() {
+            items.push(python_to_json(py, item)?);
+        }
+        return Ok(serde_json::Value::Array(items));
     }
 
     // Handle Response object - check by class name
     let class_name = obj.get_type().name().unwrap_or("");
     if class_name == "Response" {
         let mut response_obj = serde_json::Map::new();
-        response_obj.insert("__cello_response__".to_string(), serde_json::Value::Bool(true));
-        
+        response_obj.insert(
+            "__cello_response__".to_string(),
+            serde_json::Value::Bool(true),
+        );
+
         if let Ok(status) = obj.getattr("status") {
             if let Ok(s) = status.extract::<u16>() {
                 response_obj.insert("status".to_string(), serde_json::Value::Number(s.into()));
             }
         }
-        
+
         if let Ok(headers) = obj.getattr("headers") {
             if let Ok(dict) = headers.downcast::<PyDict>() {
                 let mut headers_map = serde_json::Map::new();
@@ -113,10 +124,13 @@ pub fn python_to_json(py: Python<'_>, obj: &PyAny) -> Result<serde_json::Value, 
                         headers_map.insert(k, serde_json::Value::String(v));
                     }
                 }
-                response_obj.insert("headers".to_string(), serde_json::Value::Object(headers_map));
+                response_obj.insert(
+                    "headers".to_string(),
+                    serde_json::Value::Object(headers_map),
+                );
             }
         }
-        
+
         // Get body - use body() which is Python-accessible
         if let Ok(body_bytes) = obj.call_method0("body") {
             if let Ok(bytes) = body_bytes.extract::<Vec<u8>>() {
@@ -125,14 +139,15 @@ pub fn python_to_json(py: Python<'_>, obj: &PyAny) -> Result<serde_json::Value, 
                 }
             }
         }
-        
+
         return Ok(serde_json::Value::Object(response_obj));
     }
 
-    Err(format!("Cannot convert Python object to JSON: {:?}", obj))
+    Err(format!("Cannot convert Python object to JSON: {obj:?}"))
 }
 
 /// Convert a serde_json::Value to a Python object.
+#[inline]
 pub fn json_to_python(py: Python<'_>, value: &serde_json::Value) -> PyResult<PyObject> {
     match value {
         serde_json::Value::Null => Ok(py.None()),

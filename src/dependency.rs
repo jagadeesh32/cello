@@ -9,13 +9,13 @@
 //! - Dependency overrides for testing
 
 use parking_lot::RwLock;
+use pyo3::PyObject;
 use std::any::{Any, TypeId};
 use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use pyo3::PyObject;
+use std::sync::Arc;
 
 use crate::request::Request;
 
@@ -53,13 +53,13 @@ pub enum DependencyError {
 impl std::fmt::Display for DependencyError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            DependencyError::NotFound(name) => write!(f, "Dependency not found: {}", name),
+            DependencyError::NotFound(name) => write!(f, "Dependency not found: {name}"),
             DependencyError::CircularDependency(chain) => {
-                write!(f, "Circular dependency detected: {}", chain)
+                write!(f, "Circular dependency detected: {chain}")
             }
-            DependencyError::ProviderFailed(msg) => write!(f, "Provider failed: {}", msg),
-            DependencyError::TypeMismatch(msg) => write!(f, "Type mismatch: {}", msg),
-            DependencyError::CacheFailed(msg) => write!(f, "Cache failed: {}", msg),
+            DependencyError::ProviderFailed(msg) => write!(f, "Provider failed: {msg}"),
+            DependencyError::TypeMismatch(msg) => write!(f, "Type mismatch: {msg}"),
+            DependencyError::CacheFailed(msg) => write!(f, "Cache failed: {msg}"),
         }
     }
 }
@@ -327,12 +327,12 @@ impl DependencyContainer {
 
                 // Provide and cache
                 let value = provider.provide(request, self);
-                let downcasted = value
-                    .downcast::<T>()
-                    .map_err(|_| DependencyError::TypeMismatch("Provider type mismatch".to_string()))?;
+                let downcasted = value.downcast::<T>().map_err(|_| {
+                    DependencyError::TypeMismatch("Provider type mismatch".to_string())
+                })?;
 
                 let value_clone = (*downcasted).clone();
-                
+
                 // Store in singleton cache
                 self.singleton_cache
                     .write()
@@ -345,7 +345,7 @@ impl DependencyContainer {
                 let type_id = TypeId::of::<T>();
                 if let Some(cached) = request.context.get("__di_cache__") {
                     if let Some(cache_map) = cached.as_object() {
-                        let key = format!("{:?}", type_id);
+                        let key = format!("{type_id:?}");
                         if cache_map.contains_key(&key) {
                             // Return cached value
                             // Note: In production, you'd need proper serialization
@@ -355,18 +355,18 @@ impl DependencyContainer {
 
                 // Provide
                 let value = provider.provide(request, self);
-                let downcasted = value
-                    .downcast::<T>()
-                    .map_err(|_| DependencyError::TypeMismatch("Provider type mismatch".to_string()))?;
+                let downcasted = value.downcast::<T>().map_err(|_| {
+                    DependencyError::TypeMismatch("Provider type mismatch".to_string())
+                })?;
 
                 Ok(*downcasted)
             }
             DependencyScope::Transient => {
                 // Always create new instance
                 let value = provider.provide(request, self);
-                let downcasted = value
-                    .downcast::<T>()
-                    .map_err(|_| DependencyError::TypeMismatch("Provider type mismatch".to_string()))?;
+                let downcasted = value.downcast::<T>().map_err(|_| {
+                    DependencyError::TypeMismatch("Provider type mismatch".to_string())
+                })?;
 
                 Ok(*downcasted)
             }
@@ -469,9 +469,12 @@ mod tests {
         let container = DependencyContainer::new();
 
         // Register original provider
-        container.register_singleton("db", DatabaseConnection {
-            url: "postgres://prod".to_string(),
-        });
+        container.register_singleton(
+            "db",
+            DatabaseConnection {
+                url: "postgres://prod".to_string(),
+            },
+        );
 
         let request = Request::default();
 

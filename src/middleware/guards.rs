@@ -32,9 +32,9 @@ pub enum GuardError {
 impl std::fmt::Display for GuardError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            GuardError::Forbidden(msg) => write!(f, "Forbidden: {}", msg),
-            GuardError::Unauthorized(msg) => write!(f, "Unauthorized: {}", msg),
-            GuardError::Custom(msg, code) => write!(f, "Guard error ({}): {}", code, msg),
+            GuardError::Forbidden(msg) => write!(f, "Forbidden: {msg}"),
+            GuardError::Unauthorized(msg) => write!(f, "Unauthorized: {msg}"),
+            GuardError::Custom(msg, code) => write!(f, "Guard error ({code}): {msg}"),
         }
     }
 }
@@ -222,14 +222,12 @@ impl PermissionGuard {
             .get(&self.user_key)
             .and_then(|user| user.get(&self.permission_key))
             .and_then(|perms| {
-                perms
-                    .as_array()
-                    .map(|arr| {
-                        arr.iter()
-                            .filter_map(|p| p.as_str())
-                            .map(|s| s.to_string())
-                            .collect()
-                    })
+                perms.as_array().map(|arr| {
+                    arr.iter()
+                        .filter_map(|p| p.as_str())
+                        .map(|s| s.to_string())
+                        .collect()
+                })
             })
             .unwrap_or_default()
     }
@@ -246,9 +244,13 @@ impl Guard for PermissionGuard {
         }
 
         let has_access = if self.require_all {
-            self.required_permissions.iter().all(|p| user_perms.contains(p))
+            self.required_permissions
+                .iter()
+                .all(|p| user_perms.contains(p))
         } else {
-            self.required_permissions.iter().any(|p| user_perms.contains(p))
+            self.required_permissions
+                .iter()
+                .any(|p| user_perms.contains(p))
         };
 
         if has_access {
@@ -407,9 +409,7 @@ impl Guard for OrGuard {
                 Err(e) => last_error = Some(e),
             }
         }
-        Err(last_error.unwrap_or_else(|| {
-            GuardError::Forbidden("No guards passed".to_string())
-        }))
+        Err(last_error.unwrap_or_else(|| GuardError::Forbidden("No guards passed".to_string())))
     }
 
     fn name(&self) -> &str {
@@ -456,22 +456,26 @@ impl Guard for PythonGuard {
     fn check(&self, request: &Request) -> GuardResult {
         Python::with_gil(|py| {
             // Call the Python guard with the request
-            let result = self.handler.call1(py, (request.clone(),))
-                .map_err(|e| GuardError::Custom(format!("Python guard error: {}", e), 500))?;
-            
+            let result = self
+                .handler
+                .call1(py, (request.clone(),))
+                .map_err(|e| GuardError::Custom(format!("Python guard error: {e}"), 500))?;
+
             // Check if result is None (pass) or raises error (fail) or returns False (fail)
             if result.is_none(py) {
                 return Ok(());
             }
-            
+
             if let Ok(passed) = result.extract::<bool>(py) {
                 if passed {
                     return Ok(());
                 } else {
-                    return Err(GuardError::Forbidden("Python guard returned False".to_string()));
+                    return Err(GuardError::Forbidden(
+                        "Python guard returned False".to_string(),
+                    ));
                 }
             }
-            
+
             // If it returns a string, it's a failure message
             if let Ok(msg) = result.extract::<String>(py) {
                 return Err(GuardError::Forbidden(msg));
@@ -642,10 +646,9 @@ mod tests {
 
         // With user
         let mut request = Request::default();
-        request.context.insert(
-            "user".to_string(),
-            serde_json::json!({"id": 123}),
-        );
+        request
+            .context
+            .insert("user".to_string(), serde_json::json!({"id": 123}));
         assert!(guard.check(&request).is_ok());
     }
 
@@ -662,17 +665,15 @@ mod tests {
         assert!(guard.check(&request).is_err());
 
         // User without admin role - fails
-        request.context.insert(
-            "user".to_string(),
-            serde_json::json!({"roles": ["user"]}),
-        );
+        request
+            .context
+            .insert("user".to_string(), serde_json::json!({"roles": ["user"]}));
         assert!(guard.check(&request).is_err());
 
         // User with admin role - passes
-        request.context.insert(
-            "user".to_string(),
-            serde_json::json!({"roles": ["admin"]}),
-        );
+        request
+            .context
+            .insert("user".to_string(), serde_json::json!({"roles": ["admin"]}));
         assert!(guard.check(&request).is_ok());
     }
 
@@ -710,11 +711,15 @@ mod tests {
         });
 
         let mut request = Request::default();
-        request.headers.insert("x-real-ip".to_string(), "127.0.0.1".to_string());
+        request
+            .headers
+            .insert("x-real-ip".to_string(), "127.0.0.1".to_string());
 
         assert!(guard.check(&request).is_ok());
 
-        request.headers.insert("x-real-ip".to_string(), "192.168.1.1".to_string());
+        request
+            .headers
+            .insert("x-real-ip".to_string(), "192.168.1.1".to_string());
         assert!(guard.check(&request).is_err());
     }
 }

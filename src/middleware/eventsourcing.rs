@@ -146,14 +146,9 @@ pub struct Event {
 
 impl Event {
     /// Create a new event.
-    pub fn new(
-        aggregate_id: &str,
-        event_type: &str,
-        data: JsonValue,
-        version: u64,
-    ) -> Self {
+    pub fn new(aggregate_id: &str, event_type: &str, data: JsonValue, version: u64) -> Self {
         Self {
-            id: format!("evt-{}-{}", aggregate_id, version),
+            id: format!("evt-{aggregate_id}-{version}"),
             aggregate_id: aggregate_id.to_string(),
             event_type: event_type.to_string(),
             data,
@@ -353,16 +348,10 @@ pub trait EventStore: Send + Sync {
     ) -> Result<Vec<Event>, EventSourcingError>;
 
     /// Retrieve the latest snapshot for an aggregate, if one exists.
-    fn get_snapshot(
-        &self,
-        aggregate_id: &str,
-    ) -> Result<Option<Snapshot>, EventSourcingError>;
+    fn get_snapshot(&self, aggregate_id: &str) -> Result<Option<Snapshot>, EventSourcingError>;
 
     /// Persist a snapshot for an aggregate.
-    fn save_snapshot(
-        &self,
-        snapshot: &Snapshot,
-    ) -> Result<(), EventSourcingError>;
+    fn save_snapshot(&self, snapshot: &Snapshot) -> Result<(), EventSourcingError>;
 }
 
 // ============================================================================
@@ -422,7 +411,8 @@ impl InMemoryEventStore {
 
     /// Get aggregate statistics.
     pub fn stats(&self) -> EventSourcingStats {
-        self.metrics.get_stats(&self.events.read(), &self.snapshots.read())
+        self.metrics
+            .get_stats(&self.events.read(), &self.snapshots.read())
     }
 
     /// Clear all stored events and snapshots.
@@ -446,7 +436,7 @@ impl EventStore for InMemoryEventStore {
         expected_version: u64,
     ) -> Result<(), EventSourcingError> {
         let mut store = self.events.write();
-        let aggregate_events = store.entry(aggregate_id.to_string()).or_insert_with(Vec::new);
+        let aggregate_events = store.entry(aggregate_id.to_string()).or_default();
 
         // Check for concurrency conflicts.
         let current_version = aggregate_events.last().map(|e| e.version).unwrap_or(0);
@@ -498,7 +488,9 @@ impl EventStore for InMemoryEventStore {
                 };
 
                 drop(store); // Release events lock before acquiring snapshots lock.
-                self.snapshots.write().insert(aggregate_id.to_string(), snapshot);
+                self.snapshots
+                    .write()
+                    .insert(aggregate_id.to_string(), snapshot);
                 self.metrics.record_snapshot_created();
             }
         }
@@ -528,18 +520,12 @@ impl EventStore for InMemoryEventStore {
         }
     }
 
-    fn get_snapshot(
-        &self,
-        aggregate_id: &str,
-    ) -> Result<Option<Snapshot>, EventSourcingError> {
+    fn get_snapshot(&self, aggregate_id: &str) -> Result<Option<Snapshot>, EventSourcingError> {
         let snapshots = self.snapshots.read();
         Ok(snapshots.get(aggregate_id).cloned())
     }
 
-    fn save_snapshot(
-        &self,
-        snapshot: &Snapshot,
-    ) -> Result<(), EventSourcingError> {
+    fn save_snapshot(&self, snapshot: &Snapshot) -> Result<(), EventSourcingError> {
         self.snapshots
             .write()
             .insert(snapshot.aggregate_id.clone(), snapshot.clone());
@@ -576,24 +562,23 @@ pub enum EventSourcingError {
 impl std::fmt::Display for EventSourcingError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            EventSourcingError::StoreError(msg) => write!(f, "Event store error: {}", msg),
+            EventSourcingError::StoreError(msg) => write!(f, "Event store error: {msg}"),
             EventSourcingError::ConcurrencyConflict {
                 aggregate_id,
                 expected,
                 actual,
             } => write!(
                 f,
-                "Concurrency conflict on aggregate '{}': expected version {}, actual {}",
-                aggregate_id, expected, actual
+                "Concurrency conflict on aggregate '{aggregate_id}': expected version {expected}, actual {actual}"
             ),
-            EventSourcingError::EventNotFound(id) => write!(f, "Event not found: {}", id),
+            EventSourcingError::EventNotFound(id) => write!(f, "Event not found: {id}"),
             EventSourcingError::AggregateNotFound(id) => {
-                write!(f, "Aggregate not found: {}", id)
+                write!(f, "Aggregate not found: {id}")
             }
             EventSourcingError::SerializationError(msg) => {
-                write!(f, "Event serialization error: {}", msg)
+                write!(f, "Event serialization error: {msg}")
             }
-            EventSourcingError::SnapshotError(msg) => write!(f, "Snapshot error: {}", msg),
+            EventSourcingError::SnapshotError(msg) => write!(f, "Snapshot error: {msg}"),
         }
     }
 }
@@ -832,7 +817,12 @@ mod tests {
         let store = InMemoryEventStore::new();
 
         let events = vec![
-            Event::new("order-1", "OrderCreated", serde_json::json!({"item": "A"}), 1),
+            Event::new(
+                "order-1",
+                "OrderCreated",
+                serde_json::json!({"item": "A"}),
+                1,
+            ),
             Event::new("order-1", "ItemAdded", serde_json::json!({"item": "B"}), 2),
         ];
 
@@ -866,15 +856,11 @@ mod tests {
     fn test_store_concurrency_conflict() {
         let store = InMemoryEventStore::new();
 
-        let events = vec![
-            Event::new("agg-1", "E1", serde_json::json!({}), 1),
-        ];
+        let events = vec![Event::new("agg-1", "E1", serde_json::json!({}), 1)];
         store.append_events("agg-1", &events, 0).unwrap();
 
         // Try appending with wrong expected version.
-        let more_events = vec![
-            Event::new("agg-1", "E2", serde_json::json!({}), 2),
-        ];
+        let more_events = vec![Event::new("agg-1", "E2", serde_json::json!({}), 2)];
         let result = store.append_events("agg-1", &more_events, 0);
         assert!(result.is_err());
         assert!(matches!(
@@ -929,9 +915,7 @@ mod tests {
             Event::new("agg-1", "E1", serde_json::json!({}), 1),
             Event::new("agg-1", "E2", serde_json::json!({}), 2),
         ];
-        let events2 = vec![
-            Event::new("agg-2", "E1", serde_json::json!({}), 1),
-        ];
+        let events2 = vec![Event::new("agg-2", "E1", serde_json::json!({}), 1)];
 
         store.append_events("agg-1", &events1, 0).unwrap();
         store.append_events("agg-2", &events2, 0).unwrap();
@@ -946,9 +930,7 @@ mod tests {
     fn test_store_clear() {
         let store = InMemoryEventStore::new();
 
-        let events = vec![
-            Event::new("agg-1", "E1", serde_json::json!({}), 1),
-        ];
+        let events = vec![Event::new("agg-1", "E1", serde_json::json!({}), 1)];
         store.append_events("agg-1", &events, 0).unwrap();
         assert_eq!(store.total_events(), 1);
 
@@ -962,7 +944,10 @@ mod tests {
     #[test]
     fn test_error_display() {
         assert_eq!(
-            format!("{}", EventSourcingError::StoreError("disk full".to_string())),
+            format!(
+                "{}",
+                EventSourcingError::StoreError("disk full".to_string())
+            ),
             "Event store error: disk full"
         );
         assert_eq!(
@@ -981,7 +966,10 @@ mod tests {
             "Event not found: evt-1"
         );
         assert_eq!(
-            format!("{}", EventSourcingError::AggregateNotFound("agg-1".to_string())),
+            format!(
+                "{}",
+                EventSourcingError::AggregateNotFound("agg-1".to_string())
+            ),
             "Aggregate not found: agg-1"
         );
         assert_eq!(

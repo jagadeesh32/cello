@@ -38,12 +38,14 @@ use std::time::{Duration, Instant};
 /// Health status of a component.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "UPPERCASE")]
+#[derive(Default)]
 pub enum HealthStatus {
     /// Component is healthy
     Up,
     /// Component is unhealthy
     Down,
     /// Component health is unknown
+    #[default]
     Unknown,
     /// Component is partially healthy (degraded)
     Degraded,
@@ -61,12 +63,6 @@ impl HealthStatus {
             HealthStatus::Unknown => "UNKNOWN",
             HealthStatus::Degraded => "DEGRADED",
         }
-    }
-}
-
-impl Default for HealthStatus {
-    fn default() -> Self {
-        HealthStatus::Unknown
     }
 }
 
@@ -330,8 +326,7 @@ impl HealthCheckMiddleware {
 
     /// Run all registered health checks.
     pub fn run_checks(&self) -> HealthReport {
-        let mut report = HealthReport::new()
-            .with_uptime(self.start_time.elapsed());
+        let mut report = HealthReport::new().with_uptime(self.start_time.elapsed());
 
         if let Some(ref version) = self.config.version {
             report = report.with_version(version);
@@ -396,7 +391,11 @@ impl HealthCheckMiddleware {
     /// Generate readiness response.
     fn readiness_response(&self) -> Response {
         let ready = self.is_ready();
-        let status = if ready { HealthStatus::Up } else { HealthStatus::Down };
+        let status = if ready {
+            HealthStatus::Up
+        } else {
+            HealthStatus::Down
+        };
         let http_status = if ready { 200 } else { 503 };
 
         let body = serde_json::json!({
@@ -416,7 +415,8 @@ impl HealthCheckMiddleware {
     fn full_health_response(&self) -> Response {
         let report = self.run_checks();
         let http_status = if report.status.is_healthy() { 200 } else { 503 };
-        let body = serde_json::to_value(&report).unwrap_or_else(|_| serde_json::json!({"status": "ERROR"}));
+        let body = serde_json::to_value(&report)
+            .unwrap_or_else(|_| serde_json::json!({"status": "ERROR"}));
         Response::from_json_value(body, http_status)
     }
 }
@@ -430,17 +430,17 @@ impl Middleware for HealthCheckMiddleware {
             return Ok(MiddlewareAction::Continue);
         }
 
-        let response = if request.path == format!("{}/live", base)
-            || request.path == format!("{}/liveness", base)
+        let response = if request.path == format!("{base}/live")
+            || request.path == format!("{base}/liveness")
         {
             self.liveness_response()
-        } else if request.path == format!("{}/ready", base)
-            || request.path == format!("{}/readiness", base)
+        } else if request.path == format!("{base}/ready")
+            || request.path == format!("{base}/readiness")
         {
             self.readiness_response()
-        } else if request.path == format!("{}/startup", base) {
+        } else if request.path == format!("{base}/startup") {
             self.startup_response()
-        } else if request.path == *base || request.path == format!("{}/", base) {
+        } else if request.path == *base || request.path == format!("{base}/") {
             self.full_health_response()
         } else {
             return Ok(MiddlewareAction::Continue);
@@ -476,22 +476,33 @@ pub mod builtin {
 
             let mut details = HashMap::new();
             details.insert("usage_percent".to_string(), serde_json::json!(usage));
-            details.insert("threshold_percent".to_string(), serde_json::json!(threshold_percent));
+            details.insert(
+                "threshold_percent".to_string(),
+                serde_json::json!(threshold_percent),
+            );
             details.insert("used_mb".to_string(), serde_json::json!(used / 1024 / 1024));
-            details.insert("total_mb".to_string(), serde_json::json!(total / 1024 / 1024));
+            details.insert(
+                "total_mb".to_string(),
+                serde_json::json!(total / 1024 / 1024),
+            );
 
             if usage > threshold_percent {
-                HealthCheckResult::down("memory", &format!("Memory usage {:.1}% exceeds threshold {:.1}%", usage, threshold_percent))
-                    .with_details(details)
+                HealthCheckResult::down(
+                    "memory",
+                    &format!("Memory usage {usage:.1}% exceeds threshold {threshold_percent:.1}%"),
+                )
+                .with_details(details)
             } else {
-                HealthCheckResult::up("memory")
-                    .with_details(details)
+                HealthCheckResult::up("memory").with_details(details)
             }
         }
     }
 
     /// Disk health check - fails if disk usage exceeds threshold.
-    pub fn disk_check(path: &str, threshold_percent: f64) -> impl Fn() -> HealthCheckResult + Send + Sync {
+    pub fn disk_check(
+        path: &str,
+        threshold_percent: f64,
+    ) -> impl Fn() -> HealthCheckResult + Send + Sync {
         let path = path.to_string();
         move || {
             use sysinfo::Disks;
@@ -512,14 +523,21 @@ pub mod builtin {
                     let mut details = HashMap::new();
                     details.insert("path".to_string(), serde_json::json!(path));
                     details.insert("usage_percent".to_string(), serde_json::json!(usage));
-                    details.insert("threshold_percent".to_string(), serde_json::json!(threshold_percent));
+                    details.insert(
+                        "threshold_percent".to_string(),
+                        serde_json::json!(threshold_percent),
+                    );
 
                     if usage > threshold_percent {
-                        return HealthCheckResult::down("disk", &format!("Disk usage {:.1}% exceeds threshold {:.1}%", usage, threshold_percent))
-                            .with_details(details);
+                        return HealthCheckResult::down(
+                            "disk",
+                            &format!(
+                                "Disk usage {usage:.1}% exceeds threshold {threshold_percent:.1}%"
+                            ),
+                        )
+                        .with_details(details);
                     } else {
-                        return HealthCheckResult::up("disk")
-                            .with_details(details);
+                        return HealthCheckResult::up("disk").with_details(details);
                     }
                 }
             }

@@ -5,7 +5,7 @@ description: Smart response caching in Cello Framework
 
 # Caching Middleware
 
-Cello v0.6.0 introduces smart caching middleware implemented in Rust. It caches HTTP responses in memory with configurable TTL, tag-based invalidation, and ETag support for conditional requests.
+Cello provides smart caching middleware implemented in Rust. It caches HTTP responses in memory with configurable TTL, tag-based invalidation, and ETag support for conditional requests.
 
 ## Quick Start
 
