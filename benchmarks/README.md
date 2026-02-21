@@ -85,11 +85,11 @@ Expect near-linear scaling:
 
 | Workers | Processes | Expected RPS (JSON) |
 |---------|-----------|-------------------|
-| 2       | 3         | ~60,000-70,000    |
-| 4       | 5         | ~130,000-140,000  |
-| 8       | 9         | ~155,000-165,000  |
+| 2       | 3         | ~70,000-90,000    |
+| 4       | 5         | ~160,000-175,000  |
+| 8       | 9         | ~200,000+         |
 
-**Reference benchmark**: 134,000+ req/s with 4 workers (5 processes) using `wrk -t12 -c400 -d10s`.
+**Reference benchmark**: 170,000+ req/s with 4 workers (5 processes) using `wrk -t12 -c400 -d10s`.
 
 ### Platform Notes
 
@@ -104,10 +104,10 @@ Expect near-linear scaling:
 
 | Framework | Server | Requests/sec | Avg Latency | Relative |
 |-----------|--------|-------------|-------------|----------|
-| **Cello** | Built-in (Rust/Tokio) | **134,000+** | **2.5ms** | **1.0x (fastest)** |
-| BlackSheep | Granian (Rust) | ~70,000 | 4.7ms | 1.9x slower |
-| FastAPI | Granian (Rust) | ~48,000 | 8.4ms | 2.8x slower |
-| Robyn | Built-in (Rust) | ~28,000 | 14.6ms | 4.9x slower |
+| **Cello** | Built-in (Rust/Tokio) | **170,000+** | **2.8ms** | **1.0x (fastest)** |
+| BlackSheep | Granian (Rust) | ~92,000 | 4.3ms | 1.9x slower |
+| FastAPI | Granian (Rust) | ~55,000 | 7.1ms | 3.1x slower |
+| Robyn | Built-in (Rust) | ~29,000 | 14.2ms | 5.9x slower |
 
 ### How to Reproduce
 

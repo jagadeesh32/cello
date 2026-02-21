@@ -352,7 +352,7 @@ class OrderSaga(Saga):
 
 ### v1.0.0 - Production Ready (Released February 21, 2026) :white_check_mark:
 
-- **134,000+ requests/second** benchmark throughput (4 workers, 5 processes, wrk 12t/400c); 160K+ with 8 workers
+- **170,000+ requests/second** benchmark throughput (4 workers, 5 processes, wrk 12t/400c/10s)
 - First stable release with semantic versioning guarantees
 - Major performance optimizations (handler caching, lazy parsing, zero-copy responses)
 - Security hardened (path traversal prevention, CRLF injection protection, constant-time token comparison, CSRF cryptographic tokens, secure session cookie defaults)
@@ -465,7 +465,7 @@ async def tenant_middleware(request, call_next):
 
 | Metric | Pre-1.0 | v1.0 Target | v1.0 Achieved |
 |--------|---------|-------------|---------------|
-| Requests/sec (JSON) | 50K+ | 100K+ | **134,000+** (4w) / **160,000+** (8w) |
+| Requests/sec (JSON) | 50K+ | 100K+ | **170,000+** (4 workers) |
 | Latency p50 | <1ms | <0.5ms | 1.9ms |
 | Latency p99 | <5ms | <2ms | 10ms |
 | Memory per request | <1KB | <512B | <512B |

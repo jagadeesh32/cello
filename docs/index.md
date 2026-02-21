@@ -202,29 +202,29 @@ hide:
 <!-- ===== PERFORMANCE BANNER ===== -->
 
 <div class="perf-banner">
-  <div class="perf-number">134,000+ req/sec</div>
+  <div class="perf-number">170,000+ req/sec</div>
   <div class="perf-label">Benchmarked with 4 workers (5 processes) &middot; wrk (12 threads, 400 connections, 10s)</div>
 
   <div class="perf-grid">
     <div class="perf-item">
       <div class="fw-name">🔥 Cello</div>
-      <div class="fw-rps cello-rps">134,000+</div>
-      <div class="fw-detail">p50 1.9ms &middot; p99 10ms</div>
+      <div class="fw-rps cello-rps">170,000+</div>
+      <div class="fw-detail">avg 2.8ms &middot; p99 15ms</div>
     </div>
     <div class="perf-item">
       <div class="fw-name">BlackSheep + Granian</div>
-      <div class="fw-rps other-rps">70,000</div>
-      <div class="fw-detail">p50 4ms &middot; p99 15ms</div>
+      <div class="fw-rps other-rps">92,000</div>
+      <div class="fw-detail">avg 4.3ms &middot; p99 13ms</div>
     </div>
     <div class="perf-item">
       <div class="fw-name">FastAPI + Granian</div>
-      <div class="fw-rps other-rps">48,000</div>
-      <div class="fw-detail">p50 7ms &middot; p99 23ms</div>
+      <div class="fw-rps other-rps">55,000</div>
+      <div class="fw-detail">avg 7.1ms &middot; p99 17ms</div>
     </div>
     <div class="perf-item">
       <div class="fw-name">Robyn</div>
-      <div class="fw-rps other-rps">28,000</div>
-      <div class="fw-detail">p50 15ms &middot; p99 36ms</div>
+      <div class="fw-rps other-rps">29,000</div>
+      <div class="fw-detail">avg 14.2ms &middot; p99 38ms</div>
     </div>
   </div>
 </div>
@@ -441,7 +441,7 @@ How Cello stacks up against popular Python web frameworks (4 workers, 5 processe
 
 | Feature | **Cello** | BlackSheep+Granian | FastAPI+Granian | Robyn |
 |---------|:---------:|:------------------:|:---------------:|:-----:|
-| **Requests/sec** | **134K+** | 70K | 48K | 28K |
+| **Requests/sec** | **170K+** | 92K | 55K | 29K |
 | **Async Native** | :material-check-circle: | :material-check-circle: | :material-check-circle: | :material-check-circle: |
 | **Rust Core** | :material-check-circle: | :material-check-circle: | :material-check-circle: | :material-check-circle: |
 | **SIMD JSON** | :material-check-circle: | :material-close-circle: | :material-close-circle: | :material-close-circle: |

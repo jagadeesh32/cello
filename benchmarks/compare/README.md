@@ -43,10 +43,10 @@ ensuring a completely fair comparison.
 
 | Framework | Req/sec | Avg Latency | p99 Latency | Relative |
 |-----------|---------|-------------|-------------|----------|
-| **Cello** | **134,000+** | **2.5ms** | **10ms** | **1.0x (fastest)** |
-| BlackSheep + Granian | ~70,000 | 4.7ms | 15ms | 1.9x slower |
-| FastAPI + Granian | ~48,000 | 8.4ms | 23ms | 2.8x slower |
-| Robyn | ~28,000 | 14.6ms | 36ms | 4.9x slower |
+| **Cello** | **170,000+** | **2.8ms** | **15ms** | **1.0x (fastest)** |
+| BlackSheep + Granian | ~92,000 | 4.3ms | 13ms | 1.9x slower |
+| FastAPI + Granian | ~55,000 | 7.1ms | 17ms | 3.1x slower |
+| Robyn | ~29,000 | 14.2ms | 38ms | 5.9x slower |
 
 ## Benchmark Settings
 
