@@ -470,10 +470,17 @@ impl Server {
         // This allows multiple processes to bind to the same port,
         // with the kernel distributing connections across them.
         let socket = socket2::Socket::new(
-            if addr.is_ipv4() { socket2::Domain::IPV4 } else { socket2::Domain::IPV6 },
+            if addr.is_ipv4() {
+                socket2::Domain::IPV4
+            } else {
+                socket2::Domain::IPV6
+            },
             socket2::Type::STREAM,
             Some(socket2::Protocol::TCP),
-        ).map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(format!("Failed to create socket: {e}")))?;
+        )
+        .map_err(|e| {
+            pyo3::exceptions::PyRuntimeError::new_err(format!("Failed to create socket: {e}"))
+        })?;
 
         socket.set_reuse_port(true).map_err(|e| {
             pyo3::exceptions::PyRuntimeError::new_err(format!("Failed to set SO_REUSEPORT: {e}"))
@@ -511,11 +518,12 @@ impl Server {
         let mut shutdown_rx = shutdown.subscribe();
 
         // Listen for SIGTERM (systemd, process manager, multi-worker shutdown)
-        let mut sigterm = tokio::signal::unix::signal(
-            tokio::signal::unix::SignalKind::terminate(),
-        ).map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(
-            format!("Failed to install SIGTERM handler: {e}")
-        ))?;
+        let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .map_err(|e| {
+                pyo3::exceptions::PyRuntimeError::new_err(format!(
+                    "Failed to install SIGTERM handler: {e}"
+                ))
+            })?;
 
         loop {
             tokio::select! {
@@ -718,29 +726,28 @@ async fn handle_request(
             drop(req);
             Vec::new()
         }
-        _ => {
-            match req.collect().await {
-                Ok(collected) => {
-                    let bytes = collected.to_bytes();
-                    if bytes.is_empty() {
-                        Vec::new()
-                    } else {
-                        metrics.add_bytes_received(bytes.len() as u64);
-                        bytes.to_vec()
-                    }
-                }
-                Err(_) => {
-                    metrics.inc_errors();
+        _ => match req.collect().await {
+            Ok(collected) => {
+                let bytes = collected.to_bytes();
+                if bytes.is_empty() {
                     Vec::new()
+                } else {
+                    metrics.add_bytes_received(bytes.len() as u64);
+                    bytes.to_vec()
                 }
             }
-        }
+            Err(_) => {
+                metrics.inc_errors();
+                Vec::new()
+            }
+        },
     };
 
     // Create request object with owned data
     let method_owned = method_str.to_owned();
     let path_owned = path.to_owned();
-    let mut request = Request::from_http(method_owned, path_owned, params, query, headers, body_bytes);
+    let mut request =
+        Request::from_http(method_owned, path_owned, params, query, headers, body_bytes);
 
     // PERF: Skip middleware execution if no middleware registered
     if !middleware.is_empty() {
@@ -840,7 +847,9 @@ async fn handle_request(
                         .header("Content-Type", "application/json")
                         .body(Full::new(Bytes::from(bytes)))
                         .unwrap_or_else(|_| {
-                            HyperResponse::new(Full::new(Bytes::from_static(b"Internal Server Error")))
+                            HyperResponse::new(Full::new(Bytes::from_static(
+                                b"Internal Server Error",
+                            )))
                         });
                     return Ok(hyper_resp);
                 }
@@ -855,9 +864,7 @@ async fn handle_request(
     let mut response = match result {
         Ok(handler_result) => match handler_result {
             // PERF: Fast path - pre-serialized JSON bytes, no serde_json::Value involved
-            HandlerResult::JsonBytes(bytes) => {
-                Response::from_json_bytes(bytes, 200)
-            }
+            HandlerResult::JsonBytes(bytes) => Response::from_json_bytes(bytes, 200),
             // Slow path - Response objects that need special handling via serde_json::Value
             HandlerResult::JsonValue(json_value) => {
                 if let Some(obj) = json_value.as_object() {

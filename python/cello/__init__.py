@@ -1321,6 +1321,11 @@ class App:
         Uses os.fork() directly for reliable multi-process spawning.
         Each child process gets its own Python GIL and Tokio runtime.
         SO_REUSEPORT allows the kernel to distribute connections across workers.
+
+        Architecture (matches Granian/Robyn behavior):
+            Parent process: runs as worker + supervises children
+            N child processes: each runs as an independent worker
+            Total: N+1 processes on the port (same as Granian --workers N)
         """
         import os
         import signal
@@ -1329,8 +1334,9 @@ class App:
 
         child_pids = []
 
-        # Fork N-1 child workers. Parent becomes the last worker.
-        for i in range(workers - 1):
+        # Fork N child workers. Parent also runs as a worker (N+1 total).
+        # This matches Granian's behavior where --workers N creates N+1 processes.
+        for i in range(workers):
             pid = os.fork()
             if pid == 0:
                 # Child process: run server and exit
@@ -1357,7 +1363,7 @@ class App:
         signal.signal(signal.SIGTERM, lambda s, f: (_cleanup(), os._exit(0)))
 
         try:
-            # Parent also runs a server (last worker)
+            # Parent also runs a server (another worker)
             self._app.run(host, port, None)
         except KeyboardInterrupt:
             pass

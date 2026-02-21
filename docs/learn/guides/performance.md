@@ -34,9 +34,10 @@ Every request touches Python only for business logic. Everything else runs in co
 
 ### Key Numbers
 
-On typical hardware (8-core, 32 GB), Cello handles:
+On typical hardware (8-core), Cello handles:
 
-- **100,000+ requests/sec** for simple JSON endpoints
+- **160,000+ requests/sec** for simple JSON endpoints (8 workers, wrk 12t/400c)
+- **134,000+ requests/sec** with just 4 workers (1.9x faster than BlackSheep+Granian)
 - **Sub-millisecond** routing and JSON serialization
 - **50-70% lower memory** than equivalent Python frameworks
 

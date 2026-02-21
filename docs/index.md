@@ -202,29 +202,29 @@ hide:
 <!-- ===== PERFORMANCE BANNER ===== -->
 
 <div class="perf-banner">
-  <div class="perf-number">150,000+ req/sec</div>
-  <div class="perf-label">Benchmarked on 4 cores / 8 GB RAM with wrk (12 threads, 400 connections)</div>
+  <div class="perf-number">134,000+ req/sec</div>
+  <div class="perf-label">Benchmarked with 4 workers (5 processes) &middot; wrk (12 threads, 400 connections, 10s)</div>
 
   <div class="perf-grid">
     <div class="perf-item">
       <div class="fw-name">🔥 Cello</div>
-      <div class="fw-rps cello-rps">150,000+</div>
-      <div class="fw-detail">p50 &lt;1ms &middot; p99 &lt;5ms</div>
-    </div>
-    <div class="perf-item">
-      <div class="fw-name">Robyn</div>
-      <div class="fw-rps other-rps">40,000</div>
-      <div class="fw-detail">p50 ~2ms &middot; p99 ~10ms</div>
+      <div class="fw-rps cello-rps">134,000+</div>
+      <div class="fw-detail">p50 1.9ms &middot; p99 10ms</div>
     </div>
     <div class="perf-item">
       <div class="fw-name">BlackSheep + Granian</div>
-      <div class="fw-rps other-rps">30,000</div>
-      <div class="fw-detail">p50 ~2ms &middot; p99 ~10ms</div>
+      <div class="fw-rps other-rps">70,000</div>
+      <div class="fw-detail">p50 4ms &middot; p99 15ms</div>
     </div>
     <div class="perf-item">
       <div class="fw-name">FastAPI + Granian</div>
-      <div class="fw-rps other-rps">25,000</div>
-      <div class="fw-detail">p50 ~3ms &middot; p99 ~12ms</div>
+      <div class="fw-rps other-rps">48,000</div>
+      <div class="fw-detail">p50 7ms &middot; p99 23ms</div>
+    </div>
+    <div class="perf-item">
+      <div class="fw-name">Robyn</div>
+      <div class="fw-rps other-rps">28,000</div>
+      <div class="fw-detail">p50 15ms &middot; p99 36ms</div>
     </div>
   </div>
 </div>
@@ -437,24 +437,24 @@ graph LR
 
 ## :material-chart-bar: Feature Comparison
 
-How Cello stacks up against popular Python web frameworks (4 workers, wrk 12t/400c):
+How Cello stacks up against popular Python web frameworks (4 workers, 5 processes each, wrk 12t/400c/10s):
 
-| Feature | **Cello** | Robyn | BlackSheep+Granian | FastAPI+Granian |
-|---------|:---------:|:-----:|:------------------:|:---------------:|
-| **Requests/sec** | **150K+** | 40K | 30K | 25K |
+| Feature | **Cello** | BlackSheep+Granian | FastAPI+Granian | Robyn |
+|---------|:---------:|:------------------:|:---------------:|:-----:|
+| **Requests/sec** | **134K+** | 70K | 48K | 28K |
 | **Async Native** | :material-check-circle: | :material-check-circle: | :material-check-circle: | :material-check-circle: |
 | **Rust Core** | :material-check-circle: | :material-check-circle: | :material-check-circle: | :material-check-circle: |
 | **SIMD JSON** | :material-check-circle: | :material-close-circle: | :material-close-circle: | :material-close-circle: |
 | **WebSocket** | :material-check-circle: | :material-check-circle: | :material-check-circle: | :material-check-circle: |
-| **HTTP/2** | :material-check-circle: | :material-close-circle: | :material-check-circle: | :material-check-circle: |
+| **HTTP/2** | :material-check-circle: | :material-check-circle: | :material-check-circle: | :material-close-circle: |
 | **HTTP/3 (QUIC)** | :material-check-circle: | :material-close-circle: | :material-close-circle: | :material-close-circle: |
-| **SSE** | :material-check-circle: | :material-close-circle: | :material-check-circle: | :material-check-circle: |
+| **SSE** | :material-check-circle: | :material-check-circle: | :material-check-circle: | :material-close-circle: |
 | **GraphQL** | :material-check-circle: | :material-close-circle: | :material-close-circle: | :material-close-circle: |
 | **gRPC** | :material-check-circle: | :material-close-circle: | :material-close-circle: | :material-close-circle: |
 | **Message Queues** | :material-check-circle: | :material-close-circle: | :material-close-circle: | :material-close-circle: |
-| **Dependency Injection** | :material-check-circle: | :material-close-circle: | :material-close-circle: | :material-check-circle: |
+| **Dependency Injection** | :material-check-circle: | :material-close-circle: | :material-check-circle: | :material-close-circle: |
 | **RBAC Guards** | :material-check-circle: | :material-close-circle: | :material-close-circle: | :material-close-circle: |
-| **OpenAPI Auto-Gen** | :material-check-circle: | :material-check-circle: | :material-close-circle: | :material-check-circle: |
+| **OpenAPI Auto-Gen** | :material-check-circle: | :material-close-circle: | :material-check-circle: | :material-check-circle: |
 | **Event Sourcing** | :material-check-circle: | :material-close-circle: | :material-close-circle: | :material-close-circle: |
 | **CQRS** | :material-check-circle: | :material-close-circle: | :material-close-circle: | :material-close-circle: |
 | **Saga Pattern** | :material-check-circle: | :material-close-circle: | :material-close-circle: | :material-close-circle: |

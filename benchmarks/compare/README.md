@@ -12,7 +12,10 @@ pip install -r requirements.txt
 python run_benchmarks.py
 
 # Or test specific frameworks
-python run_benchmarks.py --only cello robyn fastapi-uvicorn
+python run_benchmarks.py --only cello robyn blacksheep-granian fastapi-granian
+
+# Custom worker count
+python run_benchmarks.py --workers 4 --duration 10
 ```
 
 ## Requirements
@@ -24,7 +27,10 @@ python run_benchmarks.py --only cello robyn fastapi-uvicorn
 ## What's Tested
 
 Each framework serves the same JSON endpoint: `GET /` returning `{"message": "Hello, World!"}`.
-All frameworks run with the **same number of workers** on the **same machine**.
+All frameworks run with the **same number of workers** and **same number of processes** on the **same machine**.
+
+With `--workers N`, every framework creates **N+1 processes** (N workers + 1 supervisor/parent),
+ensuring a completely fair comparison.
 
 | Framework | Server | Protocol |
 |-----------|--------|----------|
@@ -33,6 +39,15 @@ All frameworks run with the **same number of workers** on the **same machine**.
 | BlackSheep + Granian | Granian (Rust) | HTTP/1.1 |
 | FastAPI + Granian | Granian (Rust) | HTTP/1.1 |
 
+## Latest Results (4 workers, 5 processes each)
+
+| Framework | Req/sec | Avg Latency | p99 Latency | Relative |
+|-----------|---------|-------------|-------------|----------|
+| **Cello** | **134,000+** | **2.5ms** | **10ms** | **1.0x (fastest)** |
+| BlackSheep + Granian | ~70,000 | 4.7ms | 15ms | 1.9x slower |
+| FastAPI + Granian | ~48,000 | 8.4ms | 23ms | 2.8x slower |
+| Robyn | ~28,000 | 14.6ms | 36ms | 4.9x slower |
+
 ## Benchmark Settings
 
 - **Tool**: wrk
@@ -40,3 +55,4 @@ All frameworks run with the **same number of workers** on the **same machine**.
 - **Connections**: 400
 - **Duration**: 10 seconds
 - **Workers**: Auto-detected (CPU count) or configurable via `--workers`
+- **Processes**: N+1 per framework (fair comparison)

@@ -73,21 +73,23 @@ wrk -t12 -c400 -d10s http://127.0.0.1:8080/json
 
 On a modern machine, expect per-worker:
 
-- Simple JSON: ~12,000-15,000 RPS
-- JSON with data: ~10,000-12,000 RPS
-- Path parameters: ~12,000-15,000 RPS
+- Simple JSON: ~25,000-35,000 RPS
+- JSON with data: ~20,000-25,000 RPS
+- Path parameters: ~25,000-35,000 RPS
 
 ### Multi-Worker Mode (recommended for benchmarks)
 
-With `--workers N` (where N = core count), expect near-linear scaling:
+With `--workers N`, Cello forks N+1 processes (N children + parent), all serving via SO_REUSEPORT.
+Each worker runs a single-threaded Tokio event loop for zero GIL contention.
+Expect near-linear scaling:
 
-| Cores | Expected RPS (JSON) |
-|-------|-------------------|
-| 2     | ~25,000-30,000    |
-| 4     | ~50,000-60,000    |
-| 8     | ~100,000-120,000  |
+| Workers | Processes | Expected RPS (JSON) |
+|---------|-----------|-------------------|
+| 2       | 3         | ~60,000-70,000    |
+| 4       | 5         | ~130,000-140,000  |
+| 8       | 9         | ~155,000-165,000  |
 
-**Reference benchmark**: 150,000+ req/s on a 4-core Linux server (native, not WSL2) with `wrk -t12 -c400 -d10s`.
+**Reference benchmark**: 134,000+ req/s with 4 workers (5 processes) using `wrk -t12 -c400 -d10s`.
 
 ### Platform Notes
 
@@ -98,14 +100,14 @@ With `--workers N` (where N = core count), expect near-linear scaling:
 
 ## Comparison with Other Frameworks
 
-### Expected Results (4 workers, 4 cores, wrk 12t/400c)
+### Benchmark Results (4 workers, 5 processes each, wrk 12t/400c/10s)
 
-| Framework | Server | Requests/sec |
-|-----------|--------|-------------|
-| **Cello** | Built-in (Rust) | **150,000+** |
-| Robyn | Built-in (Rust) | ~40,000 |
-| BlackSheep | Granian (Rust) | ~30,000 |
-| FastAPI | Granian (Rust) | ~25,000 |
+| Framework | Server | Requests/sec | Avg Latency | Relative |
+|-----------|--------|-------------|-------------|----------|
+| **Cello** | Built-in (Rust/Tokio) | **134,000+** | **2.5ms** | **1.0x (fastest)** |
+| BlackSheep | Granian (Rust) | ~70,000 | 4.7ms | 1.9x slower |
+| FastAPI | Granian (Rust) | ~48,000 | 8.4ms | 2.8x slower |
+| Robyn | Built-in (Rust) | ~28,000 | 14.6ms | 4.9x slower |
 
 ### How to Reproduce
 

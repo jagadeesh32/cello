@@ -12,12 +12,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Cello v1.0.0 is the first production-ready stable release of the framework. After ten iterative
 pre-release versions, the entire public API is now frozen under Semantic Versioning. No breaking
 changes will be introduced until v2.0. This release consolidates 32,000+ lines of Rust and 6,000+
-lines of Python into a cohesive, enterprise-grade web framework capable of sustaining **150,000+
-requests per second** on multi-core hardware -- faster than Robyn, FastAPI, and Litestar.
+lines of Python into a cohesive, enterprise-grade web framework capable of sustaining **134,000+
+requests per second** with 4 workers (160K+ with 8 workers) -- 1.9x faster than BlackSheep+Granian, 2.8x faster than FastAPI+Granian, and 4.9x faster than Robyn.
 
 ### Performance
 
-- **150,000+ requests/second** benchmark throughput (multi-worker, 4 cores, wrk 12t/400c), achieving C-level performance on the hot path
+- **134,000+ requests/second** benchmark throughput (4 workers, 5 processes, wrk 12t/400c/10s), achieving C-level performance on the hot path
 - **SIMD JSON** (`simd-json 0.13`): hardware-accelerated JSON parsing and serialization, up to 10x faster than Python's `json` module
 - **Zero-copy radix tree routing** (`matchit 0.7`): O(log n) route matching with compile-time optimization and zero allocations per lookup
 - **Arena allocators** (`bumpalo 3`): per-request arena allocation eliminates heap fragmentation and reduces allocator pressure

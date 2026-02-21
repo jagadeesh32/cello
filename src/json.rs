@@ -278,8 +278,16 @@ fn write_json_string(s: &str, buf: &mut Vec<u8>) {
                 buf.extend_from_slice(b"\\u00");
                 let high = b >> 4;
                 let low = b & 0x0f;
-                buf.push(if high < 10 { b'0' + high } else { b'a' + high - 10 });
-                buf.push(if low < 10 { b'0' + low } else { b'a' + low - 10 });
+                buf.push(if high < 10 {
+                    b'0' + high
+                } else {
+                    b'a' + high - 10
+                });
+                buf.push(if low < 10 {
+                    b'0' + low
+                } else {
+                    b'a' + low - 10
+                });
             }
             _ => buf.push(byte),
         }

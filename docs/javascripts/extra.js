@@ -178,7 +178,7 @@
       "Rust-powered performance",
       "Python simplicity",
       "Enterprise-grade security",
-      "150,000+ requests/sec",
+      "134,000+ requests/sec",
     ];
 
     var phraseIndex = 0;

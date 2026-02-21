@@ -175,7 +175,10 @@ impl HandlerRegistry {
                         // Try direct bytes serialization
                         match python_to_json_bytes_direct(py, result.as_ref(py))? {
                             Some(bytes) => return Ok(HandlerResult::JsonBytes(bytes)),
-                            None => return python_to_json(py, result.as_ref(py)).map(HandlerResult::JsonValue),
+                            None => {
+                                return python_to_json(py, result.as_ref(py))
+                                    .map(HandlerResult::JsonValue)
+                            }
                         }
                     }
                 };
