@@ -472,17 +472,18 @@ All of the following features are available in Cello today:
 Validate and transform request data with type-safe DTOs:
 
 ```python
-from cello import App, DTO, Field
+from cello import App
+from cello.validation import validate_field
 
-class CreateUserDTO(DTO):
-    name: str = Field(min_length=2, max_length=50)
-    email: str = Field(pattern=r"^[\w.-]+@[\w.-]+\.\w+$")
-    age: int = Field(ge=18, le=120)
+app = App()
 
 @app.post("/users")
 def create_user(request):
-    dto = CreateUserDTO.from_request(request)
-    return {"name": dto.name, "email": dto.email}
+    data = request.json()
+    name = validate_field(data.get("name"), min_length=2, max_length=50)
+    email = validate_field(data.get("email"), pattern=r"^[\w.-]+@[\w.-]+\.\w+$")
+    age = validate_field(data.get("age"), ge=18, le=120)
+    return {"name": name, "email": email}
 ```
 
 ### Advanced Caching Middleware
@@ -506,17 +507,17 @@ def get_product(request):
 Catch and transform exceptions into consistent RFC 7807 responses:
 
 ```python
-from cello import App, ProblemDetails
+from cello import App, Response
 
 @app.exception_handler(ValueError)
 def handle_value_error(request, exc):
-    return ProblemDetails(
-        type_url="/errors/validation",
-        title="Validation Error",
-        status=400,
-        detail=str(exc),
-        instance=request.path,
-    )
+    return Response.json({
+        "type": "/errors/validation",
+        "title": "Validation Error",
+        "status": 400,
+        "detail": str(exc),
+        "instance": request.path,
+    }, status=400)
 
 @app.exception_handler(Exception)
 def handle_generic(request, exc):

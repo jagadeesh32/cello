@@ -290,16 +290,16 @@ async def shutdown():
 Register a global exception handler.
 
 ```python
-from cello import ProblemDetails
+from cello import Response
 
 @app.exception_handler(ValueError)
 def handle_value_error(request, exc):
-    return ProblemDetails(
-        type_url="/errors/validation",
-        title="Validation Error",
-        status=400,
-        detail=str(exc)
-    )
+    return Response.json({
+        "type": "/errors/validation",
+        "title": "Validation Error",
+        "status": 400,
+        "detail": str(exc)
+    }, status=400)
 
 @app.exception_handler(Exception)
 def handle_all_errors(request, exc):
