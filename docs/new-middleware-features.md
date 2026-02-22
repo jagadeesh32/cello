@@ -472,7 +472,8 @@ All of the following features are available in Cello today:
 Validate and transform request data with type-safe DTOs:
 
 ```python
-from cello import App, DTO, Field
+from cello import App
+from cello.validation import validate_field
 
 class CreateUserDTO(DTO):
     name: str = Field(min_length=2, max_length=50)
@@ -506,25 +507,25 @@ def get_product(request):
 Catch and transform exceptions into consistent RFC 7807 responses:
 
 ```python
-from cello import App, ProblemDetails
+from cello import App, Response
 
 @app.exception_handler(ValueError)
 def handle_value_error(request, exc):
-    return ProblemDetails(
-        type_url="/errors/validation",
-        title="Validation Error",
-        status=400,
-        detail=str(exc),
-        instance=request.path,
-    )
+    return Response.json({
+        "type": "/errors/validation",
+        "title": "Validation Error",
+        "status": 400,
+        "detail": str(exc),
+        "instance": request.path,
+    }, status=400)
 
 @app.exception_handler(Exception)
 def handle_generic(request, exc):
-    return ProblemDetails(
-        title="Internal Server Error",
-        status=500,
-        detail="An unexpected error occurred",
-    )
+    return Response.json({
+        "title": "Internal Server Error",
+        "status": 500,
+        "detail": "An unexpected error occurred",
+    }, status=500)
 ```
 
 ### Lifecycle Hooks (Startup/Shutdown)
@@ -581,7 +582,7 @@ app.enable_opentelemetry(
 )
 ```
 
-See the [Middleware docs](middleware/overview.md) and [Enterprise Observability docs](enterprise/observability/opentelemetry.md) for full details on each feature.
+See the [Middleware docs](features/middleware/overview.md) and [Enterprise Observability docs](enterprise/observability/opentelemetry.md) for full details on each feature.
 
 ---
 

@@ -158,7 +158,7 @@ All middleware is implemented in Rust for maximum performance:
 - Event Sourcing with Aggregate base class and @event_handler decorator
 - Event base class for typed domain events with automatic serialization
 - EventStore for persisting and retrieving events with configurable backends
-- EventStoreConfig for storage URL, snapshot interval, and replay settings
+- EventSourcingConfig for storage URL, snapshot interval, and replay settings
 - Snapshot support for optimized aggregate loading at scale
 - Event replay to rebuild aggregate state from the event log
 - CQRS with Command and Query base classes

@@ -1282,10 +1282,18 @@ class App:
 
         # Run Server
         if workers > 1:
-            # Multi-process mode: fork N worker processes, each with its own GIL.
-            # Uses SO_REUSEPORT so all processes can bind to the same port.
-            # This bypasses the GIL bottleneck for true parallel request handling.
-            self._run_multiprocess(host, port, workers, env)
+            if sys.platform == "win32":
+                # Windows lacks os.fork() and SO_REUSEPORT.
+                # Fall back to single worker with a clear message.
+                print(f"\n    \033[33m⚠\033[0m  \033[1mWindows detected:\033[0m multi-worker requires Linux/macOS (os.fork + SO_REUSEPORT)")
+                print(f"    \033[33m⚠\033[0m  Running with \033[1m1 worker\033[0m. For multi-worker, deploy on Linux or use WSL.\n")
+                try:
+                    self._app.run(host, port, None)
+                except KeyboardInterrupt:
+                    pass
+            else:
+                # Unix/Linux/macOS: fork + SO_REUSEPORT for best performance.
+                self._run_multiprocess(host, port, workers, env)
         else:
             try:
                 self._app.run(host, port, None)

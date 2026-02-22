@@ -171,7 +171,7 @@ The most commonly used classes and functions at a glance.
 | [`JwtConfig`](config/security.md) | `cello.middleware` | JWT authentication config |
 | [`RateLimitConfig`](config/middleware.md) | `cello.middleware` | Rate limiting config |
 | [`SessionConfig`](config/security.md) | `cello.middleware` | Session management config |
-| [`ProblemDetails`](errors.md) | `cello` | RFC 7807 error response |
+| [`Response.json()`](api/response.md) | `cello` | RFC 7807 error response |
 
 ---
 

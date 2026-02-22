@@ -54,13 +54,13 @@ No breaking changes from v0.9.0. All existing code continues to work.
 ### New Imports
 
 ```python
-from cello import EventStoreConfig, CqrsConfig, SagaConfig
+from cello import EventSourcingConfig, CqrsConfig, SagaConfig
 ```
 
 ### New Python Modules
 
 ```python
-from cello.eventsourcing import Aggregate, Event, event_handler, EventStore, EventStoreConfig, Snapshot
+from cello.eventsourcing import Aggregate, Event, event_handler, EventStore, EventSourcingConfig, Snapshot
 from cello.cqrs import Command, Query, CommandBus, QueryBus, command_handler, query_handler, CqrsConfig
 from cello.saga import Saga, SagaStep, SagaConfig, SagaResult
 ```
@@ -71,7 +71,7 @@ from cello.saga import Saga, SagaStep, SagaConfig, SagaResult
 app = App()
 
 # Event Sourcing
-app.enable_event_store()
+app.enable_event_sourcing()
 
 # CQRS
 app.enable_cqrs()
@@ -91,7 +91,7 @@ app.enable_sagas()
 ### New APIs (v0.10.0)
 
 ```python
-from cello import App, EventStoreConfig, CqrsConfig, SagaConfig
+from cello import App, EventSourcingConfig, CqrsConfig, SagaConfig
 from cello.eventsourcing import Aggregate, Event, event_handler
 from cello.cqrs import Command, Query, command_handler, query_handler
 from cello.saga import Saga, SagaStep
@@ -109,7 +109,7 @@ class Order(Aggregate):
         self.id = event.order_id
         self.status = "created"
 
-app.enable_event_store(EventStoreConfig(
+app.enable_event_sourcing(EventSourcingConfig(
     storage="postgresql://localhost/events",
     snapshot_interval=100,
 ))

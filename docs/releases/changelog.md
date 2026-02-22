@@ -29,7 +29,7 @@ All notable changes to the Cello Framework are documented here. Each version lin
 - Added Event Sourcing with Aggregate base class, event replay, and snapshots
 - Added CQRS with Command/Query separation, dedicated buses, and event-driven sync
 - Added Saga Pattern for distributed transaction coordination with compensation logic
-- Added EventStoreConfig, CqrsConfig, and SagaConfig configuration classes
+- Added EventSourcingConfig, CqrsConfig, and SagaConfig configuration classes
 - Fixed GraphQL subscription disconnects under high throughput
 - Fixed gRPC reflection not listing methods after hot reload
 - Fixed Kafka consumer group rebalancing causing duplicate processing

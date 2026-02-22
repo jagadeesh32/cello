@@ -193,9 +193,9 @@ async def process_order(message: Message):
 Event-driven persistence with aggregate roots, event replay, and snapshots.
 
 ```python
-from cello.eventsourcing import Aggregate, Event, event_handler, EventStoreConfig
+from cello.eventsourcing import Aggregate, Event, event_handler, EventSourcingConfig
 
-app.enable_event_store(EventStoreConfig(
+app.enable_event_sourcing(EventSourcingConfig(
     storage="postgresql://localhost/events",
     snapshot_interval=100,
     enable_replay=True,
