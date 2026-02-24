@@ -10,16 +10,15 @@ Guards provide role-based and permission-based access control in Cello. They are
 ## Quick Start
 
 ```python
-from cello import App
-from cello.guards import Role, Permission, Authenticated
+from cello import App, RoleGuard, PermissionGuard, Authenticated
 
 app = App()
 
-@app.get("/admin", guards=[Role(["admin"])])
+@app.get("/admin", guards=[RoleGuard(["admin"])])
 def admin_panel(request):
     return {"admin": True}
 
-@app.post("/articles", guards=[Permission(["articles:write"])])
+@app.post("/articles", guards=[PermissionGuard(["articles:write"])])
 def create_article(request):
     return {"created": True}
 
@@ -27,6 +26,8 @@ def create_article(request):
 def profile(request):
     return {"user": request.context.get("user")}
 ```
+
+> **Note:** Guards are exported directly from `cello`. The old import style `from cello.guards import Role, Permission` still works but `from cello import RoleGuard, PermissionGuard` is now the preferred way.
 
 ---
 
@@ -37,7 +38,7 @@ def profile(request):
 Ensures a user is present in the request context (i.e., authentication middleware has run):
 
 ```python
-from cello.guards import Authenticated
+from cello import Authenticated
 
 @app.get("/dashboard", guards=[Authenticated()])
 def dashboard(request):
@@ -49,21 +50,21 @@ def dashboard(request):
 |-----------|------|---------|-------------|
 | `user_key` | `str` | `"user"` | Key in `request.context` for the user object |
 
-### Role
+### RoleGuard
 
 Checks if the user has one (or all) of the required roles:
 
 ```python
-from cello.guards import Role
+from cello import RoleGuard
 
 # User must have the "admin" role
-admin_only = Role(["admin"])
+admin_only = RoleGuard(["admin"])
 
 # User must have "admin" OR "editor" (any one)
-admin_or_editor = Role(["admin", "editor"])
+admin_or_editor = RoleGuard(["admin", "editor"])
 
 # User must have BOTH "admin" AND "editor"
-admin_and_editor = Role(["admin", "editor"], require_all=True)
+admin_and_editor = RoleGuard(["admin", "editor"], require_all=True)
 
 @app.get("/admin", guards=[admin_only])
 def admin(request):
@@ -77,21 +78,21 @@ def admin(request):
 | `user_key` | `str` | `"user"` | Key in `request.context` for user object |
 | `role_key` | `str` | `"roles"` | Key in user object for roles list |
 
-### Permission
+### PermissionGuard
 
 Checks if the user has the required permissions:
 
 ```python
-from cello.guards import Permission
+from cello import PermissionGuard
 
 # User must have "articles:write" permission
-can_write = Permission(["articles:write"])
+can_write = PermissionGuard(["articles:write"])
 
 # User must have ALL listed permissions (default behavior)
-can_manage = Permission(["articles:write", "articles:delete"])
+can_manage = PermissionGuard(["articles:write", "articles:delete"])
 
 # User must have ANY of the listed permissions
-can_access = Permission(["articles:read", "articles:write"], require_all=False)
+can_access = PermissionGuard(["articles:read", "articles:write"], require_all=False)
 
 @app.post("/articles", guards=[can_write])
 def create_article(request):
@@ -116,10 +117,10 @@ Guards can be combined using logical operators:
 All guards must pass:
 
 ```python
-from cello.guards import And, Role, Permission
+from cello import And, RoleGuard, PermissionGuard
 
 # Must be admin AND have write permission
-admin_writer = And([Role(["admin"]), Permission(["write"])])
+admin_writer = And([RoleGuard(["admin"]), PermissionGuard(["write"])])
 
 @app.delete("/data", guards=[admin_writer])
 def delete_data(request):
@@ -131,10 +132,10 @@ def delete_data(request):
 At least one guard must pass:
 
 ```python
-from cello.guards import Or, Role
+from cello import Or, RoleGuard
 
 # Must be admin OR moderator
-admin_or_mod = Or([Role(["admin"]), Role(["moderator"])])
+admin_or_mod = Or([RoleGuard(["admin"]), RoleGuard(["moderator"])])
 
 @app.post("/moderate", guards=[admin_or_mod])
 def moderate(request):
@@ -146,10 +147,10 @@ def moderate(request):
 Inverts a guard's result:
 
 ```python
-from cello.guards import Not, Role
+from cello import Not, RoleGuard
 
 # Must NOT be a "banned" user
-not_banned = Not(Role(["banned"]))
+not_banned = Not(RoleGuard(["banned"]))
 
 @app.post("/comment", guards=[not_banned])
 def comment(request):
@@ -159,13 +160,13 @@ def comment(request):
 ### Complex Compositions
 
 ```python
-from cello.guards import And, Or, Not, Role, Permission, Authenticated
+from cello import And, Or, Not, RoleGuard, PermissionGuard, Authenticated
 
 # (admin OR editor) AND has write permission AND is NOT suspended
 complex_guard = And([
-    Or([Role(["admin"]), Role(["editor"])]),
-    Permission(["write"]),
-    Not(Role(["suspended"]))
+    Or([RoleGuard(["admin"]), RoleGuard(["editor"])]),
+    PermissionGuard(["write"]),
+    Not(RoleGuard(["suspended"]))
 ])
 
 @app.put("/articles/{id}", guards=[complex_guard])
@@ -180,10 +181,10 @@ def update_article(request):
 The `verify_guards()` helper runs a list of guards with AND logic:
 
 ```python
-from cello.guards import verify_guards, Role, Permission
+from cello import RoleGuard, PermissionGuard
 
-# Equivalent to And([Role(["admin"]), Permission(["write"])])
-@app.post("/data", guards=[Role(["admin"]), Permission(["write"])])
+# Equivalent to And([RoleGuard(["admin"]), PermissionGuard(["write"])])
+@app.post("/data", guards=[RoleGuard(["admin"]), PermissionGuard(["write"])])
 def create_data(request):
     # Both guards must pass
     return {"created": True}
@@ -215,8 +216,8 @@ If your middleware stores user data under a different key:
 
 ```python
 # If user data is in request.context["current_user"]
-admin = Role(["admin"], user_key="current_user")
-can_edit = Permission(["edit"], user_key="current_user")
+admin = RoleGuard(["admin"], user_key="current_user")
+can_edit = PermissionGuard(["edit"], user_key="current_user")
 ```
 
 ---
@@ -231,7 +232,7 @@ Guards raise typed exceptions that produce appropriate HTTP responses:
 | `ForbiddenError` | `403` | User lacks required roles or permissions |
 
 ```python
-from cello.guards import GuardError, ForbiddenError, UnauthorizedError
+from cello import GuardError, ForbiddenError, UnauthorizedError
 
 # Guards automatically raise these exceptions.
 # The framework catches them and returns the appropriate HTTP response.
@@ -254,7 +255,7 @@ Error response body:
 Create custom guards by subclassing `Guard`:
 
 ```python
-from cello.guards import Guard, ForbiddenError
+from cello import Guard, ForbiddenError
 
 class IpWhitelist(Guard):
     """Allow only requests from whitelisted IPs."""
@@ -293,9 +294,11 @@ def batch_job(request):
 ## Full Example
 
 ```python
-from cello import App, JwtConfig
+from cello import (
+    App, Blueprint, JwtConfig,
+    RoleGuard, PermissionGuard, Authenticated, Or,
+)
 from cello.middleware import JwtAuth
-from cello.guards import Role, Permission, Authenticated, Or
 
 app = App()
 
@@ -316,20 +319,38 @@ def profile(request):
     return {"user": request.context.get("user")}
 
 # Admin only
-@app.get("/admin", guards=[Role(["admin"])])
+@app.get("/admin", guards=[RoleGuard(["admin"])])
 def admin(request):
     return {"admin": True}
 
 # Admin or editor
-@app.get("/content", guards=[Or([Role(["admin"]), Role(["editor"])])])
+@app.get("/content", guards=[Or([RoleGuard(["admin"]), RoleGuard(["editor"])])])
 def content(request):
     return {"content": []}
 
 # Specific permission
-@app.delete("/users/{id}", guards=[Permission(["users:delete"])])
+@app.delete("/users/{id}", guards=[PermissionGuard(["users:delete"])])
 def delete_user(request):
     return {"deleted": request.params["id"]}
 
+# Guards on blueprint routes
+api = Blueprint("/api")
+
+@api.get("/data", guards=[Authenticated()])
+def get_data(request):
+    return {"data": []}
+
+@api.post("/data", guards=[PermissionGuard(["data:write"])])
+def create_data(request):
+    return {"created": True}
+
+# Guards work with async handlers too
+@app.get("/async-profile", guards=[Authenticated()])
+async def async_profile(request):
+    user = request.context.get("user")
+    return {"user": user}
+
+app.register_blueprint(api)
 app.run()
 ```
 

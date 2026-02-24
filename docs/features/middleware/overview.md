@@ -169,6 +169,33 @@ app.use(ApiKeyAuth(keys={"key1": "service-a"}, header="X-API-Key"))
 
 ---
 
+## Async Handler Compatibility
+
+All Python-side middleware wrappers -- including the `@cache` decorator, guard wrappers, and Pydantic validation -- fully support async handlers. Each wrapper uses `inspect.iscoroutinefunction()` to detect async handlers at decoration time and generates the appropriate sync or async wrapper. This means you can freely use `async def` handlers with any combination of caching, guards, and validation without encountering unawaited coroutine issues.
+
+```python
+from cello import App, cache
+from cello.guards import RoleGuard
+from pydantic import BaseModel
+
+class Item(BaseModel):
+    name: str
+    price: float
+
+# Guards + validation + cache all work with async handlers
+@app.get("/items", guards=[RoleGuard(["viewer"])])
+@cache(ttl=60, tags=["items"])
+async def list_items(request):
+    return {"items": await db.fetch_all("SELECT * FROM items")}
+
+@app.post("/items", guards=[RoleGuard(["editor"])])
+async def create_item(request, item: Item):
+    result = await db.insert(item.model_dump())
+    return {"id": result["id"]}
+```
+
+---
+
 ## Middleware Performance
 
 All middleware is implemented in Rust with zero-allocation fast paths:

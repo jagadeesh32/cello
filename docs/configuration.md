@@ -133,6 +133,15 @@ config = ClusterConfig.auto()
 | `graceful_shutdown` | True | Enable graceful shutdown |
 | `shutdown_timeout` | 30 | Seconds to wait for graceful shutdown |
 
+### Cross-Platform Worker Strategy
+
+Cello automatically selects the best multi-worker strategy for the current platform:
+
+- **Unix/Linux/macOS**: Uses `os.fork()` with `SO_REUSEPORT`. Workers inherit the listening socket from the parent process for optimal performance.
+- **Windows**: Uses subprocess re-execution. Each worker is spawned as a new subprocess that re-executes the user's script with the `CELLO_WORKER=1` environment variable set. This ensures all routes, middleware, and lifecycle hooks are fully registered in each worker process, avoiding PyO3 pickling issues. This follows the same pattern used by Gunicorn and Uvicorn.
+
+No application code changes are required -- the strategy is selected automatically at runtime.
+
 ---
 
 ## TlsConfig

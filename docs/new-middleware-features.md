@@ -178,32 +178,36 @@ let guards = GuardsMiddleware::new()
 middleware_chain.add(guards);
 ```
 
-#### Python API (Future):
+#### Python API:
+
+Guard wrappers support both sync and async handlers. The wrapper detects the handler type automatically and generates the correct sync or async wrapper, so async handlers are properly awaited after guard checks pass.
 
 ```python
 from cello import App, guards
 
 app = App()
 
-# Role-based guard
+# Role-based guard (sync handler)
 @app.get("/admin", guards=[guards.Role(["admin"])])
 def admin_only(request):
     return {"message": "Admin area"}
 
-# Permission-based guard
+# Permission-based guard (async handler)
 @app.post("/users", guards=[guards.Permission(["users:create"])])
-def create_user(request):
-    return {"message": "User created"}
+async def create_user(request):
+    user = await db.create_user(request.json())
+    return {"message": "User created", "id": user["id"]}
 
-# Multiple guards (AND logic)
+# Multiple guards with async handler (AND logic)
 @app.delete("/users/{id}", guards=[
     guards.Role(["admin"]),
     guards.Permission(["users:delete"])
 ])
-def delete_user(request):
+async def delete_user(request):
+    await db.delete_user(request.params["id"])
     return {"message": "User deleted"}
 
-# Custom guard
+# Custom guard with async handler
 def ip_whitelist_guard(request):
     allowed_ips = ["127.0.0.1", "::1"]
     client_ip = request.headers.get("x-real-ip", "unknown")
@@ -211,8 +215,9 @@ def ip_whitelist_guard(request):
         raise guards.ForbiddenError(f"IP {client_ip} not whitelisted")
 
 @app.get("/internal", guards=[ip_whitelist_guard])
-def internal_api(request):
-    return {"message": "Internal API"}
+async def internal_api(request):
+    data = await fetch_internal_data()
+    return {"message": "Internal API", "data": data}
 ```
 
 ---
@@ -469,37 +474,54 @@ All of the following features are available in Cello today:
 
 ### DTO (Data Transfer Objects)
 
-Validate and transform request data with type-safe DTOs:
+Validate and transform request data with type-safe DTOs. The validation wrapper supports both sync and async handlers -- async handlers are properly awaited after validation, so there is no risk of returning unawaited coroutines:
 
 ```python
 from cello import App
-from cello.validation import validate_field
+from pydantic import BaseModel, Field
 
-class CreateUserDTO(DTO):
+class CreateUserDTO(BaseModel):
     name: str = Field(min_length=2, max_length=50)
     email: str = Field(pattern=r"^[\w.-]+@[\w.-]+\.\w+$")
     age: int = Field(ge=18, le=120)
 
+# Sync handler with validation
 @app.post("/users")
-def create_user(request):
-    dto = CreateUserDTO.from_request(request)
+def create_user(request, dto: CreateUserDTO):
     return {"name": dto.name, "email": dto.email}
+
+# Async handler with validation -- works identically
+@app.post("/users/async")
+async def create_user_async(request, dto: CreateUserDTO):
+    result = await db.insert(dto.model_dump())
+    return {"id": result["id"], "name": dto.name}
 ```
 
 ### Advanced Caching Middleware
 
-Smart caching with TTL, cache invalidation, and custom key strategies:
+Smart caching with TTL, cache invalidation, and custom key strategies. The `@cache` decorator supports both sync and async handlers -- it detects the handler type and generates the appropriate wrapper:
 
 ```python
+from cello import cache
+
 app.enable_caching(
     max_size=10000,
     default_ttl=300,
     stale_while_revalidate=60,
 )
 
-@app.get("/products/{id}", cache_ttl=600)
+# Sync handler with caching
+@app.get("/products/{id}")
+@cache(ttl=600)
 def get_product(request):
     return {"id": request.params["id"], "name": "Widget"}
+
+# Async handler with caching -- works identically
+@app.get("/products/{id}/details")
+@cache(ttl=600, tags=["products"])
+async def get_product_details(request):
+    details = await db.fetch_product(request.params["id"])
+    return details
 ```
 
 ### Global Exception Handling

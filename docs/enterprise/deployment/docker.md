@@ -49,6 +49,7 @@ CMD ["python", "app.py", "--host", "0.0.0.0", "--env", "production", "--workers"
 - **Non-root user** improves container security.
 - **HEALTHCHECK** enables Docker to monitor the container.
 - **`--host 0.0.0.0`** is required inside containers to accept external connections.
+- **Multi-worker mode** in Docker (Linux) uses `os.fork()` with `SO_REUSEPORT` for optimal performance. The Windows subprocess re-execution path is not used in Linux containers.
 
 ---
 

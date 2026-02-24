@@ -52,7 +52,7 @@ print(bp.name)  # "api_v1"
 
 Blueprints support the same HTTP method decorators as `App`.
 
-### `bp.get(path: str)`
+### `bp.get(path: str, guards: list = None)`
 
 ```python
 @users_bp.get("/")
@@ -64,7 +64,7 @@ def get_user(request):
     return {"id": request.params["id"]}
 ```
 
-### `bp.post(path: str)`
+### `bp.post(path: str, guards: list = None)`
 
 ```python
 @users_bp.post("/")
@@ -73,7 +73,7 @@ def create_user(request):
     return Response.json({"created": True}, status=201)
 ```
 
-### `bp.put(path: str)`
+### `bp.put(path: str, guards: list = None)`
 
 ```python
 @users_bp.put("/{id}")
@@ -81,7 +81,7 @@ def update_user(request):
     return {"updated": True}
 ```
 
-### `bp.delete(path: str)`
+### `bp.delete(path: str, guards: list = None)`
 
 ```python
 @users_bp.delete("/{id}")
@@ -89,7 +89,7 @@ def delete_user(request):
     return {"deleted": True}
 ```
 
-### `bp.patch(path: str)`
+### `bp.patch(path: str, guards: list = None)`
 
 ```python
 @users_bp.patch("/{id}")
@@ -146,10 +146,9 @@ The resulting route is `GET /api/v1/users/`.
 Apply guards at the blueprint level so all routes in the blueprint require the guard to pass.
 
 ```python
-from cello import Blueprint
-from cello.guards import Role
+from cello import Blueprint, RoleGuard
 
-admin_bp = Blueprint("/admin", guards=[Role(["admin"])])
+admin_bp = Blueprint("/admin", guards=[RoleGuard(["admin"])])
 
 @admin_bp.get("/dashboard")
 def dashboard(request):
@@ -161,6 +160,28 @@ def admin_users(request):
 ```
 
 Both `/admin/dashboard` and `/admin/users` require the `admin` role.
+
+### Per-Route Guards on Blueprints
+
+Guards can also be applied to individual blueprint routes via the `guards` parameter on route decorators. This works with both sync and async handlers.
+
+```python
+from cello import Blueprint, Authenticated, PermissionGuard
+
+api_bp = Blueprint("/api")
+
+@api_bp.get("/public")
+def public_data(request):
+    return {"public": True}
+
+@api_bp.get("/private", guards=[Authenticated()])
+def private_data(request):
+    return {"private": True}
+
+@api_bp.post("/items", guards=[PermissionGuard(["items:write"])])
+async def create_item(request):
+    return {"created": True}
+```
 
 ---
 
@@ -249,11 +270,11 @@ if __name__ == "__main__":
 | Method | Description |
 |--------|-------------|
 | `Blueprint(prefix, name)` | Create a new blueprint |
-| `bp.get(path)` | Register a GET route |
-| `bp.post(path)` | Register a POST route |
-| `bp.put(path)` | Register a PUT route |
-| `bp.delete(path)` | Register a DELETE route |
-| `bp.patch(path)` | Register a PATCH route |
+| `bp.get(path, guards=None)` | Register a GET route with optional guards |
+| `bp.post(path, guards=None)` | Register a POST route with optional guards |
+| `bp.put(path, guards=None)` | Register a PUT route with optional guards |
+| `bp.delete(path, guards=None)` | Register a DELETE route with optional guards |
+| `bp.patch(path, guards=None)` | Register a PATCH route with optional guards |
 | `bp.register(child_bp)` | Nest a child blueprint |
 | `bp.get_all_routes()` | List all routes including nested |
 | `app.register_blueprint(bp)` | Activate the blueprint in the application |

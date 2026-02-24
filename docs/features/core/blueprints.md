@@ -55,7 +55,7 @@ print(users_bp.name)    # "users"
 
 ## HTTP Method Decorators
 
-Blueprints support all the same HTTP method decorators as the `App`:
+Blueprints support all the same HTTP method decorators as the `App`. Both sync and async handlers work interchangeably -- guards and validation wrappers applied by blueprint decorators automatically detect and handle async handlers:
 
 ```python
 api = Blueprint("/api")
@@ -65,16 +65,18 @@ def list_items(request):
     return {"items": []}
 
 @api.post("/items")
-def create_item(request):
+async def create_item(request):
     data = request.json()
-    return Response.json({"id": 1, **data}, status=201)
+    item = await db.insert(data)
+    return Response.json({"id": item["id"], **data}, status=201)
 
 @api.put("/items/{id}")
 def replace_item(request):
     return {"updated": request.params["id"]}
 
 @api.patch("/items/{id}")
-def patch_item(request):
+async def patch_item(request):
+    await db.update(request.params["id"], request.json())
     return {"patched": request.params["id"]}
 
 @api.delete("/items/{id}")
@@ -178,11 +180,11 @@ app.register_blueprint(v2)
 
 ## Blueprint Middleware
 
-Apply middleware to all routes within a blueprint:
+Apply middleware to all routes within a blueprint. Async handlers work seamlessly with blueprint-level middleware and per-route guards:
 
 ```python
-from cello import Blueprint
-from cello.middleware import JwtAuth, JwtConfig
+from cello import App, Blueprint
+from cello.guards import RoleGuard, Authenticated
 
 # Public blueprint -- no auth required
 public_bp = Blueprint("/public")
@@ -191,19 +193,18 @@ public_bp = Blueprint("/public")
 def status(request):
     return {"status": "ok"}
 
-# Admin blueprint -- JWT auth on all routes
+# Admin blueprint -- guards on individual routes
 admin_bp = Blueprint("/admin")
-admin_bp.use(JwtAuth(JwtConfig(
-    secret=b"your-secret-key-minimum-32-bytes-long"
-)))
 
-@admin_bp.get("/dashboard")
-def dashboard(request):
-    return {"admin": True}
+@admin_bp.get("/dashboard", guards=[Authenticated()])
+async def dashboard(request):
+    stats = await fetch_dashboard_stats()
+    return {"admin": True, "stats": stats}
 
-@admin_bp.get("/users")
-def admin_users(request):
-    return {"users": [], "admin": True}
+@admin_bp.get("/users", guards=[RoleGuard(["admin"])])
+async def admin_users(request):
+    users = await db.fetch_all("SELECT * FROM users")
+    return {"users": users, "admin": True}
 
 app = App()
 app.register_blueprint(public_bp)

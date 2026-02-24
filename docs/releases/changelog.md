@@ -9,7 +9,28 @@ All notable changes to the Cello Framework are documented here. Each version lin
 
 ---
 
-## v1.0.1 -- Production Ready
+## v1.0.1 -- Cross-Platform & Compatibility Patch
+
+**Cross-Platform Fixes:**
+- Windows multi-worker: subprocess re-execution (`CELLO_WORKER=1`) instead of broken `multiprocessing.Process`
+- Windows signal handling: `SIGTERM` wrapped in `try/except`, platform validation for signals
+- Windows static files: UNC path normalization fix
+- Linux-only CPU affinity: gated with warning on other platforms
+- ARM JSON: `serde_json` fallback for non-SIMD architectures
+
+**Compatibility Fixes:**
+- Async handler validation: `wrap_handler_with_validation` now supports async handlers
+- Async guard wrappers: `_apply_guards` creates async/sync wrappers based on handler type
+- Async cache decorator: `cache()` now supports async handlers
+- Blueprint validation & guards: Blueprint route decorators now support `guards` parameter and validation
+- Guards exported in `__all__`: `RoleGuard`, `PermissionGuard`, `Authenticated`, `And`, `Or`, `Not`, `GuardError`, `ForbiddenError`, `UnauthorizedError`
+- Database exports: `Database`, `Redis`, `Transaction` added to `__all__`
+
+[Full release notes](v1.0.1.md)
+
+---
+
+## v1.0.0 -- Production Ready
 
 - First stable release with semantic versioning guarantees
 - Major performance optimizations: handler metadata caching, lazy body parsing, zero-copy responses
@@ -20,7 +41,7 @@ All notable changes to the Cello Framework are documented here. Each version lin
 - API stability commitment: no breaking changes until v2.0
 - All 394 tests passing
 
-[Full release notes](v1.0.1.md)
+[Full release notes](v1.0.0.md)
 
 ---
 

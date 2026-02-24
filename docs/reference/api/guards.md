@@ -11,11 +11,13 @@ Guards provide declarative access control for routes. A guard is a callable that
 
 ## Importing
 
+Guards are exported directly from `cello` (preferred):
+
 ```python
-from cello.guards import (
+from cello import (
     Guard,
-    Role,
-    Permission,
+    RoleGuard,
+    PermissionGuard,
     Authenticated,
     And,
     Or,
@@ -23,8 +25,14 @@ from cello.guards import (
     GuardError,
     ForbiddenError,
     UnauthorizedError,
-    verify_guards,
 )
+```
+
+The legacy import style still works but is no longer preferred:
+
+```python
+# Still works -- Role and Permission are the underlying class names
+from cello.guards import Role, Permission, Authenticated, And, Or, Not
 ```
 
 ---
@@ -53,7 +61,7 @@ A guard must either:
 Ensures the request has an authenticated user in `request.context`.
 
 ```python
-from cello.guards import Authenticated
+from cello import Authenticated
 
 @app.get("/me", guards=[Authenticated()])
 def profile(request):
@@ -68,19 +76,19 @@ Raises `UnauthorizedError` (HTTP 401) if the user is not present.
 
 ---
 
-### `Role(roles, require_all=False, user_key="user", role_key="roles")`
+### `RoleGuard(roles, require_all=False, user_key="user", role_key="roles")`
 
-Checks that the authenticated user has the required roles.
+Checks that the authenticated user has the required roles. Exported as `RoleGuard` from `cello` (underlying class name is `Role` in `cello.guards`).
 
 ```python
-from cello.guards import Role
+from cello import RoleGuard
 
-@app.get("/admin", guards=[Role(["admin"])])
+@app.get("/admin", guards=[RoleGuard(["admin"])])
 def admin(request):
     return {"admin": True}
 
 # Require ALL roles
-@app.get("/super", guards=[Role(["admin", "superuser"], require_all=True)])
+@app.get("/super", guards=[RoleGuard(["admin", "superuser"], require_all=True)])
 def super_admin(request):
     return {"super": True}
 ```
@@ -96,14 +104,14 @@ Raises `UnauthorizedError` (401) if no user, `ForbiddenError` (403) if roles are
 
 ---
 
-### `Permission(permissions, require_all=True, user_key="user", perm_key="permissions")`
+### `PermissionGuard(permissions, require_all=True, user_key="user", perm_key="permissions")`
 
-Checks that the authenticated user has the required permissions.
+Checks that the authenticated user has the required permissions. Exported as `PermissionGuard` from `cello` (underlying class name is `Permission` in `cello.guards`).
 
 ```python
-from cello.guards import Permission
+from cello import PermissionGuard
 
-@app.delete("/users/{id}", guards=[Permission(["users:delete"])])
+@app.delete("/users/{id}", guards=[PermissionGuard(["users:delete"])])
 def delete_user(request):
     return {"deleted": True}
 ```
@@ -124,9 +132,9 @@ def delete_user(request):
 Passes only if **all** guards pass.
 
 ```python
-from cello.guards import And, Authenticated, Role
+from cello import And, Authenticated, RoleGuard
 
-@app.get("/secure", guards=[And([Authenticated(), Role(["admin"])])])
+@app.get("/secure", guards=[And([Authenticated(), RoleGuard(["admin"])])])
 def secure(request):
     return {"secure": True}
 ```
@@ -136,9 +144,9 @@ def secure(request):
 Passes if **any** guard passes.
 
 ```python
-from cello.guards import Or, Role
+from cello import Or, RoleGuard
 
-@app.get("/content", guards=[Or([Role(["editor"]), Role(["admin"])])])
+@app.get("/content", guards=[Or([RoleGuard(["editor"]), RoleGuard(["admin"])])])
 def content(request):
     return {"content": True}
 ```
@@ -148,9 +156,9 @@ def content(request):
 Inverts a guard. Passes if the inner guard **fails**.
 
 ```python
-from cello.guards import Not, Role
+from cello import Not, RoleGuard
 
-@app.get("/public", guards=[Not(Role(["banned"]))])
+@app.get("/public", guards=[Not(RoleGuard(["banned"]))])
 def public(request):
     return {"public": True}
 ```
@@ -162,7 +170,7 @@ def public(request):
 Create a custom guard by subclassing `Guard`.
 
 ```python
-from cello.guards import Guard, ForbiddenError
+from cello import Guard, ForbiddenError
 
 class IPWhitelist(Guard):
     def __init__(self, allowed_ips: list[str]):
@@ -214,16 +222,21 @@ Raises `GuardError` if any guard fails.
 
 ## Using Guards on Routes
 
-Pass guards to the route decorator via the `guards` parameter.
+Pass guards to the route decorator via the `guards` parameter. Guards work with both sync and async handlers.
 
 ```python
-@app.get("/admin", guards=[Role(["admin"])])
+@app.get("/admin", guards=[RoleGuard(["admin"])])
 def admin(request):
     return {"admin": True}
 
-@app.post("/data", guards=[Authenticated(), Permission(["data:write"])])
+@app.post("/data", guards=[Authenticated(), PermissionGuard(["data:write"])])
 def write_data(request):
     return {"written": True}
+
+# Async handlers are also supported
+@app.get("/async-data", guards=[Authenticated()])
+async def async_data(request):
+    return {"data": []}
 ```
 
 ---
@@ -233,14 +246,33 @@ def write_data(request):
 Apply guards at the blueprint level to protect all routes in the group.
 
 ```python
-from cello import Blueprint
-from cello.guards import Role
+from cello import Blueprint, RoleGuard
 
-admin_bp = Blueprint("/admin", guards=[Role(["admin"])])
+admin_bp = Blueprint("/admin", guards=[RoleGuard(["admin"])])
 
 @admin_bp.get("/dashboard")
 def dashboard(request):
     return {"admin": True}
+```
+
+Guards can also be applied to individual blueprint routes via the `guards` parameter on route decorators:
+
+```python
+from cello import Blueprint, Authenticated, PermissionGuard
+
+api_bp = Blueprint("/api")
+
+@api_bp.get("/public")
+def public(request):
+    return {"public": True}
+
+@api_bp.get("/private", guards=[Authenticated()])
+def private(request):
+    return {"private": True}
+
+@api_bp.post("/data", guards=[PermissionGuard(["data:write"])])
+async def create_data(request):
+    return {"created": True}
 ```
 
 ---
@@ -250,8 +282,8 @@ def dashboard(request):
 | Guard | Purpose |
 |-------|---------|
 | `Authenticated()` | User must be present in context |
-| `Role(roles)` | User must have at least one of the roles |
-| `Permission(perms)` | User must have all specified permissions |
+| `RoleGuard(roles)` | User must have at least one of the roles |
+| `PermissionGuard(perms)` | User must have all specified permissions |
 | `And(guards)` | All guards must pass |
 | `Or(guards)` | At least one guard must pass |
 | `Not(guard)` | Guard must fail |

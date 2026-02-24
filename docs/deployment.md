@@ -28,6 +28,17 @@ python app.py --host 0.0.0.0 --port 8080 --workers 4
 | `--debug` | Auto | Debug mode |
 | `--no-logs` | False | Disable logging |
 
+## Multi-Worker Mode (Cross-Platform)
+
+Cello uses a platform-specific strategy for multi-worker mode to ensure reliable operation across all operating systems:
+
+- **Unix/Linux/macOS**: Uses `os.fork()` with `SO_REUSEPORT` for best performance. The parent process forks child workers that inherit the listening socket.
+- **Windows**: Uses subprocess re-execution (the same pattern used by Gunicorn/Uvicorn). Each worker subprocess re-executes the user's script with the `CELLO_WORKER=1` environment variable set, ensuring all routes and middleware are properly registered in each worker. This eliminates PyO3 pickling issues that previously affected Windows multi-worker deployments.
+
+This is handled automatically -- no code changes are needed to run on either platform. When `--workers N` is specified with N > 1, Cello detects the platform and chooses the appropriate strategy.
+
+> **Note:** The `CELLO_WORKER` environment variable is reserved for internal use by Cello's worker management. Do not set it manually.
+
 ## Systemd Service
 
 Create `/etc/systemd/system/cello.service`:

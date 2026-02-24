@@ -458,7 +458,18 @@ cargo fmt
 
 ## 📋 Release History
 
-### v1.0.1 — Production-Ready Stable Release (Feb 2026)
+### v1.0.1 — Cross-Platform & Compatibility Patch (Feb 2026)
+
+- **Windows multi-worker**: subprocess re-execution (`CELLO_WORKER=1`) replaces broken `multiprocessing.Process`
+- **Windows signal handling**: `SIGTERM` wrapped in `try/except` with platform validation
+- **Windows static files**: UNC path normalization fix
+- **ARM JSON fallback**: `serde_json` for non-SIMD architectures
+- **Linux-only CPU affinity**: gated with warning on other platforms
+- **Async compatibility**: `wrap_handler_with_validation`, `_apply_guards`, `cache()` all support async handlers
+- **Blueprint guards**: Blueprint route decorators now support `guards` parameter and validation
+- **Export completeness**: Guards (`RoleGuard`, `PermissionGuard`, `Authenticated`, `And`, `Or`, `Not`, `GuardError`, `ForbiddenError`, `UnauthorizedError`) and database (`Database`, `Redis`, `Transaction`) added to `__all__`
+
+### v1.0.0 — Production-Ready Stable Release (Feb 2026)
 
 - **170,000+ req/s** sustained throughput (fastest Python web framework)
 - Handler metadata caching, lazy query parsing, zero-copy response building

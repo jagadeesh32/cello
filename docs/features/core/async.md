@@ -243,6 +243,45 @@ Request → [Rust Async Middleware Chain] → Python Handler → [Rust Response]
 
 ---
 
+## Async-Compatible Decorators and Wrappers
+
+All Python-side decorators and wrappers in Cello automatically detect whether a handler is sync or async and wrap it accordingly. You never need to worry about unawaited coroutines when combining these features with `async def` handlers:
+
+| Decorator / Wrapper | Async Support | Notes |
+|---------------------|--------------|-------|
+| `@cache(ttl=...)` | Yes | Awaits the handler, then sets cache headers |
+| `guards=[...]` | Yes | Runs guard checks, then awaits the handler |
+| Pydantic validation | Yes | Validates the request body, then awaits the handler |
+
+```python
+from cello import App, cache
+from cello.guards import RoleGuard
+from pydantic import BaseModel
+
+app = App()
+
+class CreateItem(BaseModel):
+    name: str
+    price: float
+
+# All three features combined with an async handler
+@app.post("/items", guards=[RoleGuard(["editor"])])
+async def create_item(request, item: CreateItem):
+    result = await db.insert(item.model_dump())
+    return {"id": result["id"], "name": item.name}
+
+# @cache with an async handler
+@app.get("/items")
+@cache(ttl=120, tags=["items"])
+async def list_items(request):
+    items = await db.fetch_all("SELECT * FROM items")
+    return {"items": items}
+```
+
+Each wrapper uses `inspect.iscoroutinefunction()` to choose the right strategy at decoration time, so there is zero overhead from runtime type checking on each request.
+
+---
+
 ## Performance Considerations
 
 | Pattern | Recommendation |
