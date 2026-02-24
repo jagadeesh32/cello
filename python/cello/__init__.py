@@ -1329,6 +1329,7 @@ class App:
             Total: N+1 processes on the port
         """
         import signal
+        import sys
 
         if sys.platform == "win32":
             self._run_multiprocess_spawn(host, port, workers)
