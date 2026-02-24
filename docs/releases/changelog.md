@@ -9,7 +9,7 @@ All notable changes to the Cello Framework are documented here. Each version lin
 
 ---
 
-## v1.0.0 -- Production Ready
+## v1.0.1 -- Production Ready
 
 - First stable release with semantic versioning guarantees
 - Major performance optimizations: handler metadata caching, lazy body parsing, zero-copy responses
@@ -20,7 +20,7 @@ All notable changes to the Cello Framework are documented here. Each version lin
 - API stability commitment: no breaking changes until v2.0
 - All 394 tests passing
 
-[Full release notes](v1.0.0.md)
+[Full release notes](v1.0.1.md)
 
 ---
 

@@ -1,9 +1,9 @@
 //! Cluster mode for Cello server.
 //!
 //! Provides:
-//! - Pre-fork multi-process model
+//! - Multi-process model (fork on Unix, spawn on Windows)
 //! - Worker management
-//! - CPU affinity (optional)
+//! - CPU affinity (optional, Unix only)
 //! - Signal handling for cluster
 
 use parking_lot::RwLock;
@@ -55,9 +55,19 @@ impl ClusterConfig {
         Self::new(workers)
     }
 
-    /// Enable CPU affinity.
+    /// Enable CPU affinity (Unix/Linux only).
+    /// On Windows and macOS, this is a no-op with a warning since
+    /// sched_setaffinity is Linux-specific.
     pub fn with_cpu_affinity(mut self) -> Self {
-        self.cpu_affinity = true;
+        #[cfg(target_os = "linux")]
+        {
+            self.cpu_affinity = true;
+        }
+        #[cfg(not(target_os = "linux"))]
+        {
+            eprintln!("Warning: CPU affinity is only supported on Linux. Ignoring cpu_affinity setting.");
+            self.cpu_affinity = false;
+        }
         self
     }
 
@@ -217,14 +227,16 @@ impl ClusterManager {
             let worker_id = self.next_worker_id.fetch_add(1, Ordering::SeqCst);
             let mut info = WorkerInfo::new(worker_id);
 
+            #[cfg(target_os = "linux")]
             if self.config.cpu_affinity {
                 info.cpu_core = Some(i % num_cpus::get());
             }
 
             self.workers.write().insert(worker_id, info);
 
-            // In a real implementation, we would fork here
-            // For now, we just track the worker info
+            // In a real implementation, we would spawn worker processes here.
+            // On Unix, this uses fork(). On Windows, this uses process spawning.
+            // For now, we just track the worker info.
         }
 
         Ok(())
@@ -330,8 +342,8 @@ pub enum ClusterError {
     WorkerNotFound(u32),
     /// Max restarts exceeded
     MaxRestartsExceeded(u32),
-    /// Fork failed
-    ForkFailed(String),
+    /// Worker process spawn failed
+    SpawnFailed(String),
     /// Signal failed
     SignalFailed(String),
 }
@@ -345,7 +357,7 @@ impl std::fmt::Display for ClusterError {
             ClusterError::MaxRestartsExceeded(id) => {
                 write!(f, "Maximum restarts exceeded for worker {id}")
             }
-            ClusterError::ForkFailed(e) => write!(f, "Fork failed: {e}"),
+            ClusterError::SpawnFailed(e) => write!(f, "Worker spawn failed: {e}"),
             ClusterError::SignalFailed(e) => write!(f, "Signal failed: {e}"),
         }
     }
@@ -374,6 +386,30 @@ impl ClusterSignals {
     pub fn install(&self) {
         // In a real implementation, we would set up signal handlers
         // for SIGTERM, SIGINT, SIGHUP, SIGUSR1, SIGUSR2
+    }
+}
+
+/// Signal handler for cluster management (Windows).
+/// On Windows, signal handling is limited to console control events (Ctrl+C, Ctrl+Break).
+/// SIGHUP-based reload and SIGUSR-based custom signals are not available.
+#[cfg(windows)]
+pub struct ClusterSignals {
+    _manager: Arc<ClusterManager>,
+}
+
+#[cfg(windows)]
+impl ClusterSignals {
+    /// Create new signal handler.
+    pub fn new(manager: Arc<ClusterManager>) -> Self {
+        Self { _manager: manager }
+    }
+
+    /// Install signal handlers.
+    /// On Windows, only Ctrl+C and Ctrl+Break are available.
+    /// These are handled by tokio::signal::ctrl_c() in the server loop.
+    pub fn install(&self) {
+        // Windows uses SetConsoleCtrlHandler for Ctrl+C/Ctrl+Break events.
+        // These are handled by tokio::signal::ctrl_c() in the server loop.
     }
 }
 

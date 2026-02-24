@@ -221,7 +221,7 @@ app.enable_telemetry(OpenTelemetryConfig(
 
 ```python
 # OpenAPI/Swagger UI
-app.enable_openapi(title="My API", version="1.0.0")
+app.enable_openapi(title="My API", version="1.0.1")
 # Adds: /docs (Swagger UI), /redoc (ReDoc), /openapi.json
 ```
 

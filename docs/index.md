@@ -29,7 +29,7 @@ hide:
 [:material-package-variant: PyPI](https://pypi.org/project/cello-framework/){ .md-button }
 
 <div class="hero-badges">
-  <code class="badge-version">v1.0.0</code>
+  <code class="badge-version">v1.0.1</code>
   <code class="badge-tests">394 tests passing</code>
   <code class="badge-license">MIT License</code>
   <code class="badge-python">Python 3.12+</code>
@@ -121,7 +121,7 @@ hide:
 
     ---
 
-    **Event Sourcing**, **CQRS**, and **Saga** orchestration built right into the framework. Enterprise architecture, zero boilerplate. _Stable in v1.0.0_.
+    **Event Sourcing**, **CQRS**, and **Saga** orchestration built right into the framework. Enterprise architecture, zero boilerplate. _Stable in v1.0.1_.
 
     [:octicons-arrow-right-24: Event Sourcing](examples/enterprise/event-sourcing.md)
 
@@ -363,11 +363,11 @@ How Cello stacks up against popular Python web frameworks (4 workers, 5 processe
 
 <!-- ===== WHAT'S NEW ===== -->
 
-## :material-creation: What's New in v1.0.0
+## :material-creation: What's New in v1.0.1
 
 <div class="whats-new-box" markdown>
 
-!!! tip "v1.0.0 -- Production Ready"
+!!! tip "v1.0.1 -- Production Ready"
 
     Cello reaches **stable release** with a complete feature set, major performance optimizations, and a semantic versioning commitment. The API is now frozen -- no breaking changes until v2.0.
 
@@ -377,7 +377,7 @@ How Cello stacks up against popular Python web frameworks (4 workers, 5 processe
 
     - :material-feature-search: **Complete Feature Set** -- Routing, middleware, auth, WebSocket, SSE, DI, guards, caching, rate limiting, OpenTelemetry, GraphQL, gRPC, Event Sourcing, CQRS, and Saga patterns -- all in one framework.
 
-    [:material-tag: Full Release Notes](releases/v1.0.0.md){ .md-button .md-button--primary }
+    [:material-tag: Full Release Notes](releases/v1.0.1.md){ .md-button .md-button--primary }
     [:material-book-open-variant: Migration Guide](releases/migration.md){ .md-button }
 
 </div>

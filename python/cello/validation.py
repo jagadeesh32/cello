@@ -9,9 +9,42 @@ try:
 except ImportError:
     HAS_PYDANTIC = False
 
+def _validate_pydantic_params(pydantic_params, request, kwargs):
+    """Shared validation logic for sync and async handlers.
+
+    Returns:
+        (kwargs, errors) tuple. If errors is non-empty, return 422 response.
+    """
+    json_body = None
+    errors = []
+    for name, model in pydantic_params.items():
+        if name in kwargs:
+            continue
+
+        # Parse JSON once
+        if json_body is None:
+            try:
+                json_body = request.json()
+            except (ValueError, TypeError, UnicodeDecodeError, RuntimeError):
+                errors.append({"loc": ["body"], "msg": "Invalid JSON body", "type": "value_error.json"})
+                break
+
+        try:
+            instance = model.model_validate(json_body)
+            kwargs[name] = instance
+        except ValidationError as e:
+            for err in e.errors():
+                errors.append(err)
+        except Exception as e:
+            errors.append({"loc": [name], "msg": str(e), "type": "unknown"})
+
+    return kwargs, errors
+
+
 def wrap_handler_with_validation(handler):
     """
     Wrap a handler with Pydantic validation if type hints are present.
+    Supports both sync and async handlers.
     """
     if not HAS_PYDANTIC:
         return handler
@@ -25,9 +58,8 @@ def wrap_handler_with_validation(handler):
         return handler
 
     # Identify Pydantic params
-    # mapped to: (param_name, PydanticModel)
     pydantic_params = {}
-    
+
     for name, param in sig.parameters.items():
         if name in type_hints:
             annotation = type_hints[name]
@@ -37,51 +69,22 @@ def wrap_handler_with_validation(handler):
     if not pydantic_params:
         return handler
 
+    # Create async wrapper for async handlers
+    if inspect.iscoroutinefunction(handler):
+        @wraps(handler)
+        async def async_wrapper(request, *args, **kwargs):
+            kwargs, errors = _validate_pydantic_params(pydantic_params, request, kwargs)
+            if errors:
+                return Response.json({"detail": errors}, status=422)
+            return await handler(request, *args, **kwargs)
+        return async_wrapper
+
+    # Sync wrapper for sync handlers
     @wraps(handler)
     def wrapper(request, *args, **kwargs):
-        # request is always first arg in Cello handlers
-        
-        # Only parse JSON if we have pydantic params to validate against
-        json_body = None
-        
-        # Validate each pydantic param
-        errors = []
-        for name, model in pydantic_params.items():
-            # If param is already in kwargs (e.g. path param or dependency), skip
-            # But here we assume Pydantic models come from Body.
-            # Compatibility with path params? 
-            # If path param is Pydantic model? Cello path params are strings in request.params
-            # We assume Pydantic models map to Request Body.
-            
-            if name in kwargs: 
-                continue
-
-            # Parse JSON once
-            if json_body is None:
-                try:
-                    # request.json() is exposed by Rust bindings
-                    json_body = request.json()
-                except (ValueError, TypeError, UnicodeDecodeError, RuntimeError):
-                    # Invalid JSON, empty body, or Rust binding error
-                    errors.append({"loc": ["body"], "msg": "Invalid JSON body", "type": "value_error.json"})
-                    break
-
-            try:
-                # model_validate works on dict
-                instance = model.model_validate(json_body)
-                kwargs[name] = instance
-            except ValidationError as e:
-                # Add errors
-                for err in e.errors():
-                    # Prefix location with body/param name?
-                    # err["loc"] is tuple.
-                    errors.append(err)
-            except Exception as e:
-                errors.append({"loc": [name], "msg": str(e), "type": "unknown"})
-
+        kwargs, errors = _validate_pydantic_params(pydantic_params, request, kwargs)
         if errors:
             return Response.json({"detail": errors}, status=422)
-
         return handler(request, *args, **kwargs)
 
     return wrapper

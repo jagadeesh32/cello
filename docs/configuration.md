@@ -1,6 +1,6 @@
 # Configuration
 
-This document covers all configuration options available in Cello v1.0.0.
+This document covers all configuration options available in Cello v1.0.1.
 
 ## Server Configuration
 

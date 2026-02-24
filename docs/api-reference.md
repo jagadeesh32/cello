@@ -1,6 +1,6 @@
 # API Reference
 
-Complete API reference for Cello v1.0.0.
+Complete API reference for Cello v1.0.1.
 
 ## Core Classes
 

@@ -28,7 +28,7 @@ app = App()
 def home(request):
     return {
         "message": "Welcome to Cello!",
-        "version": "1.0.0",
+        "version": "1.0.1",
     }
 
 @app.get("/hello/{name}")
@@ -75,7 +75,7 @@ app = App()
 def home(request):
     return {
         "message": "Welcome to Cello!",
-        "version": "1.0.0",
+        "version": "1.0.1",
     }
 ```
 
@@ -134,7 +134,7 @@ if __name__ == "__main__":
 ```bash
 # Root endpoint
 curl http://127.0.0.1:8000/
-# {"message": "Welcome to Cello!", "version": "1.0.0"}
+# {"message": "Welcome to Cello!", "version": "1.0.1"}
 
 # Path parameter
 curl http://127.0.0.1:8000/hello/Alice

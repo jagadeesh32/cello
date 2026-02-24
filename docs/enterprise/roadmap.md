@@ -281,7 +281,7 @@ class OrderSaga(Saga):
 
 ---
 
-## v1.0.0 - Production Ready (Q1 2026) :material-check-circle:{ .green }
+## v1.0.1 - Production Ready (Q1 2026) :material-check-circle:{ .green }
 
 ### Stable Release
 

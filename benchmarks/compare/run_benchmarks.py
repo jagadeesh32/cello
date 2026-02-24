@@ -248,44 +248,85 @@ def wait_for_server(port: int, timeout: int = 10) -> bool:
 
 
 def kill_port(port: int):
-    """Kill any process listening on the given port."""
-    try:
-        result = subprocess.run(
-            ["lsof", "-ti", f":{port}"],
-            capture_output=True, text=True,
-        )
-        pids = result.stdout.strip().split()
-        for pid in pids:
-            if pid:
-                try:
-                    os.kill(int(pid), signal.SIGKILL)
-                except (ProcessLookupError, ValueError):
-                    pass
-        if pids:
-            time.sleep(0.5)
-    except FileNotFoundError:
+    """Kill any process listening on the given port (cross-platform)."""
+    if sys.platform == "win32":
         try:
-            subprocess.run(["fuser", "-k", f"{port}/tcp"], capture_output=True)
+            result = subprocess.run(
+                ["netstat", "-ano"],
+                capture_output=True, text=True,
+            )
+            for line in result.stdout.splitlines():
+                if f":{port}" in line and "LISTENING" in line:
+                    parts = line.split()
+                    pid = parts[-1]
+                    if pid and pid.isdigit():
+                        try:
+                            subprocess.run(
+                                ["taskkill", "/PID", pid, "/F"],
+                                capture_output=True,
+                            )
+                        except OSError:
+                            pass
             time.sleep(0.5)
         except FileNotFoundError:
             pass
+    else:
+        try:
+            result = subprocess.run(
+                ["lsof", "-ti", f":{port}"],
+                capture_output=True, text=True,
+            )
+            pids = result.stdout.strip().split()
+            for pid in pids:
+                if pid:
+                    try:
+                        os.kill(int(pid), signal.SIGTERM)
+                    except (ProcessLookupError, ValueError):
+                        pass
+            if pids:
+                time.sleep(0.5)
+        except FileNotFoundError:
+            try:
+                subprocess.run(["fuser", "-k", f"{port}/tcp"], capture_output=True)
+                time.sleep(0.5)
+            except FileNotFoundError:
+                pass
 
 
 def count_port_processes(port: int) -> int:
-    """Count how many processes are listening on a port."""
-    try:
-        result = subprocess.run(
-            ["lsof", "-ti", f":{port}"],
-            capture_output=True, text=True,
-        )
-        pids = [p for p in result.stdout.strip().split() if p]
-        return len(pids)
-    except FileNotFoundError:
-        return -1
+    """Count how many processes are listening on a port (cross-platform)."""
+    if sys.platform == "win32":
+        try:
+            result = subprocess.run(
+                ["netstat", "-ano"],
+                capture_output=True, text=True,
+            )
+            count = 0
+            for line in result.stdout.splitlines():
+                if f":{port}" in line and "LISTENING" in line:
+                    count += 1
+            return count
+        except FileNotFoundError:
+            return -1
+    else:
+        try:
+            result = subprocess.run(
+                ["lsof", "-ti", f":{port}"],
+                capture_output=True, text=True,
+            )
+            pids = [p for p in result.stdout.strip().split() if p]
+            return len(pids)
+        except FileNotFoundError:
+            return -1
 
 
 def run_wrk(port: int, duration: int, threads: int, connections: int) -> str:
-    """Run wrk and return its output."""
+    """Run wrk (Unix/macOS/WSL) or a Python fallback (Windows) and return output.
+
+    On Windows, wrk is not natively available. We first try wrk (works if running
+    in WSL or if wrk.exe is on PATH), then fall back to a simple Python HTTP
+    benchmark using concurrent.futures for approximate throughput measurement.
+    """
     cmd = [
         "wrk",
         f"-t{threads}",
@@ -296,9 +337,74 @@ def run_wrk(port: int, duration: int, threads: int, connections: int) -> str:
     ]
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=duration + 30)
-        return result.stdout + result.stderr
-    except subprocess.TimeoutExpired:
-        return ""
+        if result.returncode == 0 or result.stdout:
+            return result.stdout + result.stderr
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        pass
+
+    # Fallback: Python-based HTTP benchmark for Windows or when wrk is missing
+    return _python_http_benchmark(port, duration, threads, connections)
+
+
+def _python_http_benchmark(port: int, duration: int, threads: int, connections: int) -> str:
+    """Simple Python HTTP benchmark fallback when wrk is not available.
+
+    Uses urllib (stdlib) with concurrent.futures to approximate wrk output format.
+    Less accurate than wrk but works cross-platform including Windows.
+    """
+    import concurrent.futures
+    import urllib.request
+    import time as _time
+
+    url = f"http://127.0.0.1:{port}/"
+    total_requests = 0
+    total_errors = 0
+    latencies = []
+    start_time = _time.monotonic()
+    end_time = start_time + duration
+
+    def make_requests():
+        nonlocal total_requests, total_errors
+        local_requests = 0
+        local_errors = 0
+        local_latencies = []
+        while _time.monotonic() < end_time:
+            req_start = _time.monotonic()
+            try:
+                urllib.request.urlopen(url, timeout=5)
+                local_requests += 1
+                local_latencies.append(_time.monotonic() - req_start)
+            except Exception:
+                local_errors += 1
+        return local_requests, local_errors, local_latencies
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=threads) as executor:
+        futures = [executor.submit(make_requests) for _ in range(threads)]
+        for f in concurrent.futures.as_completed(futures):
+            reqs, errs, lats = f.result()
+            total_requests += reqs
+            total_errors += errs
+            latencies.extend(lats)
+
+    elapsed = _time.monotonic() - start_time
+    rps = total_requests / elapsed if elapsed > 0 else 0
+    avg_lat = (sum(latencies) / len(latencies) * 1000) if latencies else 0
+
+    latencies.sort()
+    p50 = latencies[len(latencies) // 2] * 1000 if latencies else 0
+    p99 = latencies[int(len(latencies) * 0.99)] * 1000 if latencies else 0
+
+    return (
+        f"Running {duration}s test @ http://127.0.0.1:{port}/\n"
+        f"  {threads} threads and {connections} connections\n"
+        f"  (Python fallback benchmark - wrk not available)\n"
+        f"  Avg Latency: {avg_lat:.2f}ms\n"
+        f"  50%: {p50:.2f}ms\n"
+        f"  99%: {p99:.2f}ms\n"
+        f"Requests/sec: {rps:.2f}\n"
+        f"  {total_requests} requests in {elapsed:.2f}s\n"
+        f"  Non-2xx or errors: {total_errors}\n"
+    )
 
 
 def run_single_benchmark(

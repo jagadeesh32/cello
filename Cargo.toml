@@ -1,6 +1,6 @@
 [package]
 name = "cello-framework"
-version = "1.0.0"
+version = "1.0.1"
 edition = "2021"
 description = "Ultra-fast Rust-powered Python async web framework"
 license = "MIT"
@@ -96,13 +96,12 @@ num_cpus = "1"
 # Route constraints
 regex = "1"
 
-# Unix process management (for pre-fork)
-libc = "0.2"
-
 # HTTP/2 support
 h2 = "0.4"
 
 # Prometheus metrics
+# Note: "process" feature uses /proc on Linux for process metrics.
+# It's a no-op on non-Linux but compiles fine cross-platform.
 prometheus = { version = "0.13", features = ["process"] }
 
 # Date/time handling for exception timestamps
@@ -144,6 +143,9 @@ full = ["postgres", "graphql", "grpc"]
 [dev-dependencies]
 reqwest = { version = "0.11", features = ["blocking", "json", "multipart"] }
 tokio-test = "0.4"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
 
 [profile.release]
 lto = "fat"

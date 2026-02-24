@@ -153,7 +153,7 @@ Any `dict` returned from a handler is automatically serialized to JSON. Cello us
 def status(request):
     return {
         "status": "healthy",
-        "version": "1.0.0",
+        "version": "1.0.1",
         "uptime_seconds": 3600,
     }
 ```
@@ -358,7 +358,7 @@ next_id = 1
 
 @app.get("/")
 def home(request):
-    return {"message": "Welcome to My API", "version": "1.0.0"}
+    return {"message": "Welcome to My API", "version": "1.0.1"}
 
 @app.get("/items")
 def list_items(request):

@@ -140,7 +140,7 @@ CMD ["python", "app.py", "--host", "0.0.0.0", "--port", "8080", "--workers", "4"
 ### requirements.txt
 
 ```
-cello-framework>=1.0.0
+cello-framework>=1.0.1
 ```
 
 ### Docker Compose

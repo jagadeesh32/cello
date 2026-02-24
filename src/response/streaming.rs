@@ -516,7 +516,9 @@ mod tests {
 
     #[test]
     fn test_file_body() {
-        let body = FileBody::new("/tmp/test.txt")
+        let temp_path = std::env::temp_dir().join("test.txt");
+        let temp_str = temp_path.to_str().expect("temp dir should be valid UTF-8");
+        let body = FileBody::new(temp_str)
             .offset(100)
             .length(500)
             .content_type("text/plain");
