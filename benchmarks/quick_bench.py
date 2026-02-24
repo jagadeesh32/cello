@@ -41,7 +41,7 @@ def run_server():
         return {
             "id": 1,
             "name": "Cello Framework",
-            "version": "1.0.0",
+            "version": "1.0.1",
             "features": ["fast", "async", "rust-powered"]
         }
     

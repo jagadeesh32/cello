@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Cluster Mode & Production Deployment Demo for Cello v1.0.0.
+Cluster Mode & Production Deployment Demo for Cello v1.0.1.
 
 This example demonstrates production deployment configurations including:
 - Cluster mode (multi-worker processes)
@@ -72,10 +72,14 @@ cluster_config_manual = ClusterConfig(
 )
 
 # TLS configuration - example (requires actual certificates)
+# Place your certificates in a 'certs/' directory relative to your project,
+# or use platform-appropriate paths.
+import os as _os
+_certs_dir = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "certs")
 tls_config = TlsConfig(
-    cert_path="/etc/ssl/certs/server.crt",
-    key_path="/etc/ssl/private/server.key",
-    ca_path="/etc/ssl/certs/ca.crt",  # For client cert verification
+    cert_path=_os.path.join(_certs_dir, "server.crt"),
+    key_path=_os.path.join(_certs_dir, "server.key"),
+    ca_path=_os.path.join(_certs_dir, "ca.crt"),  # For client cert verification
     min_version="1.2",
     max_version="1.3",
     require_client_cert=False,
@@ -108,7 +112,7 @@ def home(request):
     """Home endpoint with cluster information."""
     return {
         "message": "Cello Cluster Mode Demo",
-        "version": "1.0.0",
+        "version": "1.0.1",
         "deployment": {
             "mode": "cluster",
             "features": [
@@ -209,11 +213,18 @@ def show_config(request):
 def worker_info(request):
     """Display worker process information."""
     import os
-    
+
+    def _safe_getppid() -> int:
+        """Get parent PID, returning -1 on platforms where it's not reliable."""
+        try:
+            return os.getppid()
+        except (AttributeError, OSError):
+            return -1
+
     return {
         "worker": {
             "pid": os.getpid(),
-            "ppid": os.getppid(),
+            "ppid": _safe_getppid(),
         },
         "cluster_config": {
             "workers": cluster_config.workers,

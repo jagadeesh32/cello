@@ -49,7 +49,7 @@ app.enable_prometheus(endpoint="/metrics", namespace="cello", subsystem="api")
 
 
 # =============================================================================
-# DEPENDENCY INJECTION (v1.0.0)
+# DEPENDENCY INJECTION (v1.0.1)
 # =============================================================================
 
 # Register singletons - shared across all requests
@@ -68,20 +68,20 @@ app.register_singleton("cache", {
 
 app.register_singleton("config", {
     "debug": True,
-    "version": "1.0.0",
+    "version": "1.0.1",
     "env": "development"
 })
 
 
 # =============================================================================
-# TEMPLATE ENGINE (v1.0.0)
+# TEMPLATE ENGINE (v1.0.1)
 # =============================================================================
 
 templates = TemplateEngine("templates")
 
 
 # =============================================================================
-# BACKGROUND TASKS (v1.0.0)
+# BACKGROUND TASKS (v1.0.1)
 # =============================================================================
 
 def send_email_task(to: str, subject: str):
@@ -108,7 +108,7 @@ def home(request):
     """API Home - Lists all available endpoints."""
     return {
         "message": "Welcome to Cello Framework - ALL Features Demo!",
-        "version": "1.0.0",
+        "version": "1.0.1",
         "features": {
             "core": ["/routing", "/async", "/blueprints", "/sse", "/multipart"],
             "advanced": ["/auth", "/csrf", "/sessions", "/security"],
@@ -126,7 +126,7 @@ def home(request):
 @app.get("/health", tags=["Core"], summary="Health Check")
 def health_check(request):
     """Health check endpoint."""
-    return {"status": "healthy", "framework": "cello", "version": "1.0.0"}
+    return {"status": "healthy", "framework": "cello", "version": "1.0.1"}
 
 
 # =============================================================================
@@ -431,7 +431,7 @@ def render_template(request):
         {
             "name": name,
             "framework": "Cello",
-            "version": "1.0.0",
+            "version": "1.0.1",
             "features": ["Dependency Injection", "Guards", "Templates", "Background Tasks"]
         }
     )
@@ -569,7 +569,7 @@ def server_error_demo(request):
 # Enable OpenAPI (Auto-generated from all routes above!)
 # =============================================================================
 
-app.enable_openapi(title="Cello ALL Features API", version="1.0.0")
+app.enable_openapi(title="Cello ALL Features API", version="1.0.1")
 
 
 # =============================================================================
@@ -586,7 +586,7 @@ if __name__ == "__main__":
     print("    - Query:       /search?q=hello&page=1")
     print("    - Responses:   /response/json, /response/html, /response/text")
     print("    - Blueprints:  /items, /api/v2")
-    print("\n  v1.0.0s:")
+    print("\n  v1.0.1s:")
     print("    - Swagger UI:  http://127.0.0.1:8080/docs")
     print("    - ReDoc:       http://127.0.0.1:8080/redoc")
     print("    - Metrics:     http://127.0.0.1:8080/metrics")

@@ -1,6 +1,6 @@
 # Advanced Features
 
-Cello v1.0.0 includes advanced features for production deployments.
+Cello v1.0.1 includes advanced features for production deployments.
 
 ## Overview
 

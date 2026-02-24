@@ -314,13 +314,37 @@ impl StaticFilesMiddleware {
             path.push(decoded);
         }
 
-        // Canonicalize to prevent traversal via symlinks or other tricks
+        // Canonicalize to prevent traversal via symlinks or other tricks.
+        // The security invariant is: canonical(requested) must be within canonical(root).
         let canonical = path.canonicalize().ok()?;
         let root_canonical = self.config.root_dir.canonicalize().ok()?;
 
-        // Verify path is within root
-        if !canonical.starts_with(&root_canonical) {
-            return None;
+        // Verify path is within root.
+        // On Windows, canonicalize() may return UNC paths (\\?\C:\...) for one path
+        // but not the other, causing starts_with() to fail even for valid paths.
+        // We normalize both to their string forms, stripping the UNC prefix if present.
+        #[cfg(windows)]
+        {
+            let canonical_str = canonical.to_string_lossy();
+            let root_str = root_canonical.to_string_lossy();
+
+            // Strip the \\?\ UNC prefix for consistent comparison
+            let norm_canonical = canonical_str
+                .strip_prefix(r"\\?\")
+                .unwrap_or(&canonical_str);
+            let norm_root = root_str
+                .strip_prefix(r"\\?\")
+                .unwrap_or(&root_str);
+
+            if !norm_canonical.starts_with(norm_root) {
+                return None;
+            }
+        }
+        #[cfg(not(windows))]
+        {
+            if !canonical.starts_with(&root_canonical) {
+                return None;
+            }
         }
 
         Some(canonical)

@@ -145,9 +145,9 @@ cluster = ClusterConfig(
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `processes` | `int` | `1` | Number of worker processes to fork |
+| `processes` | `int` | `1` | Number of worker processes |
 
-Cluster mode forks multiple processes, each running its own Tokio runtime. Combined with the `workers` parameter, this provides `processes x workers` concurrent execution contexts.
+Cluster mode spawns multiple processes, each running its own Tokio runtime. Combined with the `workers` parameter, this provides `processes x workers` concurrent execution contexts.
 
 ```python
 app.run(
@@ -158,6 +158,19 @@ app.run(
 )
 # Total: 4 processes x 4 threads = 16 concurrent contexts
 ```
+
+### Platform-Specific Worker Behavior
+
+Cello uses different strategies depending on the operating system:
+
+| Platform | Strategy | Details |
+|----------|----------|---------|
+| Unix/Linux/macOS | `os.fork()` + `SO_REUSEPORT` | Workers inherit the listening socket from the parent. Best performance. |
+| Windows | Subprocess re-execution | Each worker re-executes the user's script with `CELLO_WORKER=1` env var set, ensuring all routes and middleware are registered. Same pattern as Gunicorn/Uvicorn. |
+
+The strategy is selected automatically. Application code does not need to change between platforms.
+
+> **Reserved environment variable:** `CELLO_WORKER=1` is set internally by Cello on Windows worker subprocesses. Do not set this variable manually.
 
 ---
 

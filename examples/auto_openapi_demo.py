@@ -28,7 +28,7 @@ def home(request):
     """Returns welcome message and API info."""
     return {
         "message": "Welcome to Cello API!",
-        "version": "1.0.0",
+        "version": "1.0.1",
         "docs": "/docs"
     }
 
@@ -103,7 +103,7 @@ def create_item(request):
 # Enable OpenAPI - spec will be auto-generated from routes above!
 # =============================================================================
 
-app.enable_openapi(title="My Auto-Generated API", version="1.0.0")
+app.enable_openapi(title="My Auto-Generated API", version="1.0.1")
 
 
 

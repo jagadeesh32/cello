@@ -22,7 +22,7 @@ def home(request):
     """Root endpoint returning a welcome message."""
     return {
         "message": "Welcome to Cello!",
-        "version": "1.0.0",
+        "version": "1.0.1",
         "docs": "/docs",
     }
 

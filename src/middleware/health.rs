@@ -562,11 +562,11 @@ mod tests {
     #[test]
     fn test_health_report() {
         let report = HealthReport::new()
-            .with_version("1.0.0")
+            .with_version("1.0.1")
             .with_check(HealthCheckResult::up("test"));
 
         assert_eq!(report.status, HealthStatus::Up);
-        assert_eq!(report.version, Some("1.0.0".to_string()));
+        assert_eq!(report.version, Some("1.0.1".to_string()));
         assert!(report.checks.contains_key("test"));
     }
 

@@ -7,6 +7,8 @@ description: Deploying Cello applications on Kubernetes with Deployments, Servic
 
 This guide provides Kubernetes manifests for deploying Cello applications, including Deployments, Services, Ingress, HPA, ConfigMaps, and Secrets.
 
+> **Note on multi-worker mode:** Kubernetes pods run Linux containers, so Cello's multi-worker mode uses the `os.fork()` + `SO_REUSEPORT` strategy for best performance. The `CELLO_WORKER` environment variable is reserved for internal use by Cello's worker management on Windows and should not be set in ConfigMaps or pod specs.
+
 ---
 
 ## Deployment

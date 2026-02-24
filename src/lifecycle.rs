@@ -76,14 +76,18 @@ impl Signal {
         }
     }
 
+    /// Get the raw signal number.
+    /// On non-Unix platforms, these are conventional numeric values.
+    /// SIGHUP, SIGUSR1, and SIGUSR2 are not supported on Windows;
+    /// their values here are placeholders for serialization purposes only.
     #[cfg(not(unix))]
     pub fn as_raw(&self) -> i32 {
         match self {
             Signal::SIGTERM => 15,
             Signal::SIGINT => 2,
-            Signal::SIGHUP => 1,
-            Signal::SIGUSR1 => 10,
-            Signal::SIGUSR2 => 12,
+            Signal::SIGHUP => 1,   // Not supported on Windows
+            Signal::SIGUSR1 => 10, // Not supported on Windows
+            Signal::SIGUSR2 => 12, // Not supported on Windows
         }
     }
 
@@ -96,6 +100,19 @@ impl Signal {
             "SIGUSR1" | "USR1" => Some(Signal::SIGUSR1),
             "SIGUSR2" | "USR2" => Some(Signal::SIGUSR2),
             _ => None,
+        }
+    }
+
+    /// Returns whether this signal is supported on the current platform.
+    /// On non-Unix platforms, only SIGTERM and SIGINT have meaningful behavior
+    /// (mapped to Windows console control events). SIGHUP, SIGUSR1, and SIGUSR2
+    /// are Unix-specific and are no-ops on other platforms.
+    pub fn is_supported(&self) -> bool {
+        #[cfg(unix)]
+        { true }
+        #[cfg(not(unix))]
+        {
+            matches!(self, Signal::SIGTERM | Signal::SIGINT)
         }
     }
 }
@@ -557,10 +574,19 @@ impl PyLifecycleHooks {
     }
 
     /// Register a signal handler.
+    /// On Windows, only SIGTERM and SIGINT are supported.
+    /// Registering SIGHUP, SIGUSR1, or SIGUSR2 on Windows will emit a warning and be ignored.
     pub fn on_signal(&self, signal: &str, handler: PyObject) -> PyResult<()> {
         let sig = Signal::from_str(signal).ok_or_else(|| {
             pyo3::exceptions::PyValueError::new_err(format!("Unknown signal: {signal}"))
         })?;
+        if !sig.is_supported() {
+            eprintln!(
+                "Warning: Signal {} is not supported on this platform and will be ignored",
+                signal
+            );
+            return Ok(());
+        }
         self.signals.register(sig, handler);
         Ok(())
     }
@@ -612,6 +638,31 @@ mod tests {
         {
             assert_eq!(Signal::SIGTERM.as_raw(), libc::SIGTERM);
             assert_eq!(Signal::SIGINT.as_raw(), libc::SIGINT);
+        }
+        #[cfg(not(unix))]
+        {
+            assert_eq!(Signal::SIGTERM.as_raw(), 15);
+            assert_eq!(Signal::SIGINT.as_raw(), 2);
+        }
+    }
+
+    #[test]
+    fn test_signal_is_supported() {
+        // SIGTERM and SIGINT should be supported on all platforms
+        assert!(Signal::SIGTERM.is_supported());
+        assert!(Signal::SIGINT.is_supported());
+
+        #[cfg(unix)]
+        {
+            assert!(Signal::SIGHUP.is_supported());
+            assert!(Signal::SIGUSR1.is_supported());
+            assert!(Signal::SIGUSR2.is_supported());
+        }
+        #[cfg(not(unix))]
+        {
+            assert!(!Signal::SIGHUP.is_supported());
+            assert!(!Signal::SIGUSR1.is_supported());
+            assert!(!Signal::SIGUSR2.is_supported());
         }
     }
 }

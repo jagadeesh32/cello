@@ -482,6 +482,11 @@ impl Server {
             pyo3::exceptions::PyRuntimeError::new_err(format!("Failed to create socket: {e}"))
         })?;
 
+        // SO_REUSEPORT: Unix only. Allows multiple processes to bind to the same port
+        // with kernel-level load balancing. On Windows, SO_REUSEADDR (set below) allows
+        // the port to be reused after a process exits, but does not provide load balancing
+        // across concurrent processes. Windows multi-process mode relies on each process
+        // racing to accept connections.
         #[cfg(unix)]
         socket.set_reuse_port(true).map_err(|e| {
             pyo3::exceptions::PyRuntimeError::new_err(format!("Failed to set SO_REUSEPORT: {e}"))
@@ -518,13 +523,26 @@ impl Server {
 
         let mut shutdown_rx = shutdown.subscribe();
 
-        // Listen for SIGTERM (systemd, process manager, multi-worker shutdown)
+        // Listen for termination signals (SIGTERM on Unix, ctrl_c fallback on Windows)
         let shutdown_sigterm = shutdown.clone();
         tokio::task::spawn(async move {
             #[cfg(unix)]
-            if let Ok(mut sig) = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
-                let _ = sig.recv().await;
-                shutdown_sigterm.shutdown();
+            {
+                if let Ok(mut sig) = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
+                    let _ = sig.recv().await;
+                    shutdown_sigterm.shutdown();
+                }
+            }
+            #[cfg(windows)]
+            {
+                // On Windows, SIGTERM is not delivered to processes.
+                // The primary shutdown mechanism is ctrl_c (handled in the main select! loop).
+                // This task provides a secondary ctrl_c listener in case the main loop's
+                // ctrl_c branch is not reached (e.g., during a long-running accept).
+                // Windows process managers use CtrlBreak/CtrlC events, both handled by ctrl_c().
+                if let Ok(()) = tokio::signal::ctrl_c().await {
+                    shutdown_sigterm.shutdown();
+                }
             }
         });
 

@@ -9,6 +9,27 @@ All notable changes to the Cello Framework are documented here. Each version lin
 
 ---
 
+## v1.0.1 -- Cross-Platform & Compatibility Patch
+
+**Cross-Platform Fixes:**
+- Windows multi-worker: subprocess re-execution (`CELLO_WORKER=1`) instead of broken `multiprocessing.Process`
+- Windows signal handling: `SIGTERM` wrapped in `try/except`, platform validation for signals
+- Windows static files: UNC path normalization fix
+- Linux-only CPU affinity: gated with warning on other platforms
+- ARM JSON: `serde_json` fallback for non-SIMD architectures
+
+**Compatibility Fixes:**
+- Async handler validation: `wrap_handler_with_validation` now supports async handlers
+- Async guard wrappers: `_apply_guards` creates async/sync wrappers based on handler type
+- Async cache decorator: `cache()` now supports async handlers
+- Blueprint validation & guards: Blueprint route decorators now support `guards` parameter and validation
+- Guards exported in `__all__`: `RoleGuard`, `PermissionGuard`, `Authenticated`, `And`, `Or`, `Not`, `GuardError`, `ForbiddenError`, `UnauthorizedError`
+- Database exports: `Database`, `Redis`, `Transaction` added to `__all__`
+
+[Full release notes](v1.0.1.md)
+
+---
+
 ## v1.0.0 -- Production Ready
 
 - First stable release with semantic versioning guarantees
@@ -29,7 +50,7 @@ All notable changes to the Cello Framework are documented here. Each version lin
 - Added Event Sourcing with Aggregate base class, event replay, and snapshots
 - Added CQRS with Command/Query separation, dedicated buses, and event-driven sync
 - Added Saga Pattern for distributed transaction coordination with compensation logic
-- Added EventStoreConfig, CqrsConfig, and SagaConfig configuration classes
+- Added EventSourcingConfig, CqrsConfig, and SagaConfig configuration classes
 - Fixed GraphQL subscription disconnects under high throughput
 - Fixed gRPC reflection not listing methods after hot reload
 - Fixed Kafka consumer group rebalancing causing duplicate processing

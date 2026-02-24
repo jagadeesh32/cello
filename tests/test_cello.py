@@ -1039,10 +1039,10 @@ def test_dependency_injection_registration():
 
 
 def test_version():
-    """Test that version is 1.0.0."""
+    """Test that version is 1.0.1."""
     import cello
 
-    assert cello.__version__ == "1.0.0"
+    assert cello.__version__ == "1.0.1"
 
 
 def test_all_exports():
@@ -1208,12 +1208,12 @@ def test_enable_openapi():
     from cello import App
 
     app = App()
-    result = app.enable_openapi(title="Test API", version="1.0.0")
+    result = app.enable_openapi(title="Test API", version="1.0.1")
     assert result is None
 
 
 def test_enable_openapi_default_version():
-    """Test that OpenAPI defaults to v1.0.0."""
+    """Test that OpenAPI defaults to v1.0.1."""
     from cello import App
 
     app = App()
@@ -2139,7 +2139,7 @@ def test_app_with_all_v080_features():
     # Register routes
     @app.get("/")
     def home(req):
-        return {"version": "1.0.0"}
+        return {"version": "1.0.1"}
 
     @app.post("/data")
     def create_data(req):
@@ -2200,10 +2200,10 @@ def test_v080_all_exports():
 
 
 def test_version_v090():
-    """Test that version is 1.0.0 (updated from 0.9.0)."""
+    """Test that version is 1.0.1 (updated from 0.9.0)."""
     import cello
 
-    assert cello.__version__ == "1.0.0"
+    assert cello.__version__ == "1.0.1"
 
 
 def test_v090_exports_in_all():
@@ -2724,7 +2724,7 @@ def test_app_with_all_v090_features():
     # Register routes
     @app.get("/")
     def home(req):
-        return {"version": "1.0.0"}
+        return {"version": "1.0.1"}
 
     # Verify route handler was registered
     assert callable(home)
@@ -3986,10 +3986,10 @@ async def test_consumer_with_sqs_config():
 
 
 def test_version_v0100():
-    """Test that version is 1.0.0."""
+    """Test that version is 1.0.1."""
     import cello
 
-    assert cello.__version__ == "1.0.0"
+    assert cello.__version__ == "1.0.1"
 
 
 def test_v0100_exports_in_all():
@@ -4330,7 +4330,7 @@ def test_app_with_all_v0100_features():
     # Register routes
     @app.get("/")
     def home(req):
-        return {"version": "1.0.0"}
+        return {"version": "1.0.1"}
 
     # Verify route handler was registered
     assert callable(home)
@@ -5456,7 +5456,7 @@ def test_saga_error_creation():
 
 
 # =============================================================================
-# v1.0.0 Edge Case and Security Tests
+# v1.0.1 Edge Case and Security Tests
 # =============================================================================
 
 

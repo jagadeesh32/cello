@@ -6,19 +6,36 @@
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyTuple};
 
-/// Parse JSON string to serde_json::Value using SIMD acceleration.
+/// Parse JSON string to serde_json::Value.
+/// Uses SIMD acceleration on x86_64 and aarch64 (NEON), falls back to serde_json
+/// on other architectures for maximum cross-platform compatibility.
 #[inline]
 pub fn parse_json(input: &str) -> Result<serde_json::Value, String> {
-    // simd-json requires mutable input, so we need to copy
-    let mut input_bytes = input.as_bytes().to_vec();
-
-    simd_json::serde::from_slice(&mut input_bytes).map_err(|e| format!("JSON parse error: {e}"))
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64", target_arch = "aarch64"))]
+    {
+        // simd-json requires mutable input, so we need to copy
+        let mut input_bytes = input.as_bytes().to_vec();
+        simd_json::serde::from_slice(&mut input_bytes)
+            .map_err(|e| format!("JSON parse error: {e}"))
+    }
+    #[cfg(not(any(target_arch = "x86", target_arch = "x86_64", target_arch = "aarch64")))]
+    {
+        serde_json::from_str(input).map_err(|e| format!("JSON parse error: {e}"))
+    }
 }
 
-/// Parse JSON bytes to serde_json::Value using SIMD acceleration.
+/// Parse JSON bytes to serde_json::Value.
+/// Uses SIMD acceleration where available, serde_json fallback otherwise.
 #[inline]
 pub fn parse_json_bytes(input: &mut [u8]) -> Result<serde_json::Value, String> {
-    simd_json::serde::from_slice(input).map_err(|e| format!("JSON parse error: {e}"))
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64", target_arch = "aarch64"))]
+    {
+        simd_json::serde::from_slice(input).map_err(|e| format!("JSON parse error: {e}"))
+    }
+    #[cfg(not(any(target_arch = "x86", target_arch = "x86_64", target_arch = "aarch64")))]
+    {
+        serde_json::from_slice(input).map_err(|e| format!("JSON parse error: {e}"))
+    }
 }
 
 /// Serialize a serde_json::Value to JSON string.

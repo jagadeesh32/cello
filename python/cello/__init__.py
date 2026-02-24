@@ -55,6 +55,18 @@ Example:
 
 from .validation import wrap_handler_with_validation
 from .database import transactional, Database, Redis, Transaction
+from .guards import (
+    Guard,
+    Role as RoleGuard,
+    Permission as PermissionGuard,
+    Authenticated,
+    And,
+    Or,
+    Not,
+    GuardError,
+    ForbiddenError,
+    UnauthorizedError,
+)
 from cello._cello import (
     Blueprint as _RustBlueprint,
 )
@@ -226,6 +238,17 @@ __all__ = [
     "TemplateEngine",
     "Depends",
     "cache",
+    # Guards (RBAC)
+    "Guard",
+    "RoleGuard",
+    "PermissionGuard",
+    "Authenticated",
+    "And",
+    "Or",
+    "Not",
+    "GuardError",
+    "ForbiddenError",
+    "UnauthorizedError",
     # v0.7.0 - Enterprise features
     "OpenTelemetryConfig",
     "HealthCheckConfig",
@@ -233,6 +256,9 @@ __all__ = [
     "GraphQLConfig",
     # v0.8.0 - Data Layer features
     "RedisConfig",
+    "Database",
+    "Redis",
+    "Transaction",
     "transactional",
     # v0.9.0 - API Protocol features
     "GrpcConfig",
@@ -249,7 +275,7 @@ __all__ = [
     "validate_rate_limit_config",
     "validate_tls_config",
 ]
-__version__ = "1.0.0"
+__version__ = "1.0.1"
 
 
 class Blueprint:
@@ -279,39 +305,44 @@ class Blueprint:
         """Get the blueprint's name."""
         return self._bp.name
 
-    def get(self, path: str):
+    def get(self, path: str, guards: list = None):
         """Register a GET route."""
         def decorator(func):
-            self._bp.get(path, func)
-            return func
+            wrapped = _apply_guards(wrap_handler_with_validation(func), guards)
+            self._bp.get(path, wrapped)
+            return wrapped
         return decorator
 
-    def post(self, path: str):
+    def post(self, path: str, guards: list = None):
         """Register a POST route."""
         def decorator(func):
-            self._bp.post(path, func)
-            return func
+            wrapped = _apply_guards(wrap_handler_with_validation(func), guards)
+            self._bp.post(path, wrapped)
+            return wrapped
         return decorator
 
-    def put(self, path: str):
+    def put(self, path: str, guards: list = None):
         """Register a PUT route."""
         def decorator(func):
-            self._bp.put(path, func)
-            return func
+            wrapped = _apply_guards(wrap_handler_with_validation(func), guards)
+            self._bp.put(path, wrapped)
+            return wrapped
         return decorator
 
-    def delete(self, path: str):
+    def delete(self, path: str, guards: list = None):
         """Register a DELETE route."""
         def decorator(func):
-            self._bp.delete(path, func)
-            return func
+            wrapped = _apply_guards(wrap_handler_with_validation(func), guards)
+            self._bp.delete(path, wrapped)
+            return wrapped
         return decorator
 
-    def patch(self, path: str):
+    def patch(self, path: str, guards: list = None):
         """Register a PATCH route."""
         def decorator(func):
-            self._bp.patch(path, func)
-            return func
+            wrapped = _apply_guards(wrap_handler_with_validation(func), guards)
+            self._bp.patch(path, wrapped)
+            return wrapped
         return decorator
 
     def register(self, blueprint: "Blueprint"):
@@ -321,6 +352,45 @@ class Blueprint:
     def get_all_routes(self):
         """Get all routes including from nested blueprints."""
         return self._bp.get_all_routes()
+
+
+def _worker_process_entry():
+    """Placeholder - Windows workers use subprocess re-execution instead.
+
+    On Windows (spawn-based multiprocessing), PyO3 Rust objects cannot be
+    pickled/serialized across process boundaries. Instead, we use subprocess
+    to re-execute the user's script with CELLO_WORKER=1 env var, which forces
+    single-worker mode. This ensures all routes are properly registered in
+    each worker process.
+    """
+    pass
+
+
+def _apply_guards(handler, guards):
+    """Wrap a handler with guard checks if guards are provided.
+
+    Supports both sync and async handlers. Returns the handler unchanged
+    if no guards are specified.
+    """
+    if not guards:
+        return handler
+
+    import functools
+    import inspect
+    from .guards import verify_guards
+
+    if inspect.iscoroutinefunction(handler):
+        @functools.wraps(handler)
+        async def async_guard_wrapper(request, *args, **kwargs):
+            verify_guards(guards, request)
+            return await handler(request, *args, **kwargs)
+        return async_guard_wrapper
+    else:
+        @functools.wraps(handler)
+        def guard_wrapper(request, *args, **kwargs):
+            verify_guards(guards, request)
+            return handler(request, *args, **kwargs)
+        return guard_wrapper
 
 
 class App:
@@ -383,26 +453,7 @@ class App:
                 return {"message": f"Hello, {request.params['name']}!"}
         """
         def decorator(func):
-            wrapped = wrap_handler_with_validation(func)
-            
-            if guards:
-                from .guards import verify_guards
-                original_handler = wrapped
-                
-                # We need to wrap again to check guards
-                # Note: Rust calls the handler with (request, ...) so signature is preserved?
-                # wrap_handler_with_validation preserves signature mostly but handles args.
-                # Here we just need to intercept.
-                
-                def guard_wrapper(request, *args, **kwargs):
-                    verify_guards(guards, request)
-                    return original_handler(request, *args, **kwargs)
-                
-                # Copy metadata
-                import functools
-                functools.update_wrapper(guard_wrapper, original_handler)
-                wrapped = guard_wrapper
-
+            wrapped = _apply_guards(wrap_handler_with_validation(func), guards)
             self._app.get(path, wrapped)
             self._register_route("GET", path, func, tags, summary, description)
             return wrapped
@@ -411,17 +462,7 @@ class App:
     def post(self, path: str, tags: list = None, summary: str = None, description: str = None, guards: list = None):
         """Register a POST route."""
         def decorator(func):
-            wrapped = wrap_handler_with_validation(func)
-            if guards:
-                from .guards import verify_guards
-                original_handler = wrapped
-                def guard_wrapper(request, *args, **kwargs):
-                    verify_guards(guards, request)
-                    return original_handler(request, *args, **kwargs)
-                import functools
-                functools.update_wrapper(guard_wrapper, original_handler)
-                wrapped = guard_wrapper
-
+            wrapped = _apply_guards(wrap_handler_with_validation(func), guards)
             self._app.post(path, wrapped)
             self._register_route("POST", path, func, tags, summary, description)
             return wrapped
@@ -430,17 +471,7 @@ class App:
     def put(self, path: str, tags: list = None, summary: str = None, description: str = None, guards: list = None):
         """Register a PUT route."""
         def decorator(func):
-            wrapped = wrap_handler_with_validation(func)
-            if guards:
-                from .guards import verify_guards
-                original_handler = wrapped
-                def guard_wrapper(request, *args, **kwargs):
-                    verify_guards(guards, request)
-                    return original_handler(request, *args, **kwargs)
-                import functools
-                functools.update_wrapper(guard_wrapper, original_handler)
-                wrapped = guard_wrapper
-
+            wrapped = _apply_guards(wrap_handler_with_validation(func), guards)
             self._app.put(path, wrapped)
             self._register_route("PUT", path, func, tags, summary, description)
             return wrapped
@@ -449,17 +480,7 @@ class App:
     def delete(self, path: str, tags: list = None, summary: str = None, description: str = None, guards: list = None):
         """Register a DELETE route."""
         def decorator(func):
-            wrapped = wrap_handler_with_validation(func)
-            if guards:
-                from .guards import verify_guards
-                original_handler = wrapped
-                def guard_wrapper(request, *args, **kwargs):
-                    verify_guards(guards, request)
-                    return original_handler(request, *args, **kwargs)
-                import functools
-                functools.update_wrapper(guard_wrapper, original_handler)
-                wrapped = guard_wrapper
-
+            wrapped = _apply_guards(wrap_handler_with_validation(func), guards)
             self._app.delete(path, wrapped)
             self._register_route("DELETE", path, func, tags, summary, description)
             return wrapped
@@ -468,17 +489,7 @@ class App:
     def patch(self, path: str, tags: list = None, summary: str = None, description: str = None, guards: list = None):
         """Register a PATCH route."""
         def decorator(func):
-            wrapped = wrap_handler_with_validation(func)
-            if guards:
-                from .guards import verify_guards
-                original_handler = wrapped
-                def guard_wrapper(request, *args, **kwargs):
-                    verify_guards(guards, request)
-                    return original_handler(request, *args, **kwargs)
-                import functools
-                functools.update_wrapper(guard_wrapper, original_handler)
-                wrapped = guard_wrapper
-
+            wrapped = _apply_guards(wrap_handler_with_validation(func), guards)
             self._app.patch(path, wrapped)
             self._register_route("PATCH", path, func, tags, summary, description)
             return wrapped
@@ -487,17 +498,7 @@ class App:
     def options(self, path: str, guards: list = None):
         """Register an OPTIONS route."""
         def decorator(func):
-            wrapped = func
-            if guards:
-                 from .guards import verify_guards
-                 original_handler = wrapped
-                 def guard_wrapper(request, *args, **kwargs):
-                     verify_guards(guards, request)
-                     return original_handler(request, *args, **kwargs)
-                 import functools
-                 functools.update_wrapper(guard_wrapper, original_handler)
-                 wrapped = guard_wrapper
-                 
+            wrapped = _apply_guards(func, guards)
             self._app.options(path, wrapped)
             return wrapped
         return decorator
@@ -505,17 +506,7 @@ class App:
     def head(self, path: str, guards: list = None):
         """Register a HEAD route."""
         def decorator(func):
-            wrapped = func
-            if guards:
-                 from .guards import verify_guards
-                 original_handler = wrapped
-                 def guard_wrapper(request, *args, **kwargs):
-                     verify_guards(guards, request)
-                     return original_handler(request, *args, **kwargs)
-                 import functools
-                 functools.update_wrapper(guard_wrapper, original_handler)
-                 wrapped = guard_wrapper
-                 
+            wrapped = _apply_guards(func, guards)
             self._app.head(path, wrapped)
             return wrapped
         return decorator
@@ -673,7 +664,7 @@ class App:
         """
         self._app.invalidate_cache(tags)
 
-    def enable_openapi(self, title: str = "Cello API", version: str = "1.0.0"):
+    def enable_openapi(self, title: str = "Cello API", version: str = "1.0.1"):
         """
         Enable OpenAPI documentation endpoints.
 
@@ -684,7 +675,7 @@ class App:
 
         Args:
             title: API title (default: "Cello API")
-            version: API version (default: "1.0.0")
+            version: API version (default: "1.0.1")
         """
         # Store for closure
         api_title = title
@@ -1206,6 +1197,17 @@ class App:
         import subprocess
         import time
 
+        # Check if this is a worker subprocess (Windows multi-process mode)
+        # Workers re-execute the user's script with CELLO_WORKER=1 set,
+        # so all routes get properly registered, then run as single worker.
+        if os.environ.get("CELLO_WORKER") == "1":
+            os.environ.pop("CELLO_WORKER", None)  # Prevent grandchild workers
+            try:
+                self._app.run(host, port, None)
+            except (KeyboardInterrupt, SystemExit):
+                pass
+            return
+
         # Parse CLI arguments (only if running as main script)
         if "unittest" not in sys.modules:
             parser = argparse.ArgumentParser(description="Cello Web Server", add_help=False)
@@ -1282,9 +1284,6 @@ class App:
 
         # Run Server
         if workers > 1:
-            # Multi-process mode: fork N worker processes, each with its own GIL.
-            # Uses SO_REUSEPORT so all processes can bind to the same port.
-            # This bypasses the GIL bottleneck for true parallel request handling.
             self._run_multiprocess(host, port, workers, env)
         else:
             try:
@@ -1318,15 +1317,27 @@ class App:
     def _run_multiprocess(self, host: str, port: int, workers: int, env: str):
         """Run server with multiple worker processes for maximum throughput.
 
-        Uses os.fork() directly for reliable multi-process spawning.
-        Each child process gets its own Python GIL and Tokio runtime.
-        SO_REUSEPORT allows the kernel to distribute connections across workers.
+        Cross-platform multi-process spawning:
+          - Unix/macOS: Uses os.fork() for zero-copy COW performance.
+            SO_REUSEPORT allows the kernel to distribute connections.
+          - Windows: Uses multiprocessing.Process (spawn-based).
+            SO_REUSEADDR allows port reuse between processes.
 
-        Architecture (matches Granian/Robyn behavior):
+        Architecture:
             Parent process: runs as worker + supervises children
             N child processes: each runs as an independent worker
-            Total: N+1 processes on the port (same as Granian --workers N)
+            Total: N+1 processes on the port
         """
+        import signal
+        import sys
+
+        if sys.platform == "win32":
+            self._run_multiprocess_spawn(host, port, workers)
+        else:
+            self._run_multiprocess_fork(host, port, workers)
+
+    def _run_multiprocess_fork(self, host: str, port: int, workers: int):
+        """Unix/macOS: fork-based multi-process (best performance)."""
         import os
         import signal
 
@@ -1334,8 +1345,6 @@ class App:
 
         child_pids = []
 
-        # Fork N child workers. Parent also runs as a worker (N+1 total).
-        # This matches Granian's behavior where --workers N creates N+1 processes.
         for i in range(workers):
             pid = os.fork()
             if pid == 0:
@@ -1351,7 +1360,6 @@ class App:
             else:
                 child_pids.append(pid)
 
-        # Parent: set up signal forwarding, then run as last worker
         def _cleanup(signum=None, frame=None):
             for pid in child_pids:
                 try:
@@ -1363,18 +1371,72 @@ class App:
         signal.signal(signal.SIGTERM, lambda s, f: (_cleanup(), os._exit(0)))
 
         try:
-            # Parent also runs a server (another worker)
             self._app.run(host, port, None)
         except KeyboardInterrupt:
             pass
         finally:
             _cleanup()
-            # Wait for children
             for pid in child_pids:
                 try:
                     os.waitpid(pid, os.WNOHANG)
                 except ChildProcessError:
                     pass
+
+    def _run_multiprocess_spawn(self, host: str, port: int, workers: int):
+        """Windows/cross-platform: subprocess-based multi-process.
+
+        On Windows, multiprocessing uses 'spawn' (not fork), which requires all
+        arguments to be picklable. PyO3 Rust objects (like Cello) cannot be pickled.
+
+        Instead, we spawn subprocesses that re-execute the user's script with
+        CELLO_WORKER=1 env var set. This forces each subprocess into single-worker
+        mode, ensuring all routes are properly registered in each worker process.
+        This is the same pattern used by Gunicorn/Uvicorn for Windows support.
+        """
+        import subprocess
+        import signal
+        import os
+
+        print(f"    \033[32m➜\033[0m  \033[1mMode:\033[0m      Multi-process (subprocess re-execution)")
+
+        children: list[subprocess.Popen] = []
+
+        worker_env = {**os.environ, "CELLO_WORKER": "1"}
+
+        for i in range(workers):
+            p = subprocess.Popen(
+                [sys.executable] + sys.argv,
+                env=worker_env,
+            )
+            children.append(p)
+
+        def _cleanup(signum=None, frame=None):
+            for p in children:
+                try:
+                    p.terminate()
+                except OSError:
+                    pass
+
+        # SIGINT (Ctrl+C) works on all platforms
+        signal.signal(signal.SIGINT, lambda s, f: (_cleanup(), sys.exit(0)))
+
+        # SIGTERM is available on Unix; on Windows it may not be delivered
+        try:
+            signal.signal(signal.SIGTERM, lambda s, f: (_cleanup(), sys.exit(0)))
+        except (OSError, ValueError):
+            pass  # SIGTERM not supported on this platform
+
+        try:
+            self._app.run(host, port, None)
+        except KeyboardInterrupt:
+            pass
+        finally:
+            _cleanup()
+            for p in children:
+                try:
+                    p.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    p.kill()
 
     def _watch_files(self, process):
         import os
@@ -1434,38 +1496,49 @@ class Depends:
 def cache(ttl: int = None, tags: list = None):
     """
     Decorator to cache response (Smart Caching).
-    
+
+    Supports both sync and async handlers.
+
     Args:
         ttl: Time to live in seconds (overrides default).
         tags: List of tags for invalidation.
     """
+    import inspect
     from functools import wraps
     from cello._cello import Response
-    
+
+    def _set_cache_headers(response):
+        """Apply cache headers to a Response object."""
+        if not isinstance(response, Response):
+            if isinstance(response, dict):
+                response = Response.json(response)
+            elif isinstance(response, str):
+                response = Response.text(response)
+            elif isinstance(response, bytes):
+                response = Response.binary(response)
+
+        if isinstance(response, Response):
+            if ttl is not None:
+                response.set_header("X-Cache-TTL", str(ttl))
+            if tags:
+                if isinstance(tags, list):
+                    response.set_header("X-Cache-Tags", ",".join(tags))
+                elif isinstance(tags, str):
+                    response.set_header("X-Cache-Tags", tags)
+
+        return response
+
     def decorator(func):
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            response = func(*args, **kwargs)
-            
-            # Ensure we have a Response object to set headers
-            if not isinstance(response, Response):
-                 if isinstance(response, dict):
-                     response = Response.json(response)
-                 elif isinstance(response, str):
-                     response = Response.text(response)
-                 elif isinstance(response, bytes):
-                     response = Response.binary(response)
-            
-            if isinstance(response, Response):
-                if ttl is not None:
-                     response.set_header("X-Cache-TTL", str(ttl))
-                if tags:
-                     # Check if tags is list
-                     if isinstance(tags, list):
-                         response.set_header("X-Cache-Tags", ",".join(tags))
-                     elif isinstance(tags, str):
-                         response.set_header("X-Cache-Tags", tags)
-            
-            return response
-        return wrapper
+        if inspect.iscoroutinefunction(func):
+            @wraps(func)
+            async def async_wrapper(*args, **kwargs):
+                response = await func(*args, **kwargs)
+                return _set_cache_headers(response)
+            return async_wrapper
+        else:
+            @wraps(func)
+            def wrapper(*args, **kwargs):
+                response = func(*args, **kwargs)
+                return _set_cache_headers(response)
+            return wrapper
     return decorator

@@ -146,6 +146,8 @@ pip install pydantic
 
 ### Basic Validation
 
+The validation wrapper supports both sync and async handlers. When applied to an `async def` handler, the wrapper correctly awaits the coroutine after validation -- there is no risk of returning an unawaited coroutine.
+
 ```python
 from pydantic import BaseModel, EmailStr, Field
 from cello import App, Response
@@ -158,6 +160,7 @@ class CreateUser(BaseModel):
     password: str = Field(min_length=8)
     age: int = Field(ge=0, le=150)
 
+# Sync handler with validation
 @app.post("/users")
 def create_user(request, user: CreateUser):
     # 'user' is already validated
@@ -165,6 +168,17 @@ def create_user(request, user: CreateUser):
         "username": user.username,
         "email": user.email,
         "age": user.age,
+    }
+
+# Async handler with validation -- works identically
+@app.post("/users/async")
+async def create_user_async(request, user: CreateUser):
+    # 'user' is already validated; the handler is properly awaited
+    result = await db.insert(user.model_dump())
+    return {
+        "id": result["id"],
+        "username": user.username,
+        "email": user.email,
     }
 ```
 
@@ -329,6 +343,8 @@ class UserDTOs:
 
 ## Complete Example
 
+This example shows validation with both sync and async handlers. The validation wrapper detects handler type automatically.
+
 ```python
 from cello import App, Response
 from pydantic import BaseModel, Field, field_validator
@@ -354,19 +370,21 @@ class UpdateUser(BaseModel):
     email: Optional[str] = None
     bio: Optional[str] = None
 
+# Async handler -- validation runs before await
 @app.post("/users")
-def create_user(request, user: CreateUser):
+async def create_user(request, user: CreateUser):
     # user is validated -- password present, email valid
-    new_user = db.create(user.model_dump())
+    new_user = await db.create(user.model_dump())
     # Exclude password from response
     return {k: v for k, v in new_user.items() if k != "password"}
 
+# Async handler -- partial update with validation
 @app.patch("/users/{id}")
-def update_user(request, updates: UpdateUser):
+async def update_user(request, updates: UpdateUser):
     user_id = request.params["id"]
     # Only non-None fields are applied
     changes = updates.model_dump(exclude_none=True)
-    db.update(user_id, changes)
+    await db.update(user_id, changes)
     return {"updated": True, "fields": list(changes.keys())}
 
 if __name__ == "__main__":

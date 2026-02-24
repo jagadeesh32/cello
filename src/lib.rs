@@ -625,7 +625,7 @@ impl Cello {
         version: Option<String>,
     ) -> PyResult<()> {
         let title = title.unwrap_or_else(|| "Cello API".to_string());
-        let version = version.unwrap_or_else(|| "1.0.0".to_string());
+        let version = version.unwrap_or_else(|| "1.0.1".to_string());
 
         // Store title and version for later use
         let title_clone = title.clone();
@@ -741,7 +741,9 @@ def openapi_handler(request):
         // Release the GIL and run the server
         py.allow_threads(|| {
             // PERF: Use single-threaded Tokio runtime per process.
-            // Parallelism comes from multi-process (os.fork + SO_REUSEPORT), not multi-thread.
+            // Parallelism comes from multi-process mode:
+            //   - Unix: os.fork() + SO_REUSEPORT for kernel load balancing
+            //   - Windows: multiprocessing.Process + SO_REUSEADDR
             // Multi-threaded runtime causes GIL contention: N Tokio threads all compete
             // for Python::with_gil, creating massive serialization overhead.
             // Single-threaded runtime eliminates GIL contention within each worker process.

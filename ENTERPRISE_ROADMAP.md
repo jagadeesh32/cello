@@ -350,7 +350,7 @@ class OrderSaga(Saga):
 
 ---
 
-### v1.0.0 - Production Ready (Released February 21, 2026) :white_check_mark:
+### v1.0.1 - Production Ready (Released February 21, 2026) :white_check_mark:
 
 - **170,000+ requests/second** benchmark throughput (4 workers, 5 processes, wrk 12t/400c/10s)
 - First stable release with semantic versioning guarantees
@@ -461,7 +461,7 @@ async def tenant_middleware(request, call_next):
 
 ## Performance Targets
 
-### Benchmark Results (v1.0.0 -- Achieved)
+### Benchmark Results (v1.0.1 -- Achieved)
 
 | Metric | Pre-1.0 | v1.0 Target | v1.0 Achieved |
 |--------|---------|-------------|---------------|

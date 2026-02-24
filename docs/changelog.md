@@ -7,9 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.0.0] - 2026-02-21 -- Production-Ready Stable Release
+## [1.0.1] - 2026-02-21 -- Production-Ready Stable Release
 
-Cello v1.0.0 is the first production-ready stable release of the framework. After ten iterative
+Cello v1.0.1 is the first production-ready stable release of the framework. After ten iterative
 pre-release versions, the entire public API is now frozen under Semantic Versioning. No breaking
 changes will be introduced until v2.0. This release consolidates 32,000+ lines of Rust and 6,000+
 lines of Python into a cohesive, enterprise-grade web framework capable of sustaining **170,000+
@@ -158,7 +158,7 @@ All middleware is implemented in Rust for maximum performance:
 - Event Sourcing with Aggregate base class and @event_handler decorator
 - Event base class for typed domain events with automatic serialization
 - EventStore for persisting and retrieving events with configurable backends
-- EventStoreConfig for storage URL, snapshot interval, and replay settings
+- EventSourcingConfig for storage URL, snapshot interval, and replay settings
 - Snapshot support for optimized aggregate loading at scale
 - Event replay to rebuild aggregate state from the event log
 - CQRS with Command and Query base classes

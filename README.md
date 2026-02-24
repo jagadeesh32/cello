@@ -101,7 +101,7 @@ if __name__ == "__main__":
 
 ```bash
 python app.py
-# 🐍 Cello v1.0.0 server starting at http://127.0.0.1:8000
+# 🐍 Cello v1.0.1 server starting at http://127.0.0.1:8000
 ```
 
 ---
@@ -207,7 +207,7 @@ async def transfer(request):
 
 @app.get("/")
 def home(request):
-    return {"status": "ok", "version": "1.0.0"}
+    return {"status": "ok", "version": "1.0.1"}
 
 app.run()
 ```
@@ -259,7 +259,7 @@ app.enable_rabbitmq(RabbitMQConfig(url="amqp://localhost:5672"))
 
 @app.get("/")
 def home(request):
-    return {"status": "ok", "version": "1.0.0", "protocols": ["graphql", "grpc", "kafka", "rabbitmq"]}
+    return {"status": "ok", "version": "1.0.1", "protocols": ["graphql", "grpc", "kafka", "rabbitmq"]}
 
 app.run()
 ```
@@ -297,7 +297,7 @@ app.enable_prometheus(endpoint="/metrics")
 
 @app.get("/")
 def home(request):
-    return {"status": "ok", "version": "1.0.0"}
+    return {"status": "ok", "version": "1.0.1"}
 
 app.run()
 ```
@@ -457,6 +457,17 @@ cargo fmt
 ---
 
 ## 📋 Release History
+
+### v1.0.1 — Cross-Platform & Compatibility Patch (Feb 2026)
+
+- **Windows multi-worker**: subprocess re-execution (`CELLO_WORKER=1`) replaces broken `multiprocessing.Process`
+- **Windows signal handling**: `SIGTERM` wrapped in `try/except` with platform validation
+- **Windows static files**: UNC path normalization fix
+- **ARM JSON fallback**: `serde_json` for non-SIMD architectures
+- **Linux-only CPU affinity**: gated with warning on other platforms
+- **Async compatibility**: `wrap_handler_with_validation`, `_apply_guards`, `cache()` all support async handlers
+- **Blueprint guards**: Blueprint route decorators now support `guards` parameter and validation
+- **Export completeness**: Guards (`RoleGuard`, `PermissionGuard`, `Authenticated`, `And`, `Or`, `Not`, `GuardError`, `ForbiddenError`, `UnauthorizedError`) and database (`Database`, `Redis`, `Transaction`) added to `__all__`
 
 ### v1.0.0 — Production-Ready Stable Release (Feb 2026)
 

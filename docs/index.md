@@ -6,167 +6,7 @@ hide:
   - toc
 ---
 
-<style>
-  /* Hide default title */
-  .md-typeset h1 { display: none; }
-
-  /* Hero section styling */
-  .hero-section {
-    text-align: center;
-    padding: 2rem 1rem 1rem 1rem;
-  }
-  .hero-section .hero-title {
-    font-size: 18px;
-    font-weight: 800;
-    letter-spacing: -0.02em;
-    margin-bottom: 0.25rem;
-    color: #BF360C;
-    line-height: 1.1;
-  }
-  .hero-section .hero-tagline {
-    font-size: 16px;
-    font-weight: 700;
-    margin: 0.5rem 0 0.25rem 0;
-    color: #1A1A1A;
-  }
-  .hero-section .hero-subtitle {
-    font-size: 16px;
-    color: #424242;
-    margin-bottom: 1.5rem;
-  }
-  .hero-badges {
-    display: flex;
-    gap: 0.5rem;
-    justify-content: center;
-    flex-wrap: wrap;
-    margin-top: 1rem;
-    margin-bottom: 0.5rem;
-  }
-  .hero-badges code {
-    padding: 0.3em 0.8em;
-    border-radius: 999px;
-    font-size: 0.8rem;
-    font-weight: 600;
-  }
-  .badge-version {
-    background: #1A1A1A !important;
-    color: #FF9100 !important;
-    border: 1px solid #424242 !important;
-  }
-  .badge-tests {
-    background: #1A1A1A !important;
-    color: #4caf50 !important;
-    border: 1px solid #424242 !important;
-  }
-  .badge-license {
-    background: #1A1A1A !important;
-    color: #42a5f5 !important;
-    border: 1px solid #424242 !important;
-  }
-  .badge-python {
-    background: #1A1A1A !important;
-    color: #ab47bc !important;
-    border: 1px solid #424242 !important;
-  }
-
-  /* Performance banner */
-  .perf-banner {
-    text-align: center;
-    padding: 1.5rem;
-    margin: 1rem 0;
-    border-radius: 12px;
-    background: linear-gradient(135deg, rgba(255, 109, 0, 0.08), rgba(255, 193, 7, 0.08));
-    border: 1px solid rgba(255, 145, 0, 0.25);
-  }
-  .perf-number {
-    font-size: 18px;
-    font-weight: 900;
-    color: #BF360C;
-    line-height: 1.2;
-    margin-bottom: 0.25rem;
-  }
-  .perf-label {
-    font-size: 13px;
-    font-weight: 600;
-    color: #424242;
-  }
-  .perf-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 1.5rem;
-    margin-top: 1.5rem;
-    text-align: center;
-  }
-  .perf-item {
-    padding: 1rem;
-    border-radius: 8px;
-    background: #FFFFFF;
-    border: 1px solid #E0E0E0;
-  }
-  .perf-item .fw-name {
-    font-weight: 700;
-    font-size: 1rem;
-    margin-bottom: 0.25rem;
-    color: #1A1A1A;
-  }
-  .perf-item .fw-rps {
-    font-size: 18px;
-    font-weight: 800;
-  }
-  .perf-item .fw-rps.cello-rps {
-    color: #BF360C;
-  }
-  .perf-item .fw-rps.other-rps {
-    color: #424242;
-  }
-  .perf-item .fw-detail {
-    font-size: 0.8rem;
-    color: #616161;
-  }
-
-  /* Architecture section */
-  .arch-explain {
-    text-align: center;
-    max-width: 700px;
-    margin: 0 auto;
-    color: #424242;
-    font-size: 14px;
-  }
-
-  /* What's new banner */
-  .whats-new-box {
-    padding: 1.5rem 2rem;
-    border-radius: 12px;
-    background: linear-gradient(135deg, rgba(255, 109, 0, 0.06), rgba(156, 39, 176, 0.06));
-    border: 1px solid rgba(255, 145, 0, 0.2);
-    margin: 1rem 0;
-  }
-  .whats-new-box h3 {
-    margin-top: 0;
-  }
-
-  /* Footer tagline */
-  .footer-tagline {
-    text-align: center;
-    padding: 2rem 0 1rem 0;
-    font-size: 14px;
-    color: #1A1A1A;
-  }
-  .footer-tagline .star-btn {
-    margin-top: 1rem;
-  }
-
-  /* Responsive */
-  @media screen and (max-width: 768px) {
-    .hero-section .hero-title { font-size: 16px; }
-    .hero-section .hero-tagline { font-size: 14px; }
-    .perf-grid { grid-template-columns: repeat(2, 1fr); }
-    .perf-number { font-size: 16px; }
-  }
-  @media screen and (max-width: 480px) {
-    .perf-grid { grid-template-columns: 1fr; }
-  }
-</style>
+<style>.md-typeset h1 { display: none; }</style>
 
 <!-- ===== HERO SECTION ===== -->
 
@@ -174,7 +14,7 @@ hide:
 
 <div class="hero-section" markdown>
 
-<div style="text-align: center; margin-bottom: 1rem;">
+<div class="hero-logo">
   <img src="https://cello-framework.vercel.app/logo-full.png" alt="Cello Framework" style="max-width: 320px; width: 100%; height: auto;">
 </div>
 
@@ -189,7 +29,7 @@ hide:
 [:material-package-variant: PyPI](https://pypi.org/project/cello-framework/){ .md-button }
 
 <div class="hero-badges">
-  <code class="badge-version">v1.0.0</code>
+  <code class="badge-version">v1.0.1</code>
   <code class="badge-tests">394 tests passing</code>
   <code class="badge-license">MIT License</code>
   <code class="badge-python">Python 3.12+</code>
@@ -201,7 +41,7 @@ hide:
 
 <!-- ===== PERFORMANCE BANNER ===== -->
 
-<div class="perf-banner">
+<div class="perf-banner" id="performance-banner">
   <div class="perf-number">170,000+ req/sec</div>
   <div class="perf-label">Benchmarked with 4 workers (5 processes) &middot; wrk (12 threads, 400 connections, 10s)</div>
 
@@ -281,7 +121,7 @@ hide:
 
     ---
 
-    **Event Sourcing**, **CQRS**, and **Saga** orchestration built right into the framework. Enterprise architecture, zero boilerplate. _Stable in v1.0.0_.
+    **Event Sourcing**, **CQRS**, and **Saga** orchestration built right into the framework. Enterprise architecture, zero boilerplate. _Stable in v1.0.1_.
 
     [:octicons-arrow-right-24: Event Sourcing](examples/enterprise/event-sourcing.md)
 
@@ -523,11 +363,11 @@ How Cello stacks up against popular Python web frameworks (4 workers, 5 processe
 
 <!-- ===== WHAT'S NEW ===== -->
 
-## :material-creation: What's New in v1.0.0
+## :material-creation: What's New in v1.0.1
 
 <div class="whats-new-box" markdown>
 
-!!! tip "v1.0.0 -- Production Ready"
+!!! tip "v1.0.1 -- Production Ready"
 
     Cello reaches **stable release** with a complete feature set, major performance optimizations, and a semantic versioning commitment. The API is now frozen -- no breaking changes until v2.0.
 
@@ -537,7 +377,7 @@ How Cello stacks up against popular Python web frameworks (4 workers, 5 processe
 
     - :material-feature-search: **Complete Feature Set** -- Routing, middleware, auth, WebSocket, SSE, DI, guards, caching, rate limiting, OpenTelemetry, GraphQL, gRPC, Event Sourcing, CQRS, and Saga patterns -- all in one framework.
 
-    [:material-tag: Full Release Notes](releases/v1.0.0.md){ .md-button .md-button--primary }
+    [:material-tag: Full Release Notes](releases/v1.0.1.md){ .md-button .md-button--primary }
     [:material-book-open-variant: Migration Guide](releases/migration.md){ .md-button }
 
 </div>

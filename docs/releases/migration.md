@@ -10,7 +10,7 @@ This guide helps you migrate between major versions of Cello.
 
 ### Stability
 
-v1.0.0 is the first stable release of Cello. Starting with this version, the framework follows [Semantic Versioning](https://semver.org/):
+v1.0.1 is the first stable release of Cello. Starting with this version, the framework follows [Semantic Versioning](https://semver.org/):
 
 - **Patch releases** (1.0.x): Bug fixes and security patches only.
 - **Minor releases** (1.x.0): New features, fully backwards-compatible.
@@ -22,7 +22,7 @@ No breaking changes from v0.10.0. All existing code continues to work.
 
 ### Performance Improvements
 
-v1.0.0 includes significant performance optimizations in the Rust hot path. These are transparent -- no code changes required on your side. You will see improved request throughput and lower latency automatically after upgrading.
+v1.0.1 includes significant performance optimizations in the Rust hot path. These are transparent -- no code changes required on your side. You will see improved request throughput and lower latency automatically after upgrading.
 
 ### Upgrade
 
@@ -32,7 +32,7 @@ pip install --upgrade cello-framework
 
 ```python
 import cello
-assert cello.__version__ == "1.0.0"
+assert cello.__version__ == "1.0.1"
 ```
 
 ---
@@ -71,7 +71,7 @@ from cello.saga import Saga, SagaStep, SagaConfig
 app = App()
 
 # Event Sourcing
-app.enable_event_store()
+app.enable_event_sourcing()
 
 # CQRS
 app.enable_cqrs()
@@ -109,7 +109,7 @@ class Order(Aggregate):
         self.id = event.order_id
         self.status = "created"
 
-app.enable_event_store(EventStoreConfig(
+app.enable_event_sourcing(EventSourcingConfig(
     storage="postgresql://localhost/events",
     snapshot_interval=100,
 ))

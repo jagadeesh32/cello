@@ -64,7 +64,7 @@ app.enable_caching(
 
 ## Per-Route Caching with the `@cache` Decorator
 
-Override the default TTL or add cache tags on individual routes:
+Override the default TTL or add cache tags on individual routes. The `@cache` decorator supports both sync and async handlers -- it automatically detects the handler type and wraps it correctly, so async handlers are properly awaited.
 
 ```python
 from cello import App, cache
@@ -72,25 +72,27 @@ from cello import App, cache
 app = App()
 app.enable_caching(ttl=300)
 
-# Cache this route for 1 hour
+# Cache this route for 1 hour (sync handler)
 @app.get("/api/config")
 @cache(ttl=3600)
 def get_config(request):
     return {"theme": "dark", "language": "en"}
 
-# Cache with tags for targeted invalidation
+# Cache with tags for targeted invalidation (sync handler)
 @app.get("/api/users")
 @cache(ttl=600, tags=["users"])
 def list_users(request):
     return {"users": ["Alice", "Bob"]}
 
+# Cache an async handler -- works identically
 @app.get("/api/posts")
 @cache(ttl=600, tags=["posts"])
-def list_posts(request):
-    return {"posts": []}
+async def list_posts(request):
+    posts = await fetch_posts_from_db()
+    return {"posts": posts}
 ```
 
-The `@cache` decorator sets `X-Cache-TTL` and `X-Cache-Tags` headers that the Rust caching middleware reads.
+The `@cache` decorator sets `X-Cache-TTL` and `X-Cache-Tags` headers that the Rust caching middleware reads. When applied to an async handler, the decorator awaits the coroutine before setting headers, so there is no risk of returning an unawaited coroutine.
 
 ---
 
@@ -189,13 +191,14 @@ app.enable_caching(
     exclude_paths=["/api/auth", "/health", "/metrics"]
 )
 
-# Short-lived cache for frequently changing data
+# Short-lived cache for frequently changing data (async)
 @app.get("/api/feed")
 @cache(ttl=30, tags=["feed"])
-def feed(request):
-    return {"posts": get_recent_posts()}
+async def feed(request):
+    posts = await get_recent_posts()
+    return {"posts": posts}
 
-# Long-lived cache for static configuration
+# Long-lived cache for static configuration (sync)
 @app.get("/api/settings")
 @cache(ttl=3600, tags=["settings"])
 def settings(request):
@@ -203,9 +206,9 @@ def settings(request):
 
 # Invalidate on write
 @app.post("/api/posts")
-def create_post(request):
+async def create_post(request):
     data = request.json()
-    save_post(data)
+    await save_post(data)
     app.invalidate_cache(tags=["feed"])
     return Response.json(data, status=201)
 ```

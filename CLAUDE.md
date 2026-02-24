@@ -4,7 +4,7 @@
 
 **Cello** is an ultra-fast, Rust-powered Python async web framework designed to achieve C-level performance on the hot path while maintaining Python's developer experience. It's the successor to frameworks like FastAPI, Robyn, and Litestar, combining their best features with pure Rust implementation for maximum performance.
 
-**Version:** 1.0.0
+**Version:** 1.0.1
 **License:** MIT
 **Python Requirement:** 3.12+
 **Author:** Jagadeesh Katla
@@ -255,9 +255,10 @@ python examples/simple_api.py --port 8080 --workers 4
 
 ### 1. Why Rust for Hot Path?
 - Python's GIL limits concurrency
-- SIMD JSON is 10x faster than Python JSON
+- SIMD JSON is 10x faster than Python JSON (with serde_json fallback on ARM)
 - Zero-copy routing eliminates allocations
 - Async I/O without Python overhead
+- Cross-platform: Linux (fork + SO_REUSEPORT), Windows (subprocess re-execution)
 
 ### 2. Why PyO3 with abi3?
 - Single binary works across Python versions
@@ -345,6 +346,7 @@ def handle_value_error(request, exc):
 
 ## Version History
 
+- **v1.0.1**: Cross-platform fixes (Windows multi-worker, signal handling, UNC paths; ARM JSON fallback; Linux-only CPU affinity), async compatibility fixes (handler validation, guards, cache decorator, blueprints), guards and database exports in `__all__`
 - **v1.0.0**: Production-ready stable release, performance optimizations, API stability guarantees
 - **v0.10.0**: Advanced patterns (Event Sourcing, CQRS, Saga Pattern)
 - **v0.9.0**: API protocols (GraphQL, gRPC), message queue adapters (Kafka, RabbitMQ)
@@ -357,7 +359,7 @@ def handle_value_error(request, exc):
 - **v0.2.0**: Middleware system, CORS, logging, compression
 - **v0.1.0**: Initial release with basic HTTP routing
 
-## Roadmap (Post-1.0 Features)
+## Roadmap (Post-1.0.1 Features)
 
 ### Planned for v1.1.0+
 - OAuth2/OIDC Provider
@@ -393,6 +395,14 @@ python app.py --env production --workers $(nproc)
 # Debug mode
 python app.py --debug --env development
 ```
+
+### Cross-Platform Notes (v1.0.1)
+
+- **Windows multi-worker**: Uses subprocess re-execution (`CELLO_WORKER=1` env var) instead of `os.fork()`
+- **Windows signals**: `SIGTERM` is not available; Cello handles this gracefully with try/except
+- **Windows static files**: UNC paths are normalized automatically
+- **CPU affinity**: Only supported on Linux (`os.sched_setaffinity`); a warning is emitted on other platforms
+- **ARM/non-SIMD**: JSON falls back to `serde_json` when SIMD instructions are unavailable
 
 ## Contributing Guidelines
 

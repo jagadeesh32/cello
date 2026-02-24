@@ -1,6 +1,6 @@
 # API Reference
 
-Complete API reference for Cello v1.0.0.
+Complete API reference for Cello v1.0.1.
 
 ## Core Classes
 
@@ -53,12 +53,14 @@ app.run(
 )
 ```
 
-**Multi-worker mode**: When `workers > 1`, Cello forks N processes using `SO_REUSEPORT` for kernel-level connection distribution. Each worker has its own Python GIL and Tokio runtime, enabling near-linear scaling with core count.
+**Multi-worker mode**: When `workers > 1`, Cello spawns N worker processes, each with its own Python GIL and Tokio runtime, enabling near-linear scaling with core count. On Linux, workers are forked using `os.fork()` with `SO_REUSEPORT` for kernel-level connection distribution. On Windows, workers are launched via subprocess re-execution (detected by the `CELLO_WORKER=1` environment variable).
 
 ```python
 # Production: 4 workers for a 4-core machine
 app.run(host="0.0.0.0", port=8080, env="production", workers=4)
 ```
+
+> **Note (v1.0.1):** CPU affinity (`ClusterConfig.cpu_affinity`) is only supported on Linux. On other platforms, a warning is emitted and the setting is ignored.
 
 ---
 
@@ -89,13 +91,26 @@ Blueprint(prefix: str, name: str = None)
 
 | Method | Description |
 |--------|-------------|
-| `get(path)` | Register GET route |
-| `post(path)` | Register POST route |
-| `put(path)` | Register PUT route |
-| `delete(path)` | Register DELETE route |
-| `patch(path)` | Register PATCH route |
+| `get(path, guards=None)` | Register GET route |
+| `post(path, guards=None)` | Register POST route |
+| `put(path, guards=None)` | Register PUT route |
+| `delete(path, guards=None)` | Register DELETE route |
+| `patch(path, guards=None)` | Register PATCH route |
 | `register(blueprint)` | Register nested blueprint |
 | `get_all_routes()` | Get list of (method, path, handler) tuples |
+
+> **Note (v1.0.1):** Blueprint route decorators now accept an optional `guards` parameter and support DTO validation, matching the `App` route decorator API. Both sync and async handlers are supported.
+
+```python
+from cello import Blueprint
+from cello.guards import RoleGuard
+
+api = Blueprint("/api")
+
+@api.get("/admin", guards=[RoleGuard(["admin"])])
+async def admin_panel(request):
+    return {"admin": True}
+```
 
 ---
 
@@ -285,7 +300,7 @@ msg = WebSocketMessage.text("Hello")
 
 ### cache
 
-Smart caching decorator for route handlers.
+Smart caching decorator for route handlers. Supports both sync and async handlers (v1.0.1).
 
 ```python
 from cello import cache
@@ -294,6 +309,12 @@ from cello import cache
 @cache(ttl=60, tags=["heavy"])
 def handler(request):
     return {"data": "expensive"}
+
+# Async handlers are also supported (v1.0.1)
+@app.get("/async-heavy")
+@cache(ttl=60, tags=["async-heavy"])
+async def async_handler(request):
+    return {"data": "expensive async"}
 ```
 
 #### Arguments
@@ -520,7 +541,17 @@ cello/
 ├── SessionConfig    # Session settings
 ├── SecurityHeadersConfig  # Security headers
 ├── CSP              # CSP builder
-└── StaticFilesConfig     # Static files
+├── StaticFilesConfig     # Static files
+├── RoleGuard        # Role-based guard (v1.0.1 export)
+├── PermissionGuard  # Permission-based guard (v1.0.1 export)
+├── Authenticated    # Authentication guard (v1.0.1 export)
+├── And / Or / Not   # Guard combinators (v1.0.1 export)
+├── GuardError       # Guard error base (v1.0.1 export)
+├── ForbiddenError   # 403 error (v1.0.1 export)
+├── UnauthorizedError # 401 error (v1.0.1 export)
+├── Database         # Database client (v1.0.1 export)
+├── Redis            # Redis client (v1.0.1 export)
+└── Transaction      # Transaction manager (v1.0.1 export)
 ```
 
 ---
