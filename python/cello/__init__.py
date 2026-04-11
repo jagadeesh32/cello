@@ -104,6 +104,11 @@ from cello._cello import (
     PyTemplateEngine as TemplateEngine,
 )
 
+# v1.1.0 - MiniJinja template engine
+from cello._cello import (
+    MiniJinjaEngine,
+)
+
 # v0.7.0 - Enterprise features
 from cello._cello import (
     OpenTelemetryConfig,
@@ -238,6 +243,8 @@ __all__ = [
     "TemplateEngine",
     "Depends",
     "cache",
+    # v1.1.0 - MiniJinja template engine
+    "MiniJinjaEngine",
     # Guards (RBAC)
     "Guard",
     "RoleGuard",
@@ -275,7 +282,7 @@ __all__ = [
     "validate_rate_limit_config",
     "validate_tls_config",
 ]
-__version__ = "1.0.1"
+__version__ = "1.1.0"
 
 
 class Blueprint:
@@ -415,6 +422,7 @@ class App:
         """Create a new Cello application."""
         self._app = Cello()
         self._routes = []  # Track routes for OpenAPI generation
+        self._template_engine: "MiniJinjaEngine | None" = None  # v1.1.0
 
     def _register_route(self, method: str, path: str, func, tags: list = None, summary: str = None, description: str = None):
         """Internal: Register a route and track metadata for OpenAPI."""
@@ -637,6 +645,130 @@ class App:
            failure_codes: List of status codes considered failures (default: [500, 502, 503, 504]).
         """
         self._app.enable_circuit_breaker(failure_threshold, reset_timeout, half_open_target, failure_codes)
+
+    # -------------------------------------------------------------------------
+    # v1.1.0 — MiniJinja template engine
+    # -------------------------------------------------------------------------
+
+    def enable_templates(
+        self,
+        template_dir: str = "templates",
+        auto_escape: bool = True,
+        globals: dict = None,
+    ) -> "MiniJinjaEngine":
+        """
+        Attach a MiniJinja Jinja2-compatible template engine to this application.
+
+        After calling this method, use ``app.render()`` inside handlers to produce
+        HTML (or any text) from template files.
+
+        Args:
+            template_dir: Directory that contains ``.html`` / ``.txt`` templates
+                (default: ``"templates"``).
+            auto_escape: Enable HTML auto-escaping for ``.html``/``.htm``/``.xml``
+                files to prevent XSS (default: ``True``).
+            globals: Optional dictionary of variables that are available in
+                *every* template rendered by this engine (e.g. app name, version).
+
+        Returns:
+            The configured :class:`MiniJinjaEngine` instance, in case you need
+            direct access.
+
+        Raises:
+            RuntimeError: If ``enable_templates()`` has already been called on
+                this application instance.
+
+        Example:
+            ::
+
+                app = App()
+                app.enable_templates(
+                    template_dir="templates",
+                    auto_escape=True,
+                    globals={"app_name": "My Site", "year": 2026},
+                )
+
+                @app.get("/")
+                def home(request):
+                    html = app.render("index.html", {"title": "Welcome"})
+                    return Response.html(html)
+        """
+        if self._template_engine is not None:
+            raise RuntimeError(
+                "enable_templates() has already been called on this App instance. "
+                "Call it once during application setup."
+            )
+        engine = MiniJinjaEngine(template_dir=template_dir, auto_escape=auto_escape)
+        if globals:
+            engine.add_globals(globals)
+        self._template_engine = engine
+        return engine
+
+    def render(self, template_name: str, context: dict = None) -> str:
+        """
+        Render a Jinja2 template and return the result as a string.
+
+        Must call :meth:`enable_templates` before using this method.
+
+        Args:
+            template_name: Filename of the template relative to the configured
+                ``template_dir`` (e.g. ``"index.html"``).
+            context: Dictionary of variables passed to the template.
+                Defaults to an empty dict.
+
+        Returns:
+            Rendered template string.
+
+        Raises:
+            RuntimeError: If :meth:`enable_templates` has not been called.
+            ValueError: If the template file cannot be found or contains errors.
+
+        Example:
+            ::
+
+                @app.get("/profile/{id}")
+                def profile(request):
+                    user = {"name": "Alice", "id": request.params["id"]}
+                    html = app.render("profile.html", {"user": user})
+                    return Response.html(html)
+        """
+        if self._template_engine is None:
+            raise RuntimeError(
+                "Template engine is not configured. "
+                "Call app.enable_templates() before using app.render()."
+            )
+        return self._template_engine.render(template_name, context or {})
+
+    def render_string(self, source: str, context: dict = None) -> str:
+        """
+        Render an inline Jinja2 template string and return the result.
+
+        Useful for dynamic templates that are not stored on disk.
+
+        Args:
+            source: Jinja2 template source string.
+            context: Dictionary of variables. Defaults to an empty dict.
+
+        Returns:
+            Rendered string.
+
+        Raises:
+            RuntimeError: If :meth:`enable_templates` has not been called.
+
+        Example:
+            ::
+
+                msg = app.render_string(
+                    "Hello, {{ name }}! You have {{ count }} new messages.",
+                    {"name": "Bob", "count": 3},
+                )
+        """
+        if self._template_engine is None:
+            raise RuntimeError(
+                "Template engine is not configured. "
+                "Call app.enable_templates() before using app.render_string()."
+            )
+        return self._template_engine.render_string(source, context or {})
 
     def on_event(self, event_type: str):
         """

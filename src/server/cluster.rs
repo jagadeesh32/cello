@@ -223,6 +223,7 @@ impl ClusterManager {
 
         println!("Starting cluster with {} workers", self.config.workers);
 
+        #[allow(unused_variables, unused_mut)]
         for i in 0..self.config.workers {
             let worker_id = self.next_worker_id.fetch_add(1, Ordering::SeqCst);
             let mut info = WorkerInfo::new(worker_id);

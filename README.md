@@ -133,6 +133,18 @@ python app.py
 | 🔒 **Security Headers** | CSP, HSTS, X-Frame-Options, Referrer-Policy |
 | 🔑 **API Key Auth** | Header and query parameter authentication |
 
+### Template Engine (v1.1.0)
+
+| Feature | Description |
+|---------|-------------|
+| 🎨 **MiniJinja** | Full Jinja2-compatible templates rendered entirely in Rust |
+| ⚡ **Zero Python overhead** | Template rendering stays on the Rust side via `minijinja 2` |
+| 🔒 **Auto HTML-escaping** | XSS-safe output for `.html`/`.htm`/`.xml` by default |
+| 🧱 **Template inheritance** | `{% extends %}` / `{% block %}` for base + child layouts |
+| 🔁 **Includes & macros** | `{% include %}`, `{% macro %}`, `{% import %}` for reuse |
+| 🌍 **Global variables** | `add_global()` for site-wide values (app name, year, etc.) |
+| 📦 **Standalone engine** | `MiniJinjaEngine` usable independently from App (emails, CLI) |
+
 ### Enterprise Features (v0.7.0+)
 
 | Feature | Description |
@@ -377,6 +389,66 @@ def event_stream(request):
     return stream
 ```
 
+### MiniJinja Templates (v1.1.0)
+
+```python
+from cello import App, MiniJinjaEngine, Response
+
+app = App()
+
+# Attach once at startup — optional auto_escape and global variables
+app.enable_templates(
+    template_dir="templates",   # directory containing .html files
+    auto_escape=True,           # HTML-escape {{ }} output (XSS safe)
+    globals={"site_name": "My App", "year": 2026},
+)
+
+@app.get("/")
+def home(request):
+    html = app.render("index.html", {"title": "Home", "items": ["a", "b", "c"]})
+    return Response.html(html)
+
+# Inline rendering — no file needed
+@app.get("/greet/{name}")
+def greet(request):
+    msg = app.render_string(
+        "Hello, {{ name | title }}! Welcome to {{ site_name }}.",
+        {"name": request.params["name"]},
+    )
+    return Response.html(msg)
+
+# Standalone engine (outside of App — useful for emails, CLI, background tasks)
+email_engine = MiniJinjaEngine(template_dir="templates/emails", auto_escape=False)
+html = email_engine.render("welcome.html", {"user": "Alice"})
+```
+
+**`templates/base.html`** — base layout:
+```html
+<!DOCTYPE html>
+<html>
+<head><title>{% block title %}{{ site_name }}{% endblock %}</title></head>
+<body>
+  <nav>{% block nav %}{% endblock %}</nav>
+  <main>{% block content %}{% endblock %}</main>
+  <footer>© {{ year }} {{ site_name }}</footer>
+</body>
+</html>
+```
+
+**`templates/index.html`** — child template:
+```html
+{% extends "base.html" %}
+
+{% block title %}Home — {{ site_name }}{% endblock %}
+
+{% block content %}
+<h1>{{ title }}</h1>
+{% for item in items %}
+<p>{{ loop.index }}. {{ item | upper }}</p>
+{% endfor %}
+{% endblock %}
+```
+
 ### Response Types
 
 ```python
@@ -416,6 +488,7 @@ return Response.no_content()
 | **gRPC** | Custom Rust gRPC engine |
 | **GraphQL** | Python engine with Rust serialization |
 | **Messaging** | Kafka, RabbitMQ, SQS adapters |
+| **Templates** | MiniJinja 2 (Jinja2-compatible, Rust) |
 
 ---
 
@@ -457,6 +530,17 @@ cargo fmt
 ---
 
 ## 📋 Release History
+
+### v1.1.0 — MiniJinja Template Engine (Apr 2026)
+
+- **MiniJinja integration**: full Jinja2-compatible template engine built into Cello via `minijinja 2` Rust crate — zero Python overhead on the render path
+- **`app.enable_templates()`**: attach the engine as optional middleware in one line
+- **`app.render(name, context)`** and **`app.render_string(source, context)`**: render from file or inline string
+- **`MiniJinjaEngine`**: standalone class for use outside of App (emails, CLI scripts, background tasks)
+- **HTML auto-escaping**: XSS-safe by default for `.html`/`.htm`/`.xml` templates
+- **Global template variables**: `add_global()` / `add_globals()` for site-wide variables
+- **Full Jinja2 syntax**: `{% if %}`, `{% for %}`, `{% block %}`, `{% extends %}`, `{% include %}`, `{% macro %}`, `{% import %}`, all built-in filters
+- **Python type conversion**: `str`, `int`, `float`, `bool`, `None`, `list`, `tuple`, `dict`, and objects with `__dict__` all convert automatically
 
 ### v1.0.1 — Cross-Platform & Compatibility Patch (Feb 2026)
 
