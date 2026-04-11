@@ -29,8 +29,8 @@ hide:
 [:material-package-variant: PyPI](https://pypi.org/project/cello-framework/){ .md-button }
 
 <div class="hero-badges">
-  <code class="badge-version">v1.0.1</code>
-  <code class="badge-tests">394 tests passing</code>
+  <code class="badge-version">v1.1.0</code>
+  <code class="badge-tests">441 tests passing</code>
   <code class="badge-license">MIT License</code>
   <code class="badge-python">Python 3.12+</code>
 </div>

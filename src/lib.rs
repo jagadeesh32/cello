@@ -49,6 +49,9 @@ pub mod background;
 pub mod openapi;
 pub mod template;
 
+// v1.1.0 - MiniJinja template engine
+pub mod minijinja_engine;
+
 use pyo3::prelude::*;
 use std::sync::Arc;
 
@@ -2056,6 +2059,9 @@ fn _cello(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
 
     // v0.5.0 - Template Engine
     m.add_class::<template::PyTemplateEngine>()?;
+
+    // v1.1.0 - MiniJinja Template Engine
+    m.add_class::<minijinja_engine::PyMiniJinjaEngine>()?;
 
     // v0.7.0+ / v0.8.0 - Enterprise & Data Layer Configuration Classes
     m.add_class::<PyOpenTelemetryConfig>()?;

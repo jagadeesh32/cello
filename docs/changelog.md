@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.1.0] - 2026-04-11 — MiniJinja Template Engine
+
+### Added
+
+- **`MiniJinjaEngine`** Rust-backed class exposing full Jinja2-compatible template rendering via `minijinja 2`; zero Python overhead on the render path
+- **`App.enable_templates(template_dir, auto_escape, globals)`** — attach the template engine once at startup as optional middleware
+- **`App.render(name, context)`** — render a template file relative to `template_dir`
+- **`App.render_string(source, context)`** — render an inline Jinja2 template string without a file
+- **`MiniJinjaEngine.add_global(name, value)`** / **`add_globals(dict)`** — register variables available in every template
+- **HTML auto-escaping** for `.html`, `.htm`, `.xml` templates when `auto_escape=True` (default); explicitly disabled for all other extensions
+- **Full Jinja2 syntax**: `{{ variable }}`, `{% if %}`, `{% for %}`, `{% block %}`, `{% extends %}`, `{% include %}`, `{% macro %}`, `{% import %}`, filters, tests, comments
+- **Python type conversion**: `str`, `int`, `float`, `bool`, `None`, `list`, `tuple`, `dict`, and objects with `__dict__` all convert automatically via `serde_json` intermediary
+- **`tojson` filter** from `minijinja` `json` feature — serialize a variable to a JSON string inside a template
+- Rust unit tests in `src/minijinja_engine.rs` covering render, if/for, filters, inheritance, globals, and file loading
+- Python test suite `tests/test_minijinja.py` with 47 passing tests
+- Four new examples: `minijinja_blog.py`, `minijinja_forms.py`, `minijinja_macros.py`, `minijinja_emails.py`
+- Documentation: `docs/features/minijinja-templates.md` and `docs/features/templates.md`
+
+### Dependency
+
+- Added `minijinja = { version = "2", features = ["loader", "builtins", "json"] }` to `Cargo.toml`
+- Added `tempfile = "3"` to `[dev-dependencies]`
+
+### Breaking Changes
+
+None. All v1.0.1 code works without modification.
+
+---
+
 ## [1.0.1] - 2026-02-21 -- Production-Ready Stable Release
 
 Cello v1.0.1 is the first production-ready stable release of the framework. After ten iterative

@@ -223,9 +223,9 @@ impl ClusterManager {
 
         println!("Starting cluster with {} workers", self.config.workers);
 
-        for i in 0..self.config.workers {
+        for _i in 0..self.config.workers {
             let worker_id = self.next_worker_id.fetch_add(1, Ordering::SeqCst);
-            let mut info = WorkerInfo::new(worker_id);
+            let info = WorkerInfo::new(worker_id);
 
             #[cfg(target_os = "linux")]
             if self.config.cpu_affinity {
