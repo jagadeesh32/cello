@@ -243,6 +243,9 @@ __all__ = [
     "TemplateEngine",
     "Depends",
     "cache",
+    # Async HTTP client
+    "AsyncClient",
+    "HttpResponse",
     # v1.1.0 - MiniJinja template engine
     "MiniJinjaEngine",
     # Guards (RBAC)
@@ -423,6 +426,7 @@ class App:
         self._app = Cello()
         self._routes = []  # Track routes for OpenAPI generation
         self._template_engine: "MiniJinjaEngine | None" = None  # v1.1.0
+        self._redis = None  # Python Redis client; set by enable_redis()
 
     def _register_route(self, method: str, path: str, func, tags: list = None, summary: str = None, description: str = None):
         """Internal: Register a route and track metadata for OpenAPI."""
@@ -461,7 +465,7 @@ class App:
                 return {"message": f"Hello, {request.params['name']}!"}
         """
         def decorator(func):
-            wrapped = _apply_guards(wrap_handler_with_validation(func), guards)
+            wrapped = _apply_guards(wrap_handler_with_validation(self._make_redis_aware(func)), guards)
             self._app.get(path, wrapped)
             self._register_route("GET", path, func, tags, summary, description)
             return wrapped
@@ -470,7 +474,7 @@ class App:
     def post(self, path: str, tags: list = None, summary: str = None, description: str = None, guards: list = None):
         """Register a POST route."""
         def decorator(func):
-            wrapped = _apply_guards(wrap_handler_with_validation(func), guards)
+            wrapped = _apply_guards(wrap_handler_with_validation(self._make_redis_aware(func)), guards)
             self._app.post(path, wrapped)
             self._register_route("POST", path, func, tags, summary, description)
             return wrapped
@@ -479,7 +483,7 @@ class App:
     def put(self, path: str, tags: list = None, summary: str = None, description: str = None, guards: list = None):
         """Register a PUT route."""
         def decorator(func):
-            wrapped = _apply_guards(wrap_handler_with_validation(func), guards)
+            wrapped = _apply_guards(wrap_handler_with_validation(self._make_redis_aware(func)), guards)
             self._app.put(path, wrapped)
             self._register_route("PUT", path, func, tags, summary, description)
             return wrapped
@@ -488,7 +492,7 @@ class App:
     def delete(self, path: str, tags: list = None, summary: str = None, description: str = None, guards: list = None):
         """Register a DELETE route."""
         def decorator(func):
-            wrapped = _apply_guards(wrap_handler_with_validation(func), guards)
+            wrapped = _apply_guards(wrap_handler_with_validation(self._make_redis_aware(func)), guards)
             self._app.delete(path, wrapped)
             self._register_route("DELETE", path, func, tags, summary, description)
             return wrapped
@@ -497,7 +501,7 @@ class App:
     def patch(self, path: str, tags: list = None, summary: str = None, description: str = None, guards: list = None):
         """Register a PATCH route."""
         def decorator(func):
-            wrapped = _apply_guards(wrap_handler_with_validation(func), guards)
+            wrapped = _apply_guards(wrap_handler_with_validation(self._make_redis_aware(func)), guards)
             self._app.patch(path, wrapped)
             self._register_route("PATCH", path, func, tags, summary, description)
             return wrapped
@@ -988,7 +992,8 @@ class App:
         Enable Redis connection pooling.
 
         Configures an async Redis client with connection pooling,
-        supporting standard and cluster modes.
+        supporting standard and cluster modes. After calling this,
+        handlers can access the client via ``request.redis``.
 
         Args:
             config: RedisConfig instance
@@ -1005,7 +1010,28 @@ class App:
         """
         if config is None:
             config = RedisConfig()
+        self._redis = Redis(config)
         self._app.enable_redis(config)
+
+    def _make_redis_aware(self, func):
+        """Wrap a handler so request._inject_redis() is called before dispatch."""
+        import inspect
+        from functools import wraps
+        app = self
+        if inspect.iscoroutinefunction(func):
+            @wraps(func)
+            async def async_wrapper(request, *args, **kwargs):
+                if app._redis is not None:
+                    request._inject_redis(app._redis)
+                return await func(request, *args, **kwargs)
+            return async_wrapper
+        else:
+            @wraps(func)
+            def sync_wrapper(request, *args, **kwargs):
+                if app._redis is not None:
+                    request._inject_redis(app._redis)
+                return func(request, *args, **kwargs)
+            return sync_wrapper
 
     # ========================================================================
     # End Data Layer Features
@@ -1609,6 +1635,101 @@ class App:
             if get_mtimes():
                 return
             time.sleep(1)
+
+
+class HttpResponse:
+    """HTTP response returned by AsyncClient."""
+
+    def __init__(self, status: int, content: bytes, headers: dict):
+        self.status = status
+        self.content = content
+        self._headers = headers
+
+    @property
+    def text(self) -> str:
+        return self.content.decode("utf-8", errors="replace")
+
+    def json(self) -> dict:
+        import json
+        return json.loads(self.content)
+
+    def __repr__(self):
+        return f"<HttpResponse status={self.status}>"
+
+
+class AsyncClient:
+    """
+    Async HTTP client backed by a thread-pool so it never blocks Tokio workers.
+
+    Uses Python's standard ``urllib.request`` for zero extra dependencies.
+    HTTP requests execute in ``asyncio``'s default thread-pool executor via
+    ``asyncio.to_thread``, keeping the event loop free during I/O waits.
+
+    Example::
+
+        from cello import App, AsyncClient
+
+        client = AsyncClient()
+
+        @app.get("/proxy")
+        async def proxy(request):
+            resp = await client.get("https://example.com")
+            return {"status": resp.status, "body": resp.text}
+    """
+
+    def __init__(self, timeout: float = 30.0):
+        self._timeout = timeout
+
+    def _sync_request(self, method: str, url: str, headers: dict = None,
+                      json_body=None, content: bytes = None) -> "HttpResponse":
+        import urllib.request
+        import json as _json
+
+        body = None
+        hdrs = dict(headers or {})
+
+        if json_body is not None:
+            body = _json.dumps(json_body).encode()
+            hdrs.setdefault("Content-Type", "application/json")
+        elif content is not None:
+            body = content
+
+        req = urllib.request.Request(url, data=body, headers=hdrs, method=method.upper())
+        import urllib.error
+        try:
+            with urllib.request.urlopen(req, timeout=self._timeout) as resp:
+                return HttpResponse(resp.status, resp.read(), dict(resp.headers))
+        except urllib.error.HTTPError as exc:
+            return HttpResponse(exc.code, exc.read(), dict(exc.headers))
+
+    async def get(self, url: str, headers: dict = None) -> "HttpResponse":
+        import asyncio
+        return await asyncio.to_thread(self._sync_request, "GET", url, headers)
+
+    async def post(self, url: str, json=None, content: bytes = None,
+                   headers: dict = None) -> "HttpResponse":
+        import asyncio
+        return await asyncio.to_thread(self._sync_request, "POST", url, headers, json, content)
+
+    async def put(self, url: str, json=None, content: bytes = None,
+                  headers: dict = None) -> "HttpResponse":
+        import asyncio
+        return await asyncio.to_thread(self._sync_request, "PUT", url, headers, json, content)
+
+    async def patch(self, url: str, json=None, content: bytes = None,
+                    headers: dict = None) -> "HttpResponse":
+        import asyncio
+        return await asyncio.to_thread(self._sync_request, "PATCH", url, headers, json, content)
+
+    async def delete(self, url: str, headers: dict = None) -> "HttpResponse":
+        import asyncio
+        return await asyncio.to_thread(self._sync_request, "DELETE", url, headers)
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *_):
+        pass
 
 
 class Depends:
