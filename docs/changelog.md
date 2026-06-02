@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.2.0] - 2026-06-02 — Bug Fixes & Rust-Native AsyncClient
+
+### Fixed
+
+- **`on_event("shutdown")` coroutine never awaited** — async shutdown handlers now driven to completion via `pyo3_asyncio::tokio::into_future`; coroutine body executes correctly before process exits
+- **`KeyboardInterrupt` propagating into shutdown handlers** — `CTRL+C` signal during shutdown no longer prints spurious `Error in shutdown handler: KeyboardInterrupt`; suppressed at the Rust call site
+- **`request.redis` raises `AttributeError`** — `redis` property added to the Rust `Request` struct; Python dispatch wrapper injects the configured Redis client before each handler call
+
+### Added
+
+- **`Redis.eval(script, numkeys, *keys_and_args)`** — execute a Lua script inline (single round-trip atomic operations)
+- **`Redis.evalsha(sha, numkeys, *keys_and_args)`** — execute a server-cached Lua script by SHA1
+- **`Redis.script_load(script)`** — upload a Lua script to Redis; returns its SHA1 for use with `evalsha`
+- **Rust-native `AsyncClient`** — rewritten from `urllib.request + asyncio.to_thread` to `reqwest 0.11 + Tokio`; GIL is never held during network I/O; HTTP/2, automatic gzip decompression, and `rustls` TLS included; API is identical to v1.1.0
+
+### Dependency
+
+- `reqwest = { version = "0.11", features = ["rustls-tls", "gzip"], default-features = false }` moved from `[dev-dependencies]` to `[dependencies]`
+- New source module: `src/http_client.rs`
+
+### Breaking Changes
+
+None. All v1.1.0 code works without modification.
+
+---
+
 ## [1.1.0] - 2026-04-11 — MiniJinja Template Engine
 
 ### Added
