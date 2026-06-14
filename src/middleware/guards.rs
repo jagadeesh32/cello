@@ -10,7 +10,7 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use super::{Middleware, MiddlewareAction, MiddlewareError, MiddlewareResult};
+use super::{path_matches_skip, Middleware, MiddlewareAction, MiddlewareError, MiddlewareResult};
 use crate::request::Request;
 use pyo3::prelude::*;
 
@@ -547,7 +547,7 @@ impl Middleware for GuardsMiddleware {
 
         // Check if path should be skipped
         for skip_path in &self.skip_paths {
-            if request.path.starts_with(skip_path) {
+            if path_matches_skip(&request.path, skip_path) {
                 return Ok(MiddlewareAction::Continue);
             }
         }

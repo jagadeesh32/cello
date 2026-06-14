@@ -11,7 +11,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use super::{Middleware, MiddlewareAction, MiddlewareResult};
+use super::{path_matches_skip, Middleware, MiddlewareAction, MiddlewareResult};
 use crate::request::Request;
 use crate::response::Response;
 
@@ -563,7 +563,7 @@ impl RateLimitStore for FixedWindowStore {
         let current_window = self.current_window();
         let reset_time = (current_window + 1) * self.window_seconds;
 
-        let entry = self
+        let mut entry = self
             .windows
             .entry(key.to_string())
             .or_insert_with(|| FixedWindowState {
@@ -571,10 +571,10 @@ impl RateLimitStore for FixedWindowStore {
                 window_start: current_window,
             });
 
-        // Check if window has changed
+        // Reset counter when window rolls over
         if entry.window_start != current_window {
             entry.count.store(0, Ordering::SeqCst);
-            // Note: This is a simplified approach; in production, use compare_exchange
+            entry.window_start = current_window;
         }
 
         let count = entry.count.fetch_add(1, Ordering::SeqCst);
@@ -848,7 +848,7 @@ impl Middleware for RateLimitMiddleware {
     fn before(&self, request: &mut Request) -> MiddlewareResult {
         // Check if path should be skipped
         for skip_path in &self.skip_paths {
-            if request.path.starts_with(skip_path) {
+            if path_matches_skip(&request.path, skip_path) {
                 return Ok(MiddlewareAction::Continue);
             }
         }

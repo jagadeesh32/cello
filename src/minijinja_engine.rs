@@ -361,7 +361,7 @@ mod tests {
 
     #[test]
     fn test_render_if_block() {
-        let mut env = Environment::new();
+        let env = Environment::new();
         let tmpl = "{% if active %}yes{% else %}no{% endif %}";
         let result = env
             .render_str(tmpl, serde_json::json!({ "active": true }))
@@ -371,7 +371,7 @@ mod tests {
 
     #[test]
     fn test_render_for_loop() {
-        let mut env = Environment::new();
+        let env = Environment::new();
         let tmpl = "{% for i in items %}{{ i }},{% endfor %}";
         let result = env
             .render_str(tmpl, serde_json::json!({ "items": [1, 2, 3] }))
@@ -381,7 +381,7 @@ mod tests {
 
     #[test]
     fn test_render_filters() {
-        let mut env = Environment::new();
+        let env = Environment::new();
         let result = env
             .render_str("{{ name | upper }}", serde_json::json!({ "name": "cello" }))
             .unwrap();
@@ -390,7 +390,7 @@ mod tests {
 
     #[test]
     fn test_render_nested_dict() {
-        let mut env = Environment::new();
+        let env = Environment::new();
         let ctx = serde_json::json!({
             "user": { "name": "Alice", "age": 30 }
         });
@@ -445,7 +445,7 @@ mod tests {
 
     #[test]
     fn test_json_filter() {
-        let mut env = Environment::new();
+        let env = Environment::new();
         let result = env
             .render_str(
                 "{{ data | tojson }}",

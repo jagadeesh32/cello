@@ -13,7 +13,7 @@ use sha2::Sha256;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use subtle::ConstantTimeEq;
 
-use super::{Middleware, MiddlewareAction, MiddlewareError, MiddlewareResult};
+use super::{path_matches_skip, Middleware, MiddlewareAction, MiddlewareError, MiddlewareResult};
 use crate::request::Request;
 use crate::response::Response;
 
@@ -316,7 +316,7 @@ impl CsrfMiddleware {
 
     /// Check if path should skip CSRF.
     fn should_skip(&self, path: &str) -> bool {
-        self.config.skip_paths.iter().any(|p| path.starts_with(p))
+        self.config.skip_paths.iter().any(|p| path_matches_skip(path, p))
     }
 
     /// Extract token from cookie.
@@ -389,7 +389,8 @@ impl CsrfMiddleware {
             cookie.push_str("; Secure");
         }
 
-        cookie.push_str("; HttpOnly");
+        // CSRF double-submit cookie must NOT be HttpOnly — JavaScript needs to
+        // read this value to send it back in the X-CSRF-Token request header.
         cookie.push_str(&format!("; SameSite={}", self.config.cookie_same_site));
 
         cookie

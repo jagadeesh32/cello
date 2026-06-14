@@ -201,6 +201,19 @@ impl MiddlewareError {
     }
 }
 
+/// Check if a request path matches a skip pattern.
+///
+/// Matches when:
+/// - `path == pattern` (exact match), or
+/// - `path` starts with `pattern/` (sub-path match)
+///
+/// Without the trailing-slash check, a pattern like `/health` would also
+/// skip `/healthz`, allowing an auth bypass.
+#[inline]
+pub(super) fn path_matches_skip(path: &str, pattern: &str) -> bool {
+    path == pattern || path.starts_with(&format!("{}/", pattern))
+}
+
 impl std::fmt::Display for MiddlewareError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if let Some(code) = &self.code {

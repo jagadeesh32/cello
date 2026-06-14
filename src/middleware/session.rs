@@ -14,7 +14,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use super::{Middleware, MiddlewareAction, MiddlewareResult};
+use super::{path_matches_skip, Middleware, MiddlewareAction, MiddlewareResult};
 use crate::request::Request;
 use crate::response::Response;
 
@@ -486,7 +486,7 @@ impl Middleware for SessionMiddleware {
     fn before(&self, request: &mut Request) -> MiddlewareResult {
         // Check if path should be skipped
         for skip_path in &self.skip_paths {
-            if request.path.starts_with(skip_path) {
+            if path_matches_skip(&request.path, skip_path) {
                 return Ok(MiddlewareAction::Continue);
             }
         }
@@ -513,7 +513,7 @@ impl Middleware for SessionMiddleware {
     fn after(&self, request: &Request, response: &mut Response) -> MiddlewareResult {
         // Check if path was skipped
         for skip_path in &self.skip_paths {
-            if request.path.starts_with(skip_path) {
+            if path_matches_skip(&request.path, skip_path) {
                 return Ok(MiddlewareAction::Continue);
             }
         }
