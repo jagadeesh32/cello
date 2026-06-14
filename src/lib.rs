@@ -754,60 +754,55 @@ def openapi_handler(request):
         let startup_handlers = self.startup_handlers.clone();
         let shutdown_handlers = self.shutdown_handlers.clone();
 
-        // Configure pyo3-asyncio to use a single-threaded Tokio runtime.
+        // Release the GIL and run a native Tokio current-thread runtime.
         //
-        // PERF: current_thread avoids GIL contention — N Tokio threads all competing
-        // for Python::with_gil creates massive serialization overhead. Parallelism comes
-        // from multi-process (fork + SO_REUSEPORT on Unix, subprocess on Windows).
-        //
-        // After this call, asyncio.get_event_loop() inside any Python handler returns the
-        // pyo3-asyncio Tokio-backed loop instead of _UnixSelectorEventLoop, proving that
-        // Python coroutines are now driven by Tokio. The GIL is released during I/O waits
-        // within coroutines — no uvloop needed, no external event loop optimisation.
-        let mut builder = tokio::runtime::Builder::new_current_thread();
-        builder.enable_all();
-        pyo3_asyncio::tokio::init(builder);
+        // pyo3_asyncio::tokio::run was previously used here but it drives Tokio I/O
+        // through Python's asyncio selector loop, which breaks socket binding in
+        // environments where the two event loops don't integrate (Python 3.12+ / pyo3 0.20).
+        // Since the server's hot path is pure Rust I/O, we release the GIL with
+        // allow_threads and block on a self-contained Tokio runtime. Python handlers
+        // re-acquire the GIL individually via Python::with_gil when they need it.
+        py.allow_threads(|| {
+            tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .expect("failed to build Tokio runtime")
+                .block_on(async move {
+                    let mut config = server::ServerConfig::new(&host_owned, port);
+                    config.workers = workers.unwrap_or(0);
 
-        // pyo3_asyncio::tokio::run creates a new Python asyncio event loop backed by
-        // our Tokio runtime, then runs the given future as a coroutine on that loop.
-        // The GIL is managed internally: released when Tokio is waiting, re-acquired
-        // only when Python bytecode needs to execute.
-        pyo3_asyncio::tokio::run(py, async move {
-            let mut config = server::ServerConfig::new(&host_owned, port);
-            config.workers = workers.unwrap_or(0);
+                    let server = Server::new(
+                        config,
+                        router,
+                        handlers,
+                        middleware,
+                        websocket_handlers,
+                        dependency_container,
+                        guards,
+                        prometheus,
+                    );
 
-            let server = Server::new(
-                config,
-                router,
-                handlers,
-                middleware,
-                websocket_handlers,
-                dependency_container,
-                guards,
-                prometheus,
-            );
-
-            // Startup hooks — driven by Tokio so async def handlers work without asyncio.run()
-            for handler in &startup_handlers {
-                if let Err(e) = run_lifecycle_handler_async(handler.clone()).await {
-                    eprintln!("Error in startup handler: {e}");
-                }
-            }
-
-            let _ = server.run().await;
-
-            // Shutdown hooks — KeyboardInterrupt is expected on CTRL+C, suppress it.
-            for handler in &shutdown_handlers {
-                match run_lifecycle_handler_async(handler.clone()).await {
-                    Err(e) if !e.to_string().contains("KeyboardInterrupt") => {
-                        eprintln!("Error in shutdown handler: {e}");
+                    // Startup hooks
+                    for handler in &startup_handlers {
+                        if let Err(e) = run_lifecycle_handler_async(handler.clone()).await {
+                            eprintln!("Error in startup handler: {e}");
+                        }
                     }
-                    _ => {}
-                }
-            }
 
-            Ok(())
-        })
+                    let _ = server.run().await;
+
+                    // Shutdown hooks
+                    for handler in &shutdown_handlers {
+                        match run_lifecycle_handler_async(handler.clone()).await {
+                            Err(e) if !e.to_string().contains("KeyboardInterrupt") => {
+                                eprintln!("Error in shutdown handler: {e}");
+                            }
+                            _ => {}
+                        }
+                    }
+                })
+        });
+        Ok(())
     }
 
     /// Internal route registration.
