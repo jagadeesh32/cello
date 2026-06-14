@@ -4,7 +4,7 @@
 
 **Cello** is an ultra-fast, Rust-powered Python async web framework designed to achieve C-level performance on the hot path while maintaining Python's developer experience. It's the successor to frameworks like FastAPI, Robyn, and Litestar, combining their best features with pure Rust implementation for maximum performance.
 
-**Version:** 1.2.1
+**Version:** 1.2.2
 **License:** MIT
 **Python Requirement:** 3.12+
 **Author:** Jagadeesh Katla
@@ -346,6 +346,7 @@ def handle_value_error(request, exc):
 
 ## Version History
 
+- **v1.2.2**: Security & bug fixes — CSRF `HttpOnly` on double-submit cookie (critical, broke all AJAX CSRF); all middleware `skip_path` prefix bypass fixed via `path_matches_skip()` helper; `FixedWindowStore` window_start never updated after reset; unused `mut` cleaned in minijinja tests
 - **v1.2.1**: Bug fixes — server port never bound (`pyo3_asyncio` replaced with native `py.allow_threads` + `tokio::block_on`); `ProblemDetails` was missing from Python module export; `And`/`Or` guards now accept both `*args` and list styles; CSRF `HttpOnly` removed from double-submit cookie (JS must read it); `FixedWindowStore` window_start never updated after reset; all middleware `skip_path` used raw `starts_with` allowing prefix bypass; doc corrections (`type_uri` not `type_url`)
 - **v1.2.0**: Bug fixes (shutdown coroutine never awaited, KeyboardInterrupt in shutdown handler, `request.redis` AttributeError); Redis Lua scripting (`eval`, `evalsha`, `script_load`); Rust-native `AsyncClient` backed by `reqwest + Tokio` — GIL never held during HTTP I/O, HTTP/2, gzip, rustls
 - **v1.1.0**: MiniJinja Jinja2-compatible template engine (`MiniJinjaEngine`, `App.enable_templates()`, `App.render()`, `App.render_string()`); minijinja 2 Rust crate; HTML auto-escaping; globals; 47 new tests; 6 examples

@@ -1042,7 +1042,7 @@ def test_version():
     """Test that version is 1.2.0."""
     import cello
 
-    assert cello.__version__ == "1.2.1"
+    assert cello.__version__ == "1.2.2"
 
 
 def test_all_exports():
@@ -2203,7 +2203,7 @@ def test_version_v090():
     """Test that version is 1.2.0 (updated from 0.9.0)."""
     import cello
 
-    assert cello.__version__ == "1.2.1"
+    assert cello.__version__ == "1.2.2"
 
 
 def test_v090_exports_in_all():
@@ -3989,7 +3989,7 @@ def test_version_v0100():
     """Test that version is 1.2.0."""
     import cello
 
-    assert cello.__version__ == "1.2.1"
+    assert cello.__version__ == "1.2.2"
 
 
 def test_v0100_exports_in_all():
