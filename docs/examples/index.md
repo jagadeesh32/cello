@@ -428,23 +428,57 @@ graph LR
 
 ## :material-compare: Feature Matrix
 
-Which features are demonstrated in each example?
+Which features are used in each example? Select a difficulty level:
 
-| Feature | Hello World | REST API | Forms | JWT Auth | Database | Query Params | Full-Stack | Microservices | Dashboard | Redis Cache | Background | GraphQL | File Storage | SaaS | Gateway | Events | Rate Limiting | Health | OAuth2 |
-|:--------|:-----------:|:--------:|:-----:|:--------:|:--------:|:------------:|:----------:|:-------------:|:---------:|:-----------:|:----------:|:-------:|:------------:|:----:|:-------:|:------:|:-------------:|:------:|:------:|
-| Routing | :material-check: | :material-check: | :material-check: | :material-check: | :material-check: | :material-check: | :material-check: | :material-check: | :material-check: | :material-check: | :material-check: | :material-check: | :material-check: | :material-check: | :material-check: | :material-check: | :material-check: | :material-check: | :material-check: |
-| Blueprints | | :material-check: | | | | | :material-check: | :material-check: | :material-check: | | | | | :material-check: | :material-check: | :material-check: | | | :material-check: |
-| Middleware | | :material-check: | | :material-check: | | | :material-check: | :material-check: | :material-check: | :material-check: | | | | :material-check: | :material-check: | :material-check: | :material-check: | :material-check: | :material-check: |
-| Guards / RBAC | | | | :material-check: | | | :material-check: | | | | | | | :material-check: | :material-check: | | | | |
-| JWT Auth | | | | :material-check: | | | :material-check: | :material-check: | | | | | | :material-check: | :material-check: | | | | :material-check: |
-| WebSocket / SSE | | | | | | | | | :material-check: | | | | | | | | | | |
-| Dependency Injection | | | | | | | :material-check: | :material-check: | | | | | | :material-check: | | :material-check: | | | |
-| Background Tasks | | | | | | | | :material-check: | :material-check: | | :material-check: | | | | | :material-check: | | | |
-| Prometheus Metrics | | | | | | | | :material-check: | :material-check: | | | | | | :material-check: | | :material-check: | :material-check: | |
-| Redis / Caching | | | | | | | | | | :material-check: | | | | | | | :material-check: | :material-check: | |
-| File Uploads | | | :material-check: | | | | :material-check: | | | | | | :material-check: | | | | | | |
-| Database | | | | | :material-check: | | :material-check: | :material-check: | | | | :material-check: | | :material-check: | | :material-check: | | :material-check: | |
-| OAuth2 / Sessions | | | | | | | :material-check: | | | | | | | :material-check: | | | | | :material-check: |
+=== ":material-school: Beginner"
+
+    | Feature | Hello World | REST API | Forms | JWT Auth | Database | Query Params |
+    |:--------|:-----------:|:--------:|:-----:|:--------:|:--------:|:------------:|
+    | Routing | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+    | Blueprints | | ✅ | | | | |
+    | Middleware | | ✅ | | ✅ | | |
+    | JWT Auth | | | | ✅ | | |
+    | Guards / RBAC | | | | ✅ | | |
+    | File Uploads | | | ✅ | | | |
+    | Database | | | | | ✅ | |
+    | Query Params | | | | | | ✅ |
+
+=== ":material-rocket-launch: Intermediate"
+
+    | Feature | Full-Stack | Microservices | Dashboard | Redis Cache | Background | GraphQL | File Storage |
+    |:--------|:----------:|:-------------:|:---------:|:-----------:|:----------:|:-------:|:------------:|
+    | Routing | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+    | Blueprints | ✅ | ✅ | ✅ | | | | |
+    | Middleware | ✅ | ✅ | ✅ | ✅ | | | |
+    | JWT Auth | ✅ | ✅ | | | | | |
+    | Guards / RBAC | ✅ | | | | | | |
+    | WebSocket / SSE | | | ✅ | | | | |
+    | Dependency Injection | ✅ | ✅ | | | | | |
+    | Background Tasks | | ✅ | ✅ | | ✅ | | |
+    | Prometheus Metrics | | ✅ | ✅ | | | | |
+    | Redis / Caching | | | | ✅ | | | |
+    | File Uploads | ✅ | | | | | | ✅ |
+    | Database | ✅ | ✅ | | | | ✅ | |
+    | OAuth2 / Sessions | ✅ | | | | | | |
+
+=== ":material-office-building: Enterprise"
+
+    | Feature | Multi-tenant | API Gateway | Event Sourcing | Rate Limiting | Health Checks | OAuth2 |
+    |:--------|:-----------:|:-----------:|:--------------:|:-------------:|:-------------:|:------:|
+    | Routing | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+    | Blueprints | ✅ | ✅ | ✅ | | | ✅ |
+    | Middleware | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+    | JWT Auth | ✅ | ✅ | | | | ✅ |
+    | Guards / RBAC | ✅ | ✅ | | | | |
+    | Dependency Injection | ✅ | | ✅ | | | |
+    | Background Tasks | | | ✅ | | | |
+    | Prometheus Metrics | | ✅ | | ✅ | ✅ | |
+    | Redis / Caching | | | | ✅ | ✅ | |
+    | Circuit Breaker | | ✅ | | ✅ | | |
+    | Database | ✅ | | ✅ | | ✅ | |
+    | OpenTelemetry | | | | | ✅ | |
+    | Message Queues | | | ✅ | | | |
+    | OAuth2 / Sessions | ✅ | | | | | ✅ |
 
 ---
 

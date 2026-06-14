@@ -485,76 +485,96 @@ html {
    9. TABLES — Beautiful Interface
    ========================================================================== */
 
+/* Scroll wrapper — no border/radius here so overflow-x:auto works correctly */
 .md-typeset__table {
   width: 100% !important;
   margin: 1.75rem 0 !important;
   overflow-x: auto !important;
-  border-radius: 10px;
-  box-shadow: 0 2px 16px rgba(0,0,0,0.07), 0 1px 4px rgba(0,0,0,0.04);
+  -webkit-overflow-scrolling: touch;
 }
 
+/*
+ * border-collapse:separate + border-spacing:0 is the only way to get
+ * border-radius + overflow:hidden working on a <table>. With "collapse"
+ * the browser ignores both, giving plain ugly square corners.
+ */
 .md-typeset table:not([class]) {
   width: 100% !important;
   display: table !important;
   margin: 0 !important;
-  border-collapse: collapse;
-  border-radius: 10px;
-  overflow: hidden;
-  border: none;
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+  border-radius: 12px !important;
+  overflow: hidden !important;
+  border: 2px solid #2D3748 !important;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.11), 0 1px 6px rgba(0,0,0,0.06) !important;
 }
 
-/* Header — orange gradient */
-.md-typeset table:not([class]) thead {
-  background: linear-gradient(135deg, #E65100 0%, #BF360C 100%);
-}
+/* ── Header — BLACK text on cool-grey background ── */
+.md-typeset table:not([class]) thead tr { background: #EEF2F7 !important; }
 .md-typeset table:not([class]) th {
-  background: transparent;
-  color: #FFFFFF;
-  font-weight: 700;
-  font-size: 0.77rem;
-  padding: 0.85rem 1.1rem;
-  border-bottom: none;
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-  white-space: nowrap;
+  background: #EEF2F7 !important;
+  color: #000000 !important;
+  font-weight: 800 !important;
+  font-size: 0.775rem !important;
+  padding: 0.9rem 1.15rem !important;
+  text-align: center !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.07em !important;
+  white-space: nowrap !important;
+  vertical-align: middle !important;
+  border-bottom: 2px solid #2D3748 !important;
+  border-right: 1px solid #C8D0DC !important;
 }
-.md-typeset table:not([class]) th:first-child { border-radius: 10px 0 0 0; }
-.md-typeset table:not([class]) th:last-child  { border-radius: 0 10px 0 0; }
+.md-typeset table:not([class]) th:first-child {
+  text-align: left !important;
+  border-right: 2px solid #C8D0DC !important;
+}
+.md-typeset table:not([class]) th:last-child {
+  border-right: none !important;
+}
 
-/* Body rows */
+/* ── Body cells ── */
 .md-typeset table:not([class]) td {
-  padding: 0.72rem 1.1rem;
-  border-bottom: 1px solid var(--c-border);
-  font-size: 0.845rem;
-  color: #2D3748;
-  vertical-align: middle;
-  transition: background 0.13s;
+  padding: 0.7rem 1.15rem !important;
+  border-bottom: 1px solid #E2E8F0 !important;
+  border-right: 1px solid #E2E8F0 !important;
+  font-size: 0.845rem !important;
+  color: #2D3748 !important;
+  text-align: center !important;
+  vertical-align: middle !important;
+  background: #FFFFFF !important;
+  transition: background 0.12s !important;
 }
-
-/* First column — bold accent */
 .md-typeset table:not([class]) td:first-child {
-  font-weight: 600;
-  color: #1A202C;
-  border-left: 3px solid transparent;
-  transition: border-color 0.13s, background 0.13s;
+  text-align: left !important;
+  font-weight: 600 !important;
+  color: #1A202C !important;
+  background: #F8FAFC !important;
+  border-right: 2px solid #E2E8F0 !important;
+}
+.md-typeset table:not([class]) td:last-child {
+  border-right: none !important;
+}
+.md-typeset table:not([class]) tr:last-child td {
+  border-bottom: none !important;
 }
 
-/* Last row — round bottom corners */
-.md-typeset table:not([class]) tr:last-child td { border-bottom: none; }
-.md-typeset table:not([class]) tr:last-child td:first-child { border-radius: 0 0 0 10px; }
-.md-typeset table:not([class]) tr:last-child td:last-child  { border-radius: 0 0 10px 0; }
-
-/* Zebra stripes */
-.md-typeset table:not([class]) tr:nth-child(even) td {
-  background: rgba(230, 81, 0, 0.028);
+/* ── Zebra stripes ── */
+.md-typeset table:not([class]) tbody tr:nth-child(even) td {
+  background: #F4F7FB !important;
+}
+.md-typeset table:not([class]) tbody tr:nth-child(even) td:first-child {
+  background: #EBF0F7 !important;
 }
 
-/* Row hover — orange left accent on first cell */
+/* ── Row hover ── */
 .md-typeset table:not([class]) tbody tr:hover td {
-  background: rgba(230, 81, 0, 0.055);
+  background: rgba(230,81,0,0.05) !important;
 }
 .md-typeset table:not([class]) tbody tr:hover td:first-child {
-  border-left-color: var(--c-orange);
+  color: var(--c-orange) !important;
+  background: rgba(230,81,0,0.04) !important;
 }
 
 /* Mermaid diagram container */
