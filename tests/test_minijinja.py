@@ -477,7 +477,7 @@ class TestComplexContextTypes:
 # ===========================================================================
 
 
-def test_version_is_1_1_0():
+def test_version_is_1_2_0():
     import cello
 
-    assert cello.__version__ == "1.1.0"
+    assert cello.__version__ == "1.2.0"

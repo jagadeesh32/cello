@@ -1072,3 +1072,124 @@ html {
   min-height: 56px !important;
   align-items: center !important;
 }
+
+/* ==========================================================================
+   COOKIE CONSENT — Centered modal popup (overrides Material's bottom strip)
+   ========================================================================== */
+
+/* Full-screen backdrop wrapper */
+.md-consent {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  z-index: 10000 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 1rem !important;
+}
+
+/* Dimmed, blurred backdrop */
+.md-consent__overlay {
+  position: fixed !important;
+  inset: 0 !important;
+  background: rgba(10,10,20,0.55) !important;
+  backdrop-filter: blur(3px) !important;
+  -webkit-backdrop-filter: blur(3px) !important;
+}
+
+/* The modal card itself */
+.md-consent__inner {
+  position: relative !important;
+  z-index: 1 !important;
+  /* override Material's default bottom-left positioning */
+  bottom: auto !important;
+  left: auto !important;
+  right: auto !important;
+  top: auto !important;
+  max-width: 480px !important;
+  width: 100% !important;
+  margin: 0 !important;
+  background: #FFFFFF !important;
+  border-radius: 16px !important;
+  box-shadow:
+    0 24px 64px rgba(0,0,0,0.22),
+    0 4px 16px rgba(0,0,0,0.12) !important;
+  border-top: 4px solid var(--c-orange) !important;
+  overflow: hidden !important;
+  animation: consent-pop 0.22s cubic-bezier(0.34,1.56,0.64,1) both !important;
+}
+
+@keyframes consent-pop {
+  from { opacity: 0; transform: scale(0.92) translateY(16px); }
+  to   { opacity: 1; transform: scale(1)    translateY(0);    }
+}
+
+/* Form padding */
+.md-consent__form {
+  padding: 2rem 2rem 1.75rem !important;
+}
+
+/* Title */
+.md-consent__title {
+  font-size: 1.1rem !important;
+  font-weight: 800 !important;
+  color: #1A202C !important;
+  margin: 0 0 0.6rem !important;
+  letter-spacing: -0.01em !important;
+}
+
+/* Description text */
+.md-consent__description {
+  font-size: 0.875rem !important;
+  color: #4A5568 !important;
+  line-height: 1.6 !important;
+  margin-bottom: 1.5rem !important;
+}
+
+/* Cookie checkboxes area */
+.md-consent__inputs {
+  border: none !important;
+  padding: 0 !important;
+  margin: 0 0 1.5rem !important;
+}
+
+/* Button row */
+.md-consent__controls {
+  display: flex !important;
+  gap: 0.75rem !important;
+  flex-wrap: wrap !important;
+}
+
+/* Accept button — orange fill */
+.md-consent__controls .md-button--primary {
+  background: var(--c-orange) !important;
+  color: #FFFFFF !important;
+  border-color: var(--c-orange) !important;
+  border-radius: 8px !important;
+  font-weight: 700 !important;
+  padding: 0.55rem 1.5rem !important;
+  flex: 1 !important;
+  transition: background 0.15s, transform 0.1s !important;
+}
+.md-consent__controls .md-button--primary:hover {
+  background: #BF360C !important;
+  transform: translateY(-1px) !important;
+}
+
+/* Reject / secondary button */
+.md-consent__controls .md-button:not(.md-button--primary) {
+  background: transparent !important;
+  color: #4A5568 !important;
+  border: 1.5px solid #CBD5E0 !important;
+  border-radius: 8px !important;
+  font-weight: 600 !important;
+  padding: 0.55rem 1.25rem !important;
+  transition: border-color 0.15s, color 0.15s !important;
+}
+.md-consent__controls .md-button:not(.md-button--primary):hover {
+  border-color: #718096 !important;
+  color: #1A202C !important;
+}
