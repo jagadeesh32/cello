@@ -143,6 +143,9 @@ from cello._cello import (
     HttpResponse,
 )
 
+# RFC 7807 Problem Details
+from cello._cello import ProblemDetails
+
 def validate_jwt_config(config: JwtConfig) -> JwtConfig:
     """Validate a JwtConfig instance.
 
@@ -285,6 +288,8 @@ __all__ = [
     "EventSourcingConfig",
     "CqrsConfig",
     "SagaConfig",
+    # RFC 7807
+    "ProblemDetails",
     # Config validators
     "validate_jwt_config",
     "validate_session_config",

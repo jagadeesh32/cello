@@ -2107,5 +2107,8 @@ fn _cello(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_class::<PyCqrsConfig>()?;
     m.add_class::<PySagaConfig>()?;
 
+    // RFC 7807 error type
+    m.add_class::<error::ProblemDetails>()?;
+
     Ok(())
 }
