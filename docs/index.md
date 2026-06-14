@@ -15,7 +15,7 @@ hide:
 <div class="hero-section" markdown>
 
 <div class="hero-logo">
-  <img src="https://cello-framework.vercel.app/logo-full.png" alt="Cello Framework" style="max-width: 320px; width: 100%; height: auto;">
+  <img src="logo.svg" alt="Cello Framework" style="height: 80px; width: auto; max-width: 100%;">
 </div>
 
 <div class="hero-title">🔥 Cello Framework 🚀</div>
@@ -247,13 +247,13 @@ graph LR
     E --> F["<b>Rust Response Builder</b><br/>SIMD JSON Serialization"]
     F --> G["<b>Response</b><br/>Zero-Copy Output"]
 
-    style A fill:#1A1A1A,stroke:#E65100,color:#FF9100
-    style B fill:#1A1A1A,stroke:#E65100,color:#FF9100
-    style C fill:#1A1A1A,stroke:#E65100,color:#FF9100
-    style D fill:#1A1A1A,stroke:#E65100,color:#FF9100
-    style E fill:#1A1A1A,stroke:#424242,color:#42a5f5
-    style F fill:#1A1A1A,stroke:#E65100,color:#FF9100
-    style G fill:#1A1A1A,stroke:#E65100,color:#FF9100
+    style A fill:#FFF3E0,stroke:#E65100,color:#BF360C
+    style B fill:#FFF3E0,stroke:#E65100,color:#BF360C
+    style C fill:#FFF3E0,stroke:#E65100,color:#BF360C
+    style D fill:#FFF3E0,stroke:#E65100,color:#BF360C
+    style E fill:#E3F2FD,stroke:#1976D2,color:#0D47A1
+    style F fill:#FFF3E0,stroke:#E65100,color:#BF360C
+    style G fill:#FFF3E0,stroke:#E65100,color:#BF360C
 ```
 
 <div class="arch-explain" markdown>

@@ -31,7 +31,7 @@ classifiers = [
 [project.urls]
 Homepage = "https://github.com/jagadeesh32/cello"
 Repository = "https://github.com/jagadeesh32/cello"
-Documentation = "https://cello-framework.vercel.app/"
+Documentation = "https://cello.lineupcode.com/"
 
 [project.optional-dependencies]
 dev = [

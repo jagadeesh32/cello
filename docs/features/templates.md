@@ -582,12 +582,12 @@ Six runnable examples are included:
 
 | Example | Description |
 |---------|-------------|
-| [`examples/minijinja_basic.py`](../../examples/minijinja_basic.py) | Getting started: variables, filters, loops |
-| [`examples/minijinja_advanced.py`](../../examples/minijinja_advanced.py) | Inheritance, globals, standalone engine |
-| [`examples/minijinja_blog.py`](../../examples/minijinja_blog.py) | Multi-page blog with pagination and 404 |
-| [`examples/minijinja_forms.py`](../../examples/minijinja_forms.py) | Form validation with sticky values |
-| [`examples/minijinja_macros.py`](../../examples/minijinja_macros.py) | Reusable UI component library |
-| [`examples/minijinja_emails.py`](../../examples/minijinja_emails.py) | HTML + plain-text email templates |
+| [`examples/minijinja_basic.py`](https://github.com/jagadeesh32/cello/blob/main/examples/minijinja_basic.py) | Getting started: variables, filters, loops |
+| [`examples/minijinja_advanced.py`](https://github.com/jagadeesh32/cello/blob/main/examples/minijinja_advanced.py) | Inheritance, globals, standalone engine |
+| [`examples/minijinja_blog.py`](https://github.com/jagadeesh32/cello/blob/main/examples/minijinja_blog.py) | Multi-page blog with pagination and 404 |
+| [`examples/minijinja_forms.py`](https://github.com/jagadeesh32/cello/blob/main/examples/minijinja_forms.py) | Form validation with sticky values |
+| [`examples/minijinja_macros.py`](https://github.com/jagadeesh32/cello/blob/main/examples/minijinja_macros.py) | Reusable UI component library |
+| [`examples/minijinja_emails.py`](https://github.com/jagadeesh32/cello/blob/main/examples/minijinja_emails.py) | HTML + plain-text email templates |
 
 ---
 

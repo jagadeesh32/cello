@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://cello-framework.vercel.app/logo-full.png" alt="Cello" width="400">
+  <img src="https://cello.lineupcode.com/logo-full.png" alt="Cello" width="400">
 </p>
 
 <p align="center">
@@ -19,7 +19,7 @@
   <a href="#-quick-start">Quick Start</a> •
   <a href="#-features">Features</a> •
   <a href="#-examples">Examples</a> •
-  <a href="https://cello-framework.vercel.app/">Documentation</a>
+  <a href="https://cello.lineupcode.com/">Documentation</a>
 </p>
 
 ---
@@ -644,13 +644,13 @@ cargo fmt
 
 ## 📚 Documentation
 
-Full documentation available at: **[cello-framework.vercel.app](https://cello-framework.vercel.app/)**
+Full documentation available at: **[cello.lineupcode.com](https://cello.lineupcode.com/)**
 
-- 📖 [Getting Started](https://cello-framework.vercel.app/getting-started/)
-- ✨ [Features](https://cello-framework.vercel.app/features/)
-- 📘 [API Reference](https://cello-framework.vercel.app/reference/)
-- 🏢 [Enterprise Guide](https://cello-framework.vercel.app/enterprise/)
-- 📝 [Examples](https://cello-framework.vercel.app/examples/)
+- 📖 [Getting Started](https://cello.lineupcode.com/getting-started/)
+- ✨ [Features](https://cello.lineupcode.com/features/)
+- 📘 [API Reference](https://cello.lineupcode.com/reference/)
+- 🏢 [Enterprise Guide](https://cello.lineupcode.com/enterprise/)
+- 📝 [Examples](https://cello.lineupcode.com/examples/)
 
 ---
 

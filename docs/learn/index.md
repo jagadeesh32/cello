@@ -32,9 +32,9 @@ graph LR
     I --- I1
     A --- A1
 
-    classDef beginner fill:#1A1A1A,stroke:#4caf50,color:#4caf50
-    classDef intermediate fill:#1A1A1A,stroke:#FF9100,color:#FF9100
-    classDef advanced fill:#1A1A1A,stroke:#e53935,color:#e53935
+    classDef beginner fill:#E8F5E9,stroke:#2E7D32,color:#1B5E20
+    classDef intermediate fill:#FFF3E0,stroke:#EF6C00,color:#E65100
+    classDef advanced fill:#FFEBEE,stroke:#C62828,color:#B71C1C
 ```
 
 <div class="grid cards" markdown>
