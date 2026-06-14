@@ -116,49 +116,32 @@ def handle_unexpected(request, exc):
 ### Using ProblemDetails in Cello
 
 ```python
-from cello import App, Response
+from cello import App, ProblemDetails
 
 app = App()
 
-def problem(type_url: str, title: str, status: int,
-            detail: str = None, instance: str = None, **extra) -> Response:
-    """Helper to build an RFC 7807 response."""
-    body = {"type": type_url, "title": title, "status": status}
-    if detail:
-        body["detail"] = detail
-    if instance:
-        body["instance"] = instance
-    body.update(extra)
-    resp = Response.json(body, status=status)
-    resp.set_header("Content-Type", "application/problem+json")
-    return resp
-```
-
-Use the helper in handlers and exception handlers:
-
-```python
 @app.get("/users/{id}")
 def get_user(request):
     user = find_user(request.params["id"])
     if not user:
-        return problem(
-            type_url="/errors/not-found",
+        return ProblemDetails(
+            type_uri="/errors/not-found",
             title="User Not Found",
             status=404,
             detail=f"No user with ID {request.params['id']}",
             instance=request.path,
-        )
+        ).to_response()
     return user
 
 @app.exception_handler(ValueError)
 def handle_validation(request, exc):
-    return problem(
-        type_url="/errors/validation",
+    return ProblemDetails(
+        type_uri="/errors/validation",
         title="Validation Error",
         status=400,
         detail=str(exc),
         instance=request.path,
-    )
+    ).to_response()
 ```
 
 ---
@@ -213,22 +196,22 @@ class ConflictError(Exception):
 
 @app.exception_handler(NotFoundError)
 def handle_not_found(request, exc):
-    return problem(
-        type_url="/errors/not-found",
+    return ProblemDetails(
+        type_uri="/errors/not-found",
         title=f"{exc.resource} Not Found",
         status=404,
         detail=str(exc),
         instance=request.path,
-    )
+    ).to_response()
 
 @app.exception_handler(ConflictError)
 def handle_conflict(request, exc):
-    return problem(
-        type_url="/errors/conflict",
+    return ProblemDetails(
+        type_uri="/errors/conflict",
         title="Conflict",
         status=409,
         detail=str(exc),
-    )
+    ).to_response()
 ```
 
 Then raise them in handlers:
@@ -253,12 +236,12 @@ from cello.guards import GuardError
 
 @app.exception_handler(GuardError)
 def handle_guard_error(request, exc):
-    return problem(
-        type_url="/errors/access-denied",
+    return ProblemDetails(
+        type_uri="/errors/access-denied",
         title="Access Denied",
         status=exc.status_code,
         detail=exc.message,
-    )
+    ).to_response()
 ```
 
 ---

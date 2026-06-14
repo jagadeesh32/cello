@@ -336,7 +336,7 @@ from cello import App, ProblemDetails
 @app.exception_handler(ValueError)
 def handle_value_error(request, exc):
     return ProblemDetails(
-        type_url="/errors/validation",
+        type_uri="/errors/validation",
         title="Validation Error",
         status=400,
         detail=str(exc),
@@ -346,6 +346,7 @@ def handle_value_error(request, exc):
 
 ## Version History
 
+- **v1.2.1**: Bug fixes — server port never bound (`pyo3_asyncio` replaced with native `py.allow_threads` + `tokio::block_on`); `ProblemDetails` was missing from Python module export; `And`/`Or` guards now accept both `*args` and list styles; doc corrections (`type_uri` not `type_url`)
 - **v1.2.0**: Bug fixes (shutdown coroutine never awaited, KeyboardInterrupt in shutdown handler, `request.redis` AttributeError); Redis Lua scripting (`eval`, `evalsha`, `script_load`); Rust-native `AsyncClient` backed by `reqwest + Tokio` — GIL never held during HTTP I/O, HTTP/2, gzip, rustls
 - **v1.1.0**: MiniJinja Jinja2-compatible template engine (`MiniJinjaEngine`, `App.enable_templates()`, `App.render()`, `App.render_string()`); minijinja 2 Rust crate; HTML auto-escaping; globals; 47 new tests; 6 examples
 - **v1.0.1**: Cross-platform fixes (Windows multi-worker, signal handling, UNC paths; ARM JSON fallback; Linux-only CPU affinity), async compatibility fixes (handler validation, guards, cache decorator, blueprints), guards and database exports in `__all__`

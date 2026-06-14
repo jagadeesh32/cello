@@ -124,9 +124,12 @@ class Authenticated(Guard):
         return True
 
 class And(Guard):
-    """Pass only if ALL guards pass."""
-    def __init__(self, guards: List[Callable]):
-        self.guards = guards
+    """Pass only if ALL guards pass. Accepts a list or *args: And([g1, g2]) or And(g1, g2)."""
+    def __init__(self, *args):
+        if len(args) == 1 and isinstance(args[0], list):
+            self.guards = args[0]
+        else:
+            self.guards = list(args)
 
     def __call__(self, request: Any):
         for guard in self.guards:
@@ -139,9 +142,12 @@ class And(Guard):
         return True
 
 class Or(Guard):
-    """Pass if ANY guard passes."""
-    def __init__(self, guards: List[Callable]):
-        self.guards = guards
+    """Pass if ANY guard passes. Accepts a list or *args: Or([g1, g2]) or Or(g1, g2)."""
+    def __init__(self, *args):
+        if len(args) == 1 and isinstance(args[0], list):
+            self.guards = args[0]
+        else:
+            self.guards = list(args)
 
     def __call__(self, request: Any):
         last_error = None

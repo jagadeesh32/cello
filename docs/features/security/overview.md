@@ -270,8 +270,8 @@ admin_only = RoleGuard(["admin"])
 can_edit = PermissionGuard(["posts:edit"])
 
 # Composable guards
-admin_or_editor = Or(RoleGuard(["admin"]), RoleGuard(["editor"]))
-admin_with_write = And(RoleGuard(["admin"]), PermissionGuard(["write"]))
+admin_or_editor = Or([RoleGuard(["admin"]), RoleGuard(["editor"])])
+admin_with_write = And([RoleGuard(["admin"]), PermissionGuard(["write"])])
 
 @app.get("/admin", guards=[admin_only])
 def admin_panel(request):
