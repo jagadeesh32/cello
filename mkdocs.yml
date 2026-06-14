@@ -23,7 +23,7 @@ theme:
   language: en
 
   # Logo and favicon
-  logo: logo.svg
+  logo: logo-icon.svg
   favicon: logo.jpg
 
   # Color palette - light only
@@ -168,10 +168,6 @@ markdown_extensions:
 
 # Extra configuration
 extra:
-  version:
-    provider: mike
-    default: stable
-
   # Social links
   social:
     - icon: fontawesome/brands/github
@@ -304,18 +300,58 @@ nav:
 
   - Examples:
     - examples/index.md
+    - Real Examples:
+      - Hello World: examples/real/hello-world.md
+      - Async & Sync Handlers: examples/real/async-handlers.md
+      - Simple API with OpenAPI: examples/real/simple-api.md
+      - DTO Validation: examples/real/dto-validation.md
+      - Lifecycle Hooks: examples/real/lifecycle-hooks.md
+      - Adaptive Rate Limiting: examples/real/adaptive-rate-limiting.md
+      - Smart Caching: examples/real/smart-caching.md
+      - Circuit Breaker: examples/real/circuit-breaker.md
+      - Guards (RBAC): examples/real/guards.md
+      - Blueprints & Routing: examples/real/blueprints-advanced.md
+      - Middleware Demo: examples/real/middleware-demo.md
+      - Advanced Middleware: examples/real/advanced-middleware.md
+      - Database & Redis: examples/real/database-demo.md
+      - Streaming & SSE: examples/real/streaming-sse.md
+      - Auto OpenAPI Docs: examples/real/auto-openapi.md
+      - Security Features: examples/real/security.md
+      - Enterprise Config: examples/real/enterprise-config.md
+      - Complete Showcase: examples/real/complete-showcase.md
+      - Comprehensive Demo: examples/real/comprehensive-demo.md
+      - All Features Demo: examples/real/all-features.md
+      - Advanced Patterns: examples/real/advanced-patterns.md
+      - API Protocols: examples/real/api-protocols.md
+      - Cluster Demo: examples/real/cluster-demo.md
+      - MiniJinja Basic: examples/real/minijinja-basic.md
+      - MiniJinja Advanced: examples/real/minijinja-advanced.md
+      - MiniJinja Forms: examples/real/minijinja-forms.md
+      - MiniJinja Blog: examples/real/minijinja-blog.md
+      - MiniJinja Emails: examples/real/minijinja-emails.md
+      - MiniJinja Macros: examples/real/minijinja-macros.md
     - Basic Examples:
       - Hello World: examples/basic/hello-world.md
       - REST API: examples/basic/rest-api.md
       - Form Handling: examples/basic/forms.md
+      - Database: examples/basic/database.md
+      - JWT Auth: examples/basic/jwt-auth.md
+      - Query Parameters: examples/basic/query-params.md
     - Advanced Examples:
       - Full-Stack App: examples/advanced/fullstack.md
       - Microservices: examples/advanced/microservices.md
       - Real-time Dashboard: examples/advanced/realtime-dashboard.md
+      - Background Tasks: examples/advanced/background-tasks.md
+      - File Storage: examples/advanced/file-storage.md
+      - GraphQL: examples/advanced/graphql.md
+      - Redis Caching: examples/advanced/redis-caching.md
     - Enterprise Examples:
       - Multi-tenant SaaS: examples/enterprise/multi-tenant.md
       - API Gateway: examples/enterprise/api-gateway.md
       - Event Sourcing: examples/enterprise/event-sourcing.md
+      - Health Checks: examples/enterprise/health-checks.md
+      - OAuth2: examples/enterprise/oauth2.md
+      - Rate Limiting: examples/enterprise/rate-limiting.md
 
   - Enterprise:
     - enterprise/index.md
