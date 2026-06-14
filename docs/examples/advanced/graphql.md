@@ -1,6 +1,13 @@
 ---
 title: GraphQL API
 description: Add a GraphQL endpoint alongside REST routes
+tags:
+  - GraphQL
+  - API
+  - Schema
+  - Queries
+  - REST API
+  - Examples
 ---
 
 # :material-graph: GraphQL API

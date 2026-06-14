@@ -1,6 +1,13 @@
 ---
 title: File Storage (S3-Compatible)
 description: Upload and stream files to S3-compatible storage
+tags:
+  - File Upload
+  - S3
+  - Storage
+  - Cloud
+  - Streaming
+  - Examples
 ---
 
 # :material-cloud-upload: File Storage (S3-Compatible)

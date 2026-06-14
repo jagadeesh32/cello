@@ -1,6 +1,13 @@
 ---
 title: JWT Authentication
 description: Secure routes with JSON Web Tokens
+tags:
+  - JWT
+  - Authentication
+  - Security
+  - Token
+  - Authorization
+  - Examples
 ---
 
 # :material-shield-key: JWT Authentication

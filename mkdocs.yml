@@ -100,7 +100,8 @@ plugins:
   # - git-committers:
   #     repository: jagadeesh32/cello
   #     branch: main
-  - tags
+  - tags:
+      tags_file: tags.md
   # Social cards disabled - requires cairosvg and PIL
   # - social:
   #     cards_layout_options:

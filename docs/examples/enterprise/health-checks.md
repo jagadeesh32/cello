@@ -1,6 +1,14 @@
 ---
 title: Health Checks & Observability
 description: Production-ready health endpoints for Kubernetes and monitoring
+tags:
+  - Health Checks
+  - Kubernetes
+  - Monitoring
+  - Prometheus
+  - Observability
+  - Production
+  - Examples
 ---
 
 # :material-heart-pulse: Health Checks & Observability

@@ -2,6 +2,13 @@
 title: Examples & Recipes
 description: Working code examples organized by difficulty -- from Hello World to enterprise-grade applications
 icon: material/code-tags-check
+tags:
+  - Python
+  - Web Framework
+  - Examples
+  - Tutorial
+  - REST API
+  - Code Samples
 ---
 
 # :material-code-tags-check: Examples & Recipes

@@ -1,6 +1,13 @@
 ---
 title: Background Tasks
 description: Offload slow work to background workers with retries
+tags:
+  - Background Tasks
+  - Async
+  - Workers
+  - Queue
+  - Performance
+  - Examples
 ---
 
 # :material-cog-transfer: Background Tasks

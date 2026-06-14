@@ -1,6 +1,12 @@
 ---
 title: Query Parameters & Validation
 description: Parse and validate URL query parameters
+tags:
+  - Query Parameters
+  - REST API
+  - Validation
+  - HTTP
+  - Examples
 ---
 
 # :material-filter-check: Query Parameters & Validation

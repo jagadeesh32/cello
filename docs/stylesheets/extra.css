@@ -482,43 +482,94 @@ html {
 }
 
 /* ==========================================================================
-   9. TABLES
+   9. TABLES — Beautiful Interface
    ========================================================================== */
 
 .md-typeset__table {
   width: 100% !important;
-  margin: 1.5rem 0 !important;
+  margin: 1.75rem 0 !important;
   overflow-x: auto !important;
+  border-radius: 10px;
+  box-shadow: 0 2px 16px rgba(0,0,0,0.07), 0 1px 4px rgba(0,0,0,0.04);
 }
+
 .md-typeset table:not([class]) {
   width: 100% !important;
   display: table !important;
   margin: 0 !important;
   border-collapse: collapse;
-  border-radius: 8px;
+  border-radius: 10px;
   overflow: hidden;
-  border: 1px solid var(--c-border);
-  box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+  border: none;
+}
+
+/* Header — orange gradient */
+.md-typeset table:not([class]) thead {
+  background: linear-gradient(135deg, #E65100 0%, #BF360C 100%);
 }
 .md-typeset table:not([class]) th {
-  background: var(--c-bg-subtle);
-  color: #2D3748;
+  background: transparent;
+  color: #FFFFFF;
   font-weight: 700;
-  font-size: 0.8rem;
-  padding: 0.7rem 1rem;
-  border-bottom: 2px solid var(--c-border-strong);
+  font-size: 0.77rem;
+  padding: 0.85rem 1.1rem;
+  border-bottom: none;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.07em;
+  white-space: nowrap;
 }
+.md-typeset table:not([class]) th:first-child { border-radius: 10px 0 0 0; }
+.md-typeset table:not([class]) th:last-child  { border-radius: 0 10px 0 0; }
+
+/* Body rows */
 .md-typeset table:not([class]) td {
-  padding: 0.65rem 1rem;
+  padding: 0.72rem 1.1rem;
   border-bottom: 1px solid var(--c-border);
-  font-size: 0.85rem;
+  font-size: 0.845rem;
   color: #2D3748;
+  vertical-align: middle;
+  transition: background 0.13s;
 }
+
+/* First column — bold accent */
+.md-typeset table:not([class]) td:first-child {
+  font-weight: 600;
+  color: #1A202C;
+  border-left: 3px solid transparent;
+  transition: border-color 0.13s, background 0.13s;
+}
+
+/* Last row — round bottom corners */
 .md-typeset table:not([class]) tr:last-child td { border-bottom: none; }
-.md-typeset table:not([class]) tr:nth-child(even) td { background: #FAFAFA; }
-.md-typeset table:not([class]) tr:hover td { background: var(--c-bg-hover); }
+.md-typeset table:not([class]) tr:last-child td:first-child { border-radius: 0 0 0 10px; }
+.md-typeset table:not([class]) tr:last-child td:last-child  { border-radius: 0 0 10px 0; }
+
+/* Zebra stripes */
+.md-typeset table:not([class]) tr:nth-child(even) td {
+  background: rgba(230, 81, 0, 0.028);
+}
+
+/* Row hover — orange left accent on first cell */
+.md-typeset table:not([class]) tbody tr:hover td {
+  background: rgba(230, 81, 0, 0.055);
+}
+.md-typeset table:not([class]) tbody tr:hover td:first-child {
+  border-left-color: var(--c-orange);
+}
+
+/* Mermaid diagram container */
+.md-typeset .mermaid {
+  background: #FAFBFC;
+  border: 1px solid var(--c-border);
+  border-radius: 10px;
+  padding: 1.5rem 1rem;
+  margin: 1.75rem 0;
+  overflow-x: auto;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.04);
+}
+
+/* Mermaid node colours inherit theme */
+.md-typeset .mermaid svg { max-width: 100%; height: auto; }
 
 /* ==========================================================================
    10. CARDS

@@ -7,6 +7,44 @@ description: HTTP routing in Cello Framework
 
 Cello uses a high-performance radix tree router implemented in Rust using the `matchit` crate. Routes are compiled at startup for O(log n) lookup performance.
 
+```mermaid
+mindmap
+  root((Cello Router))
+    HTTP Methods
+      GET
+      POST
+      PUT / PATCH
+      DELETE
+      route() multi-method
+    Path Types
+      Static   /users
+      Param    /users/{id}
+      Wildcard /files/{path:*}
+    Constraints
+      int   {id:int}
+      uuid  {id:uuid}
+      regex {slug:regex}
+    Blueprints
+      URL prefix
+      Nested blueprints
+      Group middleware
+```
+
+```mermaid
+flowchart LR
+    A(["GET /users/42"]) --> B{"Radix Tree\nO(log n)"}
+    B -->|matched| C["/users/{id}"]
+    B -->|no match| D(["404"])
+    C --> E["Extract params\nid = 42"]
+    E --> F["Middleware chain"]
+    F --> G["Python handler"]
+    G --> H(["JSON response"])
+
+    style A fill:#E65100,color:#fff,stroke:none
+    style H fill:#2E7D32,color:#fff,stroke:none
+    style D fill:#C62828,color:#fff,stroke:none
+```
+
 ## Basic Routing
 
 ### HTTP Methods

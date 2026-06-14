@@ -7,6 +7,22 @@ description: Real-time bidirectional communication with WebSocket in Cello Frame
 
 Cello provides WebSocket support through `tokio-tungstenite`, enabling real-time bidirectional communication between clients and your server. WebSocket handlers are registered with the `@app.websocket()` decorator and receive a `WebSocket` connection object.
 
+```mermaid
+flowchart TD
+    C(["Browser / Client"]) -->|"1. HTTP GET\nUpgrade: websocket"| S["Cello Server\ntokio-tungstenite 🦀"]
+    S -->|"2. 101 Switching Protocols"| C
+    S --> H["@app.websocket handler\n🐍 Python"]
+    H -->|"ws.send_text / send_json"| C
+    C -->|"ws.recv()"| H
+    H -->|"msg is None\nor is_close()"| CLOSE(["Connection closed\ncleanup runs"])
+    C -->|"Close frame"| CLOSE
+
+    style C     fill:#1565C0,color:#fff,stroke:none
+    style S     fill:#E65100,color:#fff,stroke:none
+    style H     fill:#6A1B9A,color:#fff,stroke:none
+    style CLOSE fill:#5F6368,color:#fff,stroke:none
+```
+
 ---
 
 ## Quick Start

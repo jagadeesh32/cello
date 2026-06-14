@@ -101,7 +101,7 @@ if __name__ == "__main__":
 
 ```bash
 python app.py
-# 🐍 Cello v1.0.1 server starting at http://127.0.0.1:8000
+# 🐍 Cello v1.2.0 server starting at http://127.0.0.1:8000
 ```
 
 ---
@@ -132,6 +132,16 @@ python app.py
 | 🍪 **Sessions** | Secure cookie-based session management |
 | 🔒 **Security Headers** | CSP, HSTS, X-Frame-Options, Referrer-Policy |
 | 🔑 **API Key Auth** | Header and query parameter authentication |
+
+### v1.2.0 — Bug Fixes & Rust-Native AsyncClient
+
+| Feature | Description |
+|---------|-------------|
+| 🐛 **Shutdown coroutine fix** | `async def` shutdown hooks are now properly awaited via Tokio |
+| 🐛 **KeyboardInterrupt fix** | `CTRL+C` no longer leaks into shutdown handlers |
+| 🐛 **`request.redis` fix** | `AttributeError` on `request.redis` resolved when Redis is enabled |
+| 🦀 **Rust AsyncClient** | `AsyncClient` rewritten in Rust (`reqwest + Tokio`) — GIL never held during HTTP I/O |
+| 📜 **Redis Lua scripting** | `eval`, `evalsha`, `script_load` for atomic server-side operations |
 
 ### Template Engine (v1.1.0)
 
@@ -219,7 +229,7 @@ async def transfer(request):
 
 @app.get("/")
 def home(request):
-    return {"status": "ok", "version": "1.0.1"}
+    return {"status": "ok", "version": "1.2.0"}
 
 app.run()
 ```
@@ -309,7 +319,7 @@ app.enable_prometheus(endpoint="/metrics")
 
 @app.get("/")
 def home(request):
-    return {"status": "ok", "version": "1.0.1"}
+    return {"status": "ok", "version": "1.2.0"}
 
 app.run()
 ```
@@ -449,6 +459,53 @@ html = email_engine.render("welcome.html", {"user": "Alice"})
 {% endblock %}
 ```
 
+### Rust-Native AsyncClient (v1.2.0)
+
+```python
+from cello import AsyncClient
+
+client = AsyncClient(timeout=10.0)
+
+# GET
+resp = await client.get("https://api.example.com/data")
+print(resp.status)    # int
+print(resp.json())    # dict
+
+# POST with JSON
+resp = await client.post("https://api.example.com/items", json={"name": "widget"})
+
+# PUT / PATCH / DELETE
+resp = await client.put("https://api.example.com/items/1", json={"name": "updated"})
+resp = await client.delete("https://api.example.com/items/1")
+
+# Async context manager
+async with AsyncClient() as c:
+    resp = await c.get("https://example.com")
+```
+
+> GIL is never held during network I/O. HTTP/2, gzip, and `rustls` TLS are included.
+
+### Redis Lua Scripting (v1.2.0)
+
+```python
+app.enable_redis(RedisConfig(url="redis://localhost:6379", pool_size=10))
+
+@app.get("/")
+async def index(request):
+    r = request.redis
+
+    # Upload script once, reuse by SHA1
+    sha = await r.script_load("""
+        local m = redis.call('SISMEMBER', KEYS[1], ARGV[1])
+        if m == 0 then return 0 end
+        redis.call('LPUSH', KEYS[2], ARGV[2])
+        return 1
+    """)
+
+    result = await r.evalsha(sha, 2, "tokens", "queue", "tok", "payload")
+    return {"enqueued": result == 1}
+```
+
 ### Response Types
 
 ```python
@@ -530,6 +587,14 @@ cargo fmt
 ---
 
 ## 📋 Release History
+
+### v1.2.0 — Bug Fixes & Rust-Native AsyncClient (Jun 2026)
+
+- **Fix:** `async def` shutdown handlers (`@app.on_event("shutdown")`) now correctly awaited via Tokio instead of silently dropped
+- **Fix:** `KeyboardInterrupt` during `CTRL+C` no longer leaks into shutdown handler error output
+- **Fix:** `request.redis` no longer raises `AttributeError` when `app.enable_redis()` is configured
+- **Rust AsyncClient:** `AsyncClient` rewritten from Python stdlib to `reqwest + Tokio` — GIL is never held during HTTP I/O; HTTP/2, gzip, and `rustls` TLS included; API unchanged from v1.1.0
+- **Redis Lua scripting:** `eval(script, numkeys, *args)`, `evalsha(sha, numkeys, *args)`, `script_load(script)` for atomic server-side operations
 
 ### v1.1.0 — MiniJinja Template Engine (Apr 2026)
 

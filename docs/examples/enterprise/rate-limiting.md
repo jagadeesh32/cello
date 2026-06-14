@@ -1,6 +1,13 @@
 ---
 title: Rate Limiting & DDoS Protection
 description: Sliding window rate limiting with Redis and IP filtering
+tags:
+  - Rate Limiting
+  - DDoS
+  - Security
+  - Redis
+  - Middleware
+  - Examples
 ---
 
 # :material-speedometer: Rate Limiting & DDoS Protection

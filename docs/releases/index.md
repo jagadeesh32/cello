@@ -2,6 +2,12 @@
 title: Release Notes
 description: Version history, changelogs, and migration guides for every Cello Framework release
 icon: material/tag-multiple
+tags:
+  - Release Notes
+  - Changelog
+  - v1.2.0
+  - v1.1.0
+  - Migration
 ---
 
 # :material-tag-multiple: Release Notes

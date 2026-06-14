@@ -1,6 +1,12 @@
 ---
 title: Redis Caching
 description: Cache responses using Redis with TTL management
+tags:
+  - Redis
+  - Caching
+  - Performance
+  - TTL
+  - Examples
 ---
 
 # :material-database-clock: Redis Caching

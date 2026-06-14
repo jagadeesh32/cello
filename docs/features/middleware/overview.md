@@ -9,34 +9,32 @@ Cello's middleware system is implemented entirely in Rust as an async chain. Eac
 
 ## How Middleware Works
 
-```
-Request
-  │
-  ▼
-┌──────────────────────────┐
-│  Rate Limiting  (Rust)   │  ← May short-circuit with 429
-├──────────────────────────┤
-│  Security Headers (Rust) │  ← Adds CSP, HSTS, etc.
-├──────────────────────────┤
-│  CORS  (Rust)            │  ← Handles preflight, adds headers
-├──────────────────────────┤
-│  CSRF Protection (Rust)  │  ← Validates tokens on POST/PUT/DELETE
-├──────────────────────────┤
-│  Authentication (Rust)   │  ← JWT/Basic/API Key validation
-├──────────────────────────┤
-│  Logging  (Rust)         │  ← Records request/response info
-├──────────────────────────┤
-│  Compression (Rust)      │  ← Compresses response body
-├──────────────────────────┤
-│  Caching  (Rust)         │  ← Returns cached response if available
-├──────────────────────────┤
-│  Circuit Breaker (Rust)  │  ← Opens circuit on repeated failures
-├──────────────────────────┤
-│  Your Handler (Python)   │  ← Business logic
-└──────────────────────────┘
-  │
-  ▼
-Response
+```mermaid
+flowchart TD
+    REQ(["HTTP Request"]) --> RL["Rate Limiting 🦀"]
+    RL -->|"429 Too Many"| ERR(["Error Response"])
+    RL -->|OK| SH["Security Headers 🦀"]
+    SH --> CORS["CORS 🦀"]
+    CORS -->|"Preflight OPTIONS"| PRE(["Preflight 200"])
+    CORS -->|Continue| CSRF["CSRF Protection 🦀"]
+    CSRF -->|"Invalid token"| ERR
+    CSRF -->|Valid| AUTH["Authentication 🦀\nJWT / Basic / API Key"]
+    AUTH -->|"401 Unauthorized"| ERR
+    AUTH -->|OK| LOG["Logging 🦀"]
+    LOG --> COMP["Compression 🦀"]
+    COMP --> CACHE{"Cache Hit?"}
+    CACHE -->|"✓ Hit"| CACHED(["Cached Response"])
+    CACHE -->|"✗ Miss"| CB["Circuit Breaker 🦀"]
+    CB -->|"Circuit open"| ERR
+    CB -->|"Circuit closed"| PY(["🐍 Python Handler\nYour business logic"])
+    PY --> RES(["HTTP Response"])
+
+    style REQ  fill:#E65100,color:#fff,stroke:none
+    style RES  fill:#2E7D32,color:#fff,stroke:none
+    style ERR  fill:#C62828,color:#fff,stroke:none
+    style PY   fill:#1565C0,color:#fff,stroke:none
+    style CACHED fill:#2E7D32,color:#fff,stroke:none
+    style PRE  fill:#2E7D32,color:#fff,stroke:none
 ```
 
 Each middleware can:

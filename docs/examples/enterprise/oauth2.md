@@ -1,6 +1,14 @@
 ---
 title: OAuth2 & Social Login
 description: OAuth2 authorization code flow with Google and GitHub
+tags:
+  - OAuth2
+  - Authentication
+  - Google
+  - GitHub
+  - Social Login
+  - Security
+  - Examples
 ---
 
 # :material-shield-account: OAuth2 & Social Login

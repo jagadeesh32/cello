@@ -1,6 +1,13 @@
 ---
 title: Database Integration
 description: Async database queries with connection pooling
+tags:
+  - Database
+  - PostgreSQL
+  - Async
+  - Connection Pool
+  - CRUD
+  - Examples
 ---
 
 # :material-database: Database Integration

@@ -7,6 +7,54 @@ description: Security features in Cello Framework
 
 Cello is built with security as a core principle. All security features are implemented in Rust with constant-time operations to prevent timing attacks.
 
+```mermaid
+mindmap
+  root((Security))
+    Authentication
+      JWT HS256 RS256 ES256
+      Basic Auth
+      API Key header/query
+      Constant-time compare
+    Authorization
+      RoleGuard
+      PermissionGuard
+      And / Or / Not guards
+      RBAC composable
+    Protection
+      CSRF double-submit
+      Rate limiting
+      Body size limit
+      Request ID tracing
+    Headers
+      CSP Content-Security-Policy
+      HSTS Strict-Transport
+      X-Frame-Options
+      Referrer-Policy
+    Sessions
+      Secure cookie
+      HttpOnly SameSite
+      Automatic rotation
+```
+
+```mermaid
+flowchart LR
+    REQ(["Request"]) --> AUTH{"Authentication\ntoken present?"}
+    AUTH -->|No token| ANON{"Route\npublic?"}
+    ANON -->|Yes| HANDLER
+    ANON -->|No| U401(["401 Unauthorized"])
+    AUTH -->|Token| VERIFY{"Verify\nsignature + exp"}
+    VERIFY -->|Invalid / expired| U401
+    VERIFY -->|Valid| CLAIMS["Extract claims\nroles, permissions"]
+    CLAIMS --> GUARD{"Guards\npassed?"}
+    GUARD -->|Fail| F403(["403 Forbidden"])
+    GUARD -->|Pass| HANDLER(["🐍 Handler"])
+
+    style REQ   fill:#E65100,color:#fff,stroke:none
+    style U401  fill:#C62828,color:#fff,stroke:none
+    style F403  fill:#C62828,color:#fff,stroke:none
+    style HANDLER fill:#2E7D32,color:#fff,stroke:none
+```
+
 ## Security Features
 
 <div class="grid cards" markdown>
