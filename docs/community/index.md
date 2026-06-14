@@ -2,6 +2,11 @@
 title: Community
 description: Join the Cello Framework community -- contribute, get support, and connect with other developers
 icon: material/account-group
+tags:
+  - Community
+  - Contributing
+  - Open Source
+  - Support
 ---
 
 # :material-account-group: Welcome to the Cello Community

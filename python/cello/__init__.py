@@ -137,6 +137,12 @@ from cello._cello import (
     SagaConfig,
 )
 
+# Rust-native async HTTP client (reqwest + Tokio, no GIL during I/O)
+from cello._cello import (
+    AsyncClient,
+    HttpResponse,
+)
+
 def validate_jwt_config(config: JwtConfig) -> JwtConfig:
     """Validate a JwtConfig instance.
 
@@ -243,6 +249,9 @@ __all__ = [
     "TemplateEngine",
     "Depends",
     "cache",
+    # Async HTTP client
+    "AsyncClient",
+    "HttpResponse",
     # v1.1.0 - MiniJinja template engine
     "MiniJinjaEngine",
     # Guards (RBAC)
@@ -282,7 +291,7 @@ __all__ = [
     "validate_rate_limit_config",
     "validate_tls_config",
 ]
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 
 
 class Blueprint:
@@ -423,6 +432,7 @@ class App:
         self._app = Cello()
         self._routes = []  # Track routes for OpenAPI generation
         self._template_engine: "MiniJinjaEngine | None" = None  # v1.1.0
+        self._redis = None  # Python Redis client; set by enable_redis()
 
     def _register_route(self, method: str, path: str, func, tags: list = None, summary: str = None, description: str = None):
         """Internal: Register a route and track metadata for OpenAPI."""
@@ -461,7 +471,7 @@ class App:
                 return {"message": f"Hello, {request.params['name']}!"}
         """
         def decorator(func):
-            wrapped = _apply_guards(wrap_handler_with_validation(func), guards)
+            wrapped = _apply_guards(wrap_handler_with_validation(self._make_redis_aware(func)), guards)
             self._app.get(path, wrapped)
             self._register_route("GET", path, func, tags, summary, description)
             return wrapped
@@ -470,7 +480,7 @@ class App:
     def post(self, path: str, tags: list = None, summary: str = None, description: str = None, guards: list = None):
         """Register a POST route."""
         def decorator(func):
-            wrapped = _apply_guards(wrap_handler_with_validation(func), guards)
+            wrapped = _apply_guards(wrap_handler_with_validation(self._make_redis_aware(func)), guards)
             self._app.post(path, wrapped)
             self._register_route("POST", path, func, tags, summary, description)
             return wrapped
@@ -479,7 +489,7 @@ class App:
     def put(self, path: str, tags: list = None, summary: str = None, description: str = None, guards: list = None):
         """Register a PUT route."""
         def decorator(func):
-            wrapped = _apply_guards(wrap_handler_with_validation(func), guards)
+            wrapped = _apply_guards(wrap_handler_with_validation(self._make_redis_aware(func)), guards)
             self._app.put(path, wrapped)
             self._register_route("PUT", path, func, tags, summary, description)
             return wrapped
@@ -488,7 +498,7 @@ class App:
     def delete(self, path: str, tags: list = None, summary: str = None, description: str = None, guards: list = None):
         """Register a DELETE route."""
         def decorator(func):
-            wrapped = _apply_guards(wrap_handler_with_validation(func), guards)
+            wrapped = _apply_guards(wrap_handler_with_validation(self._make_redis_aware(func)), guards)
             self._app.delete(path, wrapped)
             self._register_route("DELETE", path, func, tags, summary, description)
             return wrapped
@@ -497,7 +507,7 @@ class App:
     def patch(self, path: str, tags: list = None, summary: str = None, description: str = None, guards: list = None):
         """Register a PATCH route."""
         def decorator(func):
-            wrapped = _apply_guards(wrap_handler_with_validation(func), guards)
+            wrapped = _apply_guards(wrap_handler_with_validation(self._make_redis_aware(func)), guards)
             self._app.patch(path, wrapped)
             self._register_route("PATCH", path, func, tags, summary, description)
             return wrapped
@@ -988,7 +998,8 @@ class App:
         Enable Redis connection pooling.
 
         Configures an async Redis client with connection pooling,
-        supporting standard and cluster modes.
+        supporting standard and cluster modes. After calling this,
+        handlers can access the client via ``request.redis``.
 
         Args:
             config: RedisConfig instance
@@ -1005,7 +1016,28 @@ class App:
         """
         if config is None:
             config = RedisConfig()
+        self._redis = Redis(config)
         self._app.enable_redis(config)
+
+    def _make_redis_aware(self, func):
+        """Wrap a handler so request._inject_redis() is called before dispatch."""
+        import inspect
+        from functools import wraps
+        app = self
+        if inspect.iscoroutinefunction(func):
+            @wraps(func)
+            async def async_wrapper(request, *args, **kwargs):
+                if app._redis is not None:
+                    request._inject_redis(app._redis)
+                return await func(request, *args, **kwargs)
+            return async_wrapper
+        else:
+            @wraps(func)
+            def sync_wrapper(request, *args, **kwargs):
+                if app._redis is not None:
+                    request._inject_redis(app._redis)
+                return func(request, *args, **kwargs)
+            return sync_wrapper
 
     # ========================================================================
     # End Data Layer Features

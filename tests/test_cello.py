@@ -1039,10 +1039,10 @@ def test_dependency_injection_registration():
 
 
 def test_version():
-    """Test that version is 1.1.0."""
+    """Test that version is 1.2.0."""
     import cello
 
-    assert cello.__version__ == "1.1.0"
+    assert cello.__version__ == "1.2.0"
 
 
 def test_all_exports():
@@ -2200,10 +2200,10 @@ def test_v080_all_exports():
 
 
 def test_version_v090():
-    """Test that version is 1.1.0 (updated from 0.9.0)."""
+    """Test that version is 1.2.0 (updated from 0.9.0)."""
     import cello
 
-    assert cello.__version__ == "1.1.0"
+    assert cello.__version__ == "1.2.0"
 
 
 def test_v090_exports_in_all():
@@ -3986,10 +3986,10 @@ async def test_consumer_with_sqs_config():
 
 
 def test_version_v0100():
-    """Test that version is 1.1.0."""
+    """Test that version is 1.2.0."""
     import cello
 
-    assert cello.__version__ == "1.1.0"
+    assert cello.__version__ == "1.2.0"
 
 
 def test_v0100_exports_in_all():
@@ -5625,7 +5625,7 @@ def test_saga_execution_compensates_on_failure():
 
     exe = SagaExecution(saga)
     try:
-        asyncio.get_event_loop().run_until_complete(exe.run({}))
+        asyncio.run(exe.run({}))
     except SagaError:
         pass  # Expected
     assert "s1" in log

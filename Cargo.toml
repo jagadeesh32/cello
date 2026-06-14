@@ -1,6 +1,6 @@
 [package]
 name = "cello-framework"
-version = "1.1.0"
+version = "1.2.0"
 edition = "2021"
 description = "Ultra-fast Rust-powered Python async web framework"
 license = "MIT"
@@ -16,8 +16,14 @@ crate-type = ["cdylib"]
 # Python bindings (minimum Python 3.12)
 pyo3 = { version = "0.20", features = ["extension-module", "abi3-py312"] }
 
+# Tokio-backed Python async event loop (drives async def handlers via Tokio, not asyncio)
+pyo3-asyncio = { version = "0.20", features = ["tokio-runtime"] }
+
 # Async runtime
 tokio = { version = "1", features = ["full"] }
+
+# Async HTTP client (Rust-native, no GIL during I/O)
+reqwest = { version = "0.11", features = ["rustls-tls", "gzip"], default-features = false }
 
 # HTTP server
 hyper = { version = "1", features = ["full"] }
@@ -144,7 +150,6 @@ grpc = ["tonic", "prost"]
 full = ["postgres", "graphql", "grpc"]
 
 [dev-dependencies]
-reqwest = { version = "0.11", features = ["blocking", "json", "multipart"] }
 tokio-test = "0.4"
 tempfile = "3"
 

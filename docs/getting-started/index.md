@@ -2,6 +2,13 @@
 title: Getting Started
 description: Get up and running with Cello Framework in minutes
 icon: material/rocket-launch
+tags:
+  - Python
+  - Web Framework
+  - Getting Started
+  - Installation
+  - Tutorial
+  - Quick Start
 ---
 
 # :material-rocket-launch: Getting Started
@@ -18,9 +25,30 @@ icon: material/rocket-launch
 
 ## :material-eye: What You'll Build
 
+```mermaid
+flowchart LR
+    A(["pip install\ncello-framework"]) --> B["Create App()"]
+    B --> C["Register Routes\n@app.get / post / put"]
+    C --> D["app.run()"]
+    D --> E(["API live\nlocalhost:8000"])
+
+    C -->|"Need auth?"| F["app.use(JwtAuth)"]
+    C -->|"Need DB?"| G["app.enable_database()"]
+    C -->|"Group routes?"| H["Blueprint"]
+    F --> D
+    G --> D
+    H --> C
+
+    style A fill:#E65100,color:#fff,stroke:none
+    style E fill:#2E7D32,color:#fff,stroke:none
+    style F fill:#1565C0,color:#fff,stroke:none
+    style G fill:#1565C0,color:#fff,stroke:none
+    style H fill:#6A1B9A,color:#fff,stroke:none
+```
+
 By the end of this guide, you'll have a fully functional REST API running at blazing speed:
 
-```python title="app.py" linenums="1"
+```python title="app.py"
 from cello import App, Response
 
 app = App()

@@ -7,6 +7,32 @@ description: JSON Web Token authentication in Cello Framework
 
 Cello provides JWT (JSON Web Token) authentication middleware implemented in Rust using the `jsonwebtoken` crate. Token validation, signature verification, and claims extraction all happen in Rust with constant-time comparison.
 
+```mermaid
+flowchart LR
+    subgraph "Login Flow"
+        A(["POST /auth/login\nusername + password"]) --> B{"Verify\ncredentials"}
+        B -->|Invalid| X(["401"])
+        B -->|Valid| C["Sign JWT\nHS256 / RS256\n+ expiry claim"]
+        C --> D(["Return token"])
+    end
+    subgraph "Protected Request Flow"
+        E(["GET /protected\nBearer eyJ..."]) --> F{"Validate\nsignature + exp"}
+        F -->|Expired / Invalid| X
+        F -->|Valid| G["Extract claims\nsub, roles, exp"]
+        G --> H["Check guards"]
+        H -->|Fail| Y(["403"])
+        H -->|Pass| I(["Handler runs"])
+    end
+    D -.->|"Client stores & sends"| E
+
+    style A fill:#E65100,color:#fff,stroke:none
+    style E fill:#E65100,color:#fff,stroke:none
+    style X fill:#C62828,color:#fff,stroke:none
+    style Y fill:#C62828,color:#fff,stroke:none
+    style I fill:#2E7D32,color:#fff,stroke:none
+    style C fill:#1565C0,color:#fff,stroke:none
+```
+
 ## Quick Start
 
 ```python

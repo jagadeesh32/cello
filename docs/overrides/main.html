@@ -2,9 +2,53 @@
 
 {% block announce %}
 <span class="cello-announce">
-  🔥 Cello v1.0.1 — Production Ready: Stable API, Peak Performance
-  <a href="{{ base_url }}/releases/v1.0.1/" class="cello-announce-link">
-    Read release notes →
+  Cello v1.2.0 — Redis Lua scripting, Rust-native AsyncClient, critical bug fixes
+  <a href="{{ base_url }}/releases/" class="cello-announce-link">
+    Release notes →
   </a>
 </span>
+{% endblock %}
+
+{% block extrahead %}
+  {{ super() }}
+  {% if page and page.meta %}
+    {% if page.meta.description %}
+    <meta name="description" content="{{ page.meta.description }}">
+    {% endif %}
+    {% if page.meta.tags %}
+    <meta name="keywords" content="{{ page.meta.tags | join(', ') }}">
+    {% endif %}
+  {% endif %}
+  <meta name="author" content="Jagadeesh Katla">
+  <meta property="og:site_name" content="Cello Framework">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:creator" content="@jagadeesh32">
+  <link rel="canonical" href="{{ page.canonical_url if page else config.site_url }}">
+  {% if page and page.is_homepage %}
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Cello Framework",
+    "description": "Ultra-Fast Python Web Framework — Rust-powered performance with Python simplicity",
+    "url": "https://cello.lineupcode.com",
+    "applicationCategory": "DeveloperApplication",
+    "operatingSystem": "Linux, macOS, Windows",
+    "programmingLanguage": ["Python", "Rust"],
+    "license": "https://opensource.org/licenses/MIT",
+    "softwareVersion": "1.2.0",
+    "author": {
+      "@type": "Person",
+      "name": "Jagadeesh Katla",
+      "email": "katla.jagadeesh@gmail.com"
+    },
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD"
+    }
+  }
+  </script>
+  {% endif %}
 {% endblock %}

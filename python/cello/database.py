@@ -340,9 +340,82 @@ class Redis:
         """Get a range from a list."""
         return []
 
+    async def sismember(self, key: str, member: str) -> bool:
+        """Check if member exists in a set."""
+        return False
+
     async def publish(self, channel: str, message: str) -> int:
         """Publish a message to a channel."""
         return 0
+
+    async def eval(self, script: str, numkeys: int, *keys_and_args) -> Any:
+        """
+        Execute a Lua script atomically on the server.
+
+        Args:
+            script:        Lua script source.
+            numkeys:       Number of key arguments that follow.
+            *keys_and_args: KEYS (first ``numkeys`` items) then ARGV.
+
+        Returns:
+            Script return value (int, str, list, or None).
+
+        Example::
+
+            result = await r.eval(
+                "return redis.call('SET', KEYS[1], ARGV[1])",
+                1, "mykey", "myvalue"
+            )
+        """
+        return None
+
+    async def evalsha(self, sha: str, numkeys: int, *keys_and_args) -> Any:
+        """
+        Execute a previously loaded Lua script by its SHA1 digest.
+
+        Use ``script_load`` to upload the script once and reuse the hash
+        to save bandwidth on hot paths.
+
+        Args:
+            sha:           SHA1 hex string returned by ``script_load``.
+            numkeys:       Number of key arguments that follow.
+            *keys_and_args: KEYS then ARGV.
+
+        Returns:
+            Script return value.
+
+        Example::
+
+            sha = await r.script_load("return 1")
+            result = await r.evalsha(sha, 0)
+        """
+        return None
+
+    async def script_load(self, script: str) -> str:
+        """
+        Upload a Lua script to the server and return its SHA1 digest.
+
+        The script is cached server-side; call ``evalsha`` with the
+        returned hash to execute it without re-sending the source.
+
+        Args:
+            script: Lua script source.
+
+        Returns:
+            SHA1 hex string identifying the cached script.
+
+        Example::
+
+            sha = await r.script_load(\"\"\"
+                local m = redis.call('SISMEMBER', KEYS[1], ARGV[1])
+                if m == 0 then return 0 end
+                redis.call('LPUSH', KEYS[2], ARGV[2])
+                return 1
+            \"\"\")
+            result = await r.evalsha(sha, 2, "tokens", "queue", token, data)
+        """
+        import hashlib
+        return hashlib.sha1(script.encode()).hexdigest()
 
     async def close(self):
         """Close the Redis connection pool."""

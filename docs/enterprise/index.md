@@ -2,6 +2,14 @@
 title: Enterprise
 description: Enterprise-grade capabilities for building production-ready applications at scale
 icon: material/domain
+tags:
+  - Enterprise
+  - Production
+  - Kubernetes
+  - Docker
+  - Monitoring
+  - Observability
+  - Deployment
 ---
 
 # :material-domain: Enterprise

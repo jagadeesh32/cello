@@ -1,6 +1,14 @@
 ---
 title: Cello - Ultra-Fast Python Web Framework
 description: Enterprise-grade, Rust-powered Python async web framework with C-level performance
+tags:
+  - Python
+  - Web Framework
+  - Rust
+  - Async
+  - Performance
+  - REST API
+  - HTTP
 hide:
   - navigation
   - toc
@@ -15,7 +23,7 @@ hide:
 <div class="hero-section" markdown>
 
 <div class="hero-logo">
-  <img src="https://cello-framework.vercel.app/logo-full.png" alt="Cello Framework" style="max-width: 320px; width: 100%; height: auto;">
+  <img src="logo.svg" alt="Cello Framework" style="height: 80px; width: auto; max-width: 100%;">
 </div>
 
 <div class="hero-title">🔥 Cello Framework 🚀</div>
@@ -29,7 +37,7 @@ hide:
 [:material-package-variant: PyPI](https://pypi.org/project/cello-framework/){ .md-button }
 
 <div class="hero-badges">
-  <code class="badge-version">v1.1.0</code>
+  <code class="badge-version">v1.2.0</code>
   <code class="badge-tests">441 tests passing</code>
   <code class="badge-license">MIT License</code>
   <code class="badge-python">Python 3.12+</code>
@@ -247,13 +255,13 @@ graph LR
     E --> F["<b>Rust Response Builder</b><br/>SIMD JSON Serialization"]
     F --> G["<b>Response</b><br/>Zero-Copy Output"]
 
-    style A fill:#1A1A1A,stroke:#E65100,color:#FF9100
-    style B fill:#1A1A1A,stroke:#E65100,color:#FF9100
-    style C fill:#1A1A1A,stroke:#E65100,color:#FF9100
-    style D fill:#1A1A1A,stroke:#E65100,color:#FF9100
-    style E fill:#1A1A1A,stroke:#424242,color:#42a5f5
-    style F fill:#1A1A1A,stroke:#E65100,color:#FF9100
-    style G fill:#1A1A1A,stroke:#E65100,color:#FF9100
+    style A fill:#FFF3E0,stroke:#E65100,color:#BF360C
+    style B fill:#FFF3E0,stroke:#E65100,color:#BF360C
+    style C fill:#FFF3E0,stroke:#E65100,color:#BF360C
+    style D fill:#FFF3E0,stroke:#E65100,color:#BF360C
+    style E fill:#E3F2FD,stroke:#1976D2,color:#0D47A1
+    style F fill:#FFF3E0,stroke:#E65100,color:#BF360C
+    style G fill:#FFF3E0,stroke:#E65100,color:#BF360C
 ```
 
 <div class="arch-explain" markdown>
@@ -363,21 +371,21 @@ How Cello stacks up against popular Python web frameworks (4 workers, 5 processe
 
 <!-- ===== WHAT'S NEW ===== -->
 
-## :material-creation: What's New in v1.0.1
+## :material-creation: What's New in v1.2.0
 
 <div class="whats-new-box" markdown>
 
-!!! tip "v1.0.1 -- Production Ready"
+!!! tip "v1.2.0 -- Bug Fixes & Rust-Native AsyncClient"
 
-    Cello reaches **stable release** with a complete feature set, major performance optimizations, and a semantic versioning commitment. The API is now frozen -- no breaking changes until v2.0.
+    Cello v1.2.0 ships critical bug fixes and a brand-new Rust-native HTTP client — the GIL is never held during HTTP I/O.
 
-    - :material-rocket-launch: **Production Stable** -- Battle-tested API with semantic versioning guarantees. Ready for enterprise deployments.
+    - :material-bug-check: **Critical Bug Fixes** -- Shutdown coroutine now properly awaited, `KeyboardInterrupt` handled cleanly in shutdown handler, `request.redis` AttributeError resolved.
 
-    - :material-speedometer: **Performance Optimizations** -- Handler metadata caching, lazy body parsing, zero-copy responses, TCP_NODELAY, and optimized release builds deliver peak throughput.
+    - :material-language-rust: **Rust-Native AsyncClient** -- Backed by `reqwest + Tokio` with HTTP/2, gzip, and rustls. GIL is never held during HTTP I/O — true async performance.
 
-    - :material-feature-search: **Complete Feature Set** -- Routing, middleware, auth, WebSocket, SSE, DI, guards, caching, rate limiting, OpenTelemetry, GraphQL, gRPC, Event Sourcing, CQRS, and Saga patterns -- all in one framework.
+    - :material-database: **Redis Lua Scripting** -- New `eval`, `evalsha`, and `script_load` methods for atomic server-side operations.
 
-    [:material-tag: Full Release Notes](releases/v1.0.1.md){ .md-button .md-button--primary }
+    [:material-tag: Full Release Notes](releases/v1.2.0.md){ .md-button .md-button--primary }
     [:material-book-open-variant: Migration Guide](releases/migration.md){ .md-button }
 
 </div>

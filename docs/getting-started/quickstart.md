@@ -1,6 +1,12 @@
 ---
 title: Quick Start
 description: Create your first Cello application in 5 minutes
+tags:
+  - Quick Start
+  - Tutorial
+  - Getting Started
+  - Hello World
+  - Python
 ---
 
 # Quick Start

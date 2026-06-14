@@ -1,6 +1,12 @@
 ---
 title: Installation
 description: Install Cello Framework on your system
+tags:
+  - Installation
+  - Getting Started
+  - pip
+  - Python
+  - Setup
 ---
 
 # Installation

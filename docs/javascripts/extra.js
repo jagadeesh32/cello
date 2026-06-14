@@ -1,44 +1,40 @@
-/* Cello Framework - Custom JavaScript for Material for MkDocs */
-/* Dark orange/black theme enhancements */
-
+/* Cello Framework – Custom JS */
 (function () {
   "use strict";
 
-  // ──────────────────────────────────────────────
-  // 1. Table Sorting
-  // ──────────────────────────────────────────────
+  // ── 1. Table Sorting ──────────────────────────────────────────────────────
   function initTableSort() {
-    var tables = document.querySelectorAll("article table:not([class])");
-    tables.forEach(function (table) {
+    document.querySelectorAll("article table:not([class])").forEach(function (t) {
+      if (t.classList.contains("tablesort-initialized")) return;
       if (typeof Tablesort !== "undefined") {
-        new Tablesort(table);
+        new Tablesort(t);
+        t.classList.add("tablesort-initialized");
       }
     });
   }
 
-  // ──────────────────────────────────────────────
-  // 2. Copy Button Feedback
-  // ──────────────────────────────────────────────
+  // ── 2. Copy Button Feedback ───────────────────────────────────────────────
   function initCopyFeedback() {
-    var copyButtons = document.querySelectorAll(".md-clipboard");
-    copyButtons.forEach(function (button) {
-      button.addEventListener("click", function () {
-        button.classList.add("copied");
-        button.setAttribute("aria-label", "Copied!");
+    document.querySelectorAll(".md-clipboard").forEach(function (btn) {
+      if (btn.classList.contains("copy-feedback-initialized")) return;
+      btn.classList.add("copy-feedback-initialized");
+      btn.addEventListener("click", function () {
+        btn.classList.add("copied");
+        btn.setAttribute("aria-label", "Copied!");
         setTimeout(function () {
-          button.classList.remove("copied");
-          button.setAttribute("aria-label", "Copy to clipboard");
+          btn.classList.remove("copied");
+          btn.setAttribute("aria-label", "Copy to clipboard");
         }, 2000);
       });
     });
   }
 
-  // ──────────────────────────────────────────────
-  // 3. Smooth Scroll for Anchor Links
-  // ──────────────────────────────────────────────
+  // ── 3. Smooth Scroll ──────────────────────────────────────────────────────
   function initSmoothScroll() {
-    document.querySelectorAll('a[href^="#"]').forEach(function (anchor) {
-      anchor.addEventListener("click", function (e) {
+    document.querySelectorAll('a[href^="#"]').forEach(function (a) {
+      if (a.classList.contains("smooth-scroll-initialized")) return;
+      a.classList.add("smooth-scroll-initialized");
+      a.addEventListener("click", function (e) {
         var href = this.getAttribute("href");
         if (href.length > 1) {
           var target = document.querySelector(href);
@@ -52,11 +48,11 @@
     });
   }
 
-  // ──────────────────────────────────────────────
-  // 4. External Link Handling
-  // ──────────────────────────────────────────────
+  // ── 4. External Links ─────────────────────────────────────────────────────
   function initExternalLinks() {
     document.querySelectorAll('a[href^="http"]').forEach(function (link) {
+      if (link.classList.contains("external-link-initialized")) return;
+      link.classList.add("external-link-initialized");
       if (!link.hostname.includes(window.location.hostname)) {
         link.setAttribute("target", "_blank");
         link.setAttribute("rel", "noopener noreferrer");
@@ -64,115 +60,321 @@
     });
   }
 
-  // ──────────────────────────────────────────────
-  // 5. Animated Counters
-  // ──────────────────────────────────────────────
+  // ── 5. Double Sidebar Layout ──────────────────────────────────────────────
+  function initDoubleSidebar() {
+    var isDesktop = window.matchMedia("(min-width: 76.2em)").matches;
+    var mainInner = document.querySelector(".md-main__inner");
+    var primarySidebar = document.querySelector(".md-sidebar--primary");
+    
+    // Inject icon badges into nav links
+    injectIconBadges();
+
+    // Clean up any existing sub-sidebar if not on desktop
+    if (!isDesktop) {
+      var existingSub = document.querySelector(".md-sidebar--sub");
+      if (existingSub) existingSub.remove();
+      document.body.classList.remove("no-sub-sidebar");
+      return;
+    }
+
+    if (!mainInner || !primarySidebar) return;
+
+    // Remove toggle button if it exists from older code
+    var toggleBtn = document.getElementById("cello-nav-toggle");
+    if (toggleBtn) toggleBtn.remove();
+
+
+
+    // 1. Find the active top-level category item
+    var navList = primarySidebar.querySelector(".md-nav > .md-nav__list");
+    if (!navList) return;
+
+    var activeItem = navList.querySelector(".md-nav__item--active");
+    if (!activeItem) {
+      // Find the first list item as a fallback
+      activeItem = navList.querySelector(".md-nav__item");
+    }
+
+    // 2. Find the sub-navigation menu inside the active item
+    var subNav = activeItem ? activeItem.querySelector(".md-nav[data-md-level='1']") : null;
+
+    // Check if we are on the Home page (by tab title or pathname)
+    var titleText = "";
+    var linkTitleEl = activeItem ? (activeItem.querySelector("a.md-nav__link .md-ellipsis") || activeItem.querySelector("a.md-nav__link")) : null;
+    if (linkTitleEl) {
+      var clone = linkTitleEl.cloneNode(true);
+      var badge = clone.querySelector(".nav-icon-badge");
+      if (badge) badge.remove();
+      titleText = clone.textContent.trim().toLowerCase();
+    }
+    
+    var isHome = (titleText === "home" || titleText === "overview" || window.location.pathname === "/" || window.location.pathname.endsWith("/index.html") || window.location.pathname.endsWith("/index.htm"));
+
+    if (isHome) {
+      subNav = null; // Force disable sub-sidebar on Home page
+    }
+
+    var subSidebar = document.querySelector(".md-sidebar--sub");
+
+    if (subNav) {
+      // We have sub-pages, show sub-sidebar
+      document.body.classList.remove("no-sub-sidebar");
+
+      if (!subSidebar) {
+        subSidebar = document.createElement("div");
+        subSidebar.className = "md-sidebar md-sidebar--sub";
+        mainInner.insertBefore(subSidebar, primarySidebar.nextSibling);
+      }
+
+      // Clear previous content
+      subSidebar.innerHTML = "";
+
+      // Clone subNav and append to subSidebar
+      var clonedNav = subNav.cloneNode(true);
+      clonedNav.style.display = "block"; // Make sure it's visible
+      
+      // Remove any md-nav__title inside the cloned nav to prevent duplicate headers
+      clonedNav.querySelectorAll(".md-nav__title").forEach(function (el) {
+        el.remove();
+      });
+      
+      // Update IDs of toggles and labels to avoid duplicates and enable nested expand/collapse
+      var toggles = clonedNav.querySelectorAll("input.md-toggle, input.md-nav__toggle");
+      toggles.forEach(function (toggle) {
+        var oldId = toggle.id;
+        if (oldId) {
+          var newId = oldId + "-sub";
+          toggle.id = newId;
+          
+          // Find the corresponding label(s) in the cloned node
+          var labels = clonedNav.querySelectorAll("label[for='" + oldId + "']");
+          labels.forEach(function (lbl) {
+            lbl.setAttribute("for", newId);
+          });
+        }
+      });
+      
+      // Create a section title for the sub-sidebar
+      var titleText = "";
+      var sectionHref = "";
+      var linkTitleEl = activeItem.querySelector("a.md-nav__link .md-ellipsis") || activeItem.querySelector("a.md-nav__link");
+      if (linkTitleEl) {
+        // Clone and strip badges to get clean text
+        var clone = linkTitleEl.cloneNode(true);
+        var badge = clone.querySelector(".nav-icon-badge");
+        if (badge) badge.remove();
+        titleText = clone.textContent.trim();
+        
+        var parentLink = activeItem.querySelector("a.md-nav__link");
+        if (parentLink) {
+          sectionHref = parentLink.getAttribute("href");
+        }
+      }
+
+      if (titleText) {
+        var sectionTitle = document.createElement("div");
+        sectionTitle.className = "md-nav__title";
+        sectionTitle.textContent = titleText;
+        subSidebar.appendChild(sectionTitle);
+      }
+
+      // Check if we are already on the section overview page
+      var isOverviewPage = false;
+      if (sectionHref) {
+        try {
+          var currentUrl = new URL(window.location.href);
+          var targetUrl = new URL(sectionHref, window.location.href);
+          var currentPath = currentUrl.pathname.replace(/\/index\.html$/, "/").replace(/\/$/, "");
+          var targetPath = targetUrl.pathname.replace(/\/index\.html$/, "/").replace(/\/$/, "");
+          if (currentPath === targetPath) {
+            isOverviewPage = true;
+          }
+        } catch (e) {
+          // Ignore URL parsing errors
+        }
+      }
+
+      if (sectionHref && titleText && !isOverviewPage) {
+        var backBtn = document.createElement("a");
+        backBtn.className = "sub-sidebar-back-btn";
+        backBtn.setAttribute("href", sectionHref);
+        backBtn.innerHTML = '<i class="fa-solid fa-arrow-left"></i> Back to Overview';
+        subSidebar.appendChild(backBtn);
+      }
+
+      subSidebar.appendChild(clonedNav);
+    } else {
+      // No sub-pages (e.g. Home or Tags), hide sub-sidebar
+      document.body.classList.add("no-sub-sidebar");
+      if (subSidebar) {
+        subSidebar.remove();
+      }
+    }
+
+    // Always enable native tooltips on primary sidebar icons since it's permanently narrow
+    var navLinks = document.querySelectorAll(".md-sidebar--primary a.md-nav__link, .md-sidebar--primary span.md-nav__link");
+    navLinks.forEach(function (link) {
+      if (link.classList.contains("md-nav__container")) return;
+      if (link.tagName.toLowerCase() === "label") return;
+      
+      var text = link.getAttribute("data-title");
+      if (text) {
+        link.setAttribute("title", text);
+      }
+    });
+  }
+
+  var iconMap = {
+    home: '<i class="fa-solid fa-house"></i>',
+    getting_started: '<i class="fa-solid fa-rocket"></i>',
+    features: '<i class="fa-solid fa-bolt"></i>',
+    learn: '<i class="fa-solid fa-book-open"></i>',
+    reference: '<i class="fa-solid fa-book"></i>',
+    examples: '<i class="fa-solid fa-code"></i>',
+    enterprise: '<i class="fa-solid fa-building"></i>',
+    release: '<i class="fa-solid fa-clock-rotate-left"></i>',
+    community: '<i class="fa-solid fa-users"></i>',
+    tags: '<i class="fa-solid fa-tags"></i>',
+    default: '<i class="fa-solid fa-file-lines"></i>'
+  };
+
+  function getIconForTitle(title) {
+    var cleanTitle = title.toLowerCase().trim();
+    
+    if (cleanTitle === "home" || cleanTitle === "overview") return iconMap.home;
+    if (cleanTitle.includes("getting started")) return iconMap.getting_started;
+    if (cleanTitle === "features") return iconMap.features;
+    if (cleanTitle === "learn") return iconMap.learn;
+    if (cleanTitle === "reference") return iconMap.reference;
+    if (cleanTitle === "examples") return iconMap.examples;
+    if (cleanTitle === "enterprise") return iconMap.enterprise;
+    if (cleanTitle.includes("release")) return iconMap.release;
+    if (cleanTitle.includes("community")) return iconMap.community;
+    if (cleanTitle.includes("tag")) return iconMap.tags;
+    
+    return iconMap.default;
+  }
+
+  function injectIconBadges() {
+    var navLinks = document.querySelectorAll(
+      ".md-sidebar--primary a.md-nav__link, .md-sidebar--primary span.md-nav__link"
+    );
+    navLinks.forEach(function (link) {
+      if (link.classList.contains("md-nav__container")) return;
+      if (link.tagName.toLowerCase() === "label") return;
+
+      // Find nearest parent nav element
+      var parentNav = link.closest("nav");
+      if (!parentNav) return;
+
+      // ONLY inject icons for top-level navigation items (level 0)
+      var level = parentNav.getAttribute("data-md-level");
+      if (level !== "0") {
+        // This is a sub-page, remove any existing badges to keep it clean and tidy
+        var existingBadge = link.querySelector(".nav-icon-badge");
+        if (existingBadge) existingBadge.remove();
+        return;
+      }
+
+      if (link.querySelector(".nav-icon-badge")) return;
+
+      var ellipsisNode = link.querySelector(".md-ellipsis");
+      var text = "";
+      if (ellipsisNode) {
+        var clone = ellipsisNode.cloneNode(true);
+        var badg = clone.querySelector(".nav-icon-badge");
+        if (badg) badg.remove();
+        text = clone.textContent.trim();
+      } else {
+        var child = link.firstChild;
+        while (child) {
+          if (child.nodeType === 3) {
+            text += child.textContent;
+          }
+          child = child.nextSibling;
+        }
+        text = text.trim();
+      }
+
+      if (!text) return;
+
+      // Store tooltip
+      if (!link.getAttribute("data-title")) {
+        link.setAttribute("data-title", text);
+      }
+
+      var iconHTML = getIconForTitle(text);
+
+      var badge = document.createElement("span");
+      badge.className = "nav-icon-badge";
+      badge.setAttribute("aria-hidden", "true");
+      badge.innerHTML = iconHTML;
+      link.insertBefore(badge, link.firstChild);
+    });
+  }
+
+  // ── 6. Animated Counters ──────────────────────────────────────────────────
   function initAnimatedCounters() {
     if (!("IntersectionObserver" in window)) return;
-
-    // Match elements containing performance numbers like "150,000+" or "10x"
-    var candidates = document.querySelectorAll(
-      "h1, h2, h3, h4, p, li, td, th, strong, em, span"
-    );
     var numberPattern = /^([\d,]+)\+?$/;
     var multiplierPattern = /^(\d+)x$/;
 
-    candidates.forEach(function (el) {
+    document.querySelectorAll("h1,h2,h3,h4,p,li,td,th,strong,em,span").forEach(function (el) {
+      if (el.hasAttribute("data-counter-animated")) return;
       var text = el.textContent.trim();
-      var match = text.match(numberPattern);
-      var multMatch = text.match(multiplierPattern);
-
-      if (match || multMatch) {
+      if (text.match(numberPattern) || text.match(multiplierPattern)) {
         el.setAttribute("data-counter-animated", "false");
       }
     });
 
-    var counterElements = document.querySelectorAll(
-      "[data-counter-animated='false']"
-    );
-    if (counterElements.length === 0) return;
+    var els = document.querySelectorAll("[data-counter-animated='false']");
+    if (!els.length) return;
 
-    var counterObserver = new IntersectionObserver(
-      function (entries) {
-        entries.forEach(function (entry) {
-          if (
-            entry.isIntersecting &&
-            entry.target.getAttribute("data-counter-animated") === "false"
-          ) {
-            entry.target.setAttribute("data-counter-animated", "true");
-            animateCounter(entry.target);
-          }
-        });
-      },
-      { threshold: 0.3 }
-    );
+    var obs = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (entry.isIntersecting && entry.target.getAttribute("data-counter-animated") === "false") {
+          entry.target.setAttribute("data-counter-animated", "true");
+          animateCounter(entry.target);
+        }
+      });
+    }, { threshold: 0.3 });
 
-    counterElements.forEach(function (el) {
-      counterObserver.observe(el);
-    });
+    els.forEach(function (el) { obs.observe(el); });
   }
 
   function animateCounter(el) {
     var text = el.textContent.trim();
     var hasPlusSuffix = text.endsWith("+");
     var hasXSuffix = text.endsWith("x");
-
-    var rawNumber;
-    if (hasXSuffix) {
-      rawNumber = text.replace("x", "");
-    } else {
-      rawNumber = text.replace(/[+,]/g, "");
-    }
-
-    var targetValue = parseInt(rawNumber, 10);
-    if (isNaN(targetValue) || targetValue === 0) return;
-
+    var raw = text.replace(/[+,x]/g, "");
+    var target = parseInt(raw, 10);
+    if (isNaN(target) || target === 0) return;
     var suffix = hasPlusSuffix ? "+" : hasXSuffix ? "x" : "";
     var useCommas = text.includes(",");
-    var duration = 1200;
-    var startTime = null;
-
-    function formatNumber(num) {
-      if (useCommas) {
-        return num.toLocaleString("en-US");
-      }
-      return String(num);
+    var duration = 1000;
+    var start = null;
+    function fmt(n) { return useCommas ? n.toLocaleString("en-US") : String(n); }
+    function step(ts) {
+      if (!start) start = ts;
+      var p = Math.min((ts - start) / duration, 1);
+      var eased = 1 - Math.pow(1 - p, 3);
+      el.textContent = fmt(Math.floor(eased * target)) + suffix;
+      if (p < 1) requestAnimationFrame(step);
+      else el.textContent = fmt(target) + suffix;
     }
-
-    function step(timestamp) {
-      if (!startTime) startTime = timestamp;
-      var progress = Math.min((timestamp - startTime) / duration, 1);
-      // Ease-out cubic for smooth deceleration
-      var eased = 1 - Math.pow(1 - progress, 3);
-      var current = Math.floor(eased * targetValue);
-      el.textContent = formatNumber(current) + suffix;
-      if (progress < 1) {
-        requestAnimationFrame(step);
-      } else {
-        el.textContent = formatNumber(targetValue) + suffix;
-      }
-    }
-
-    el.textContent = formatNumber(0) + suffix;
+    el.textContent = fmt(0) + suffix;
     requestAnimationFrame(step);
   }
 
-  // ──────────────────────────────────────────────
-  // 6. Typing Effect for Hero Subtitle
-  // ──────────────────────────────────────────────
+  // ── 7. Typing Effect ──────────────────────────────────────────────────────
   function initTypingEffect() {
-    // Target the hero subtitle on the homepage
-    var heroSubtitle = document.querySelector(
-      ".md-typeset .hero-subtitle, .tx-hero__content p, .md-content h2:first-of-type"
-    );
-
-    // Only activate on the index/home page
-    var isHomePage =
-      window.location.pathname === "/" ||
-      window.location.pathname.endsWith("/index.html") ||
-      window.location.pathname.endsWith("/cello/");
-
-    if (!heroSubtitle || !isHomePage) return;
+    var el = document.querySelector(".hero-subtitle");
+    var isHome = ["/" , "/index.html"].some(function (p) {
+      return window.location.pathname === p || window.location.pathname.endsWith(p);
+    });
+    if (!el || !isHome) return;
+    if (el.classList.contains("typing-initialized")) return;
+    el.classList.add("typing-initialized");
 
     var phrases = [
       "Rust-powered performance",
@@ -180,236 +382,147 @@
       "Enterprise-grade security",
       "170,000+ requests/sec",
     ];
+    var pi = 0, ci = 0, deleting = false;
+    el.innerHTML = '<span class="typing-text"></span><span class="typing-cursor" style="color:#E65100;animation:cello-blink 0.7s step-end infinite;">|</span>';
+    var target = el.querySelector(".typing-text");
 
-    var phraseIndex = 0;
-    var charIndex = 0;
-    var isDeleting = false;
-    var typingSpeed = 60;
-    var deletingSpeed = 35;
-    var pauseBetween = 2000;
-
-    // Store original text and replace with typing container
-    var originalText = heroSubtitle.textContent;
-    heroSubtitle.setAttribute("data-original-text", originalText);
-    heroSubtitle.innerHTML = '<span class="typing-text"></span><span class="typing-cursor">|</span>';
-
-    var typingTarget = heroSubtitle.querySelector(".typing-text");
-    var cursor = heroSubtitle.querySelector(".typing-cursor");
-
-    // Add cursor blink animation via inline style (CSS handles the rest)
-    cursor.style.animation = "cello-blink 0.7s step-end infinite";
+    if (!document.getElementById("cello-blink-style")) {
+      var s = document.createElement("style");
+      s.id = "cello-blink-style";
+      s.textContent = "@keyframes cello-blink{0%,100%{opacity:1}50%{opacity:0}}";
+      document.head.appendChild(s);
+    }
 
     function type() {
-      var currentPhrase = phrases[phraseIndex];
-
-      if (isDeleting) {
-        charIndex--;
-        typingTarget.textContent = currentPhrase.substring(0, charIndex);
-
-        if (charIndex === 0) {
-          isDeleting = false;
-          phraseIndex = (phraseIndex + 1) % phrases.length;
-          setTimeout(type, typingSpeed);
-          return;
-        }
-        setTimeout(type, deletingSpeed);
+      var phrase = phrases[pi];
+      if (deleting) {
+        ci--;
+        target.textContent = phrase.substring(0, ci);
+        if (ci === 0) { deleting = false; pi = (pi + 1) % phrases.length; setTimeout(type, 60); return; }
+        setTimeout(type, 35);
       } else {
-        charIndex++;
-        typingTarget.textContent = currentPhrase.substring(0, charIndex);
-
-        if (charIndex === currentPhrase.length) {
-          isDeleting = true;
-          setTimeout(type, pauseBetween);
-          return;
-        }
-        setTimeout(type, typingSpeed);
+        ci++;
+        target.textContent = phrase.substring(0, ci);
+        if (ci === phrase.length) { deleting = true; setTimeout(type, 2000); return; }
+        setTimeout(type, 60);
       }
     }
-
-    // Inject keyframe animation for cursor blink
-    if (!document.getElementById("cello-typing-styles")) {
-      var style = document.createElement("style");
-      style.id = "cello-typing-styles";
-      style.textContent =
-        "@keyframes cello-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }" +
-        ".typing-cursor { color: #FF6D00; font-weight: 300; margin-left: 2px; }";
-      document.head.appendChild(style);
-    }
-
-    // Start after a short delay
-    setTimeout(type, 500);
+    setTimeout(type, 600);
   }
 
-  // ──────────────────────────────────────────────
-  // 7. Scroll-Triggered Animations
-  // ──────────────────────────────────────────────
+  // ── 8. Scroll Animations ──────────────────────────────────────────────────
   function initScrollAnimations() {
     if (!("IntersectionObserver" in window)) return;
-
-    // Inject animation styles
-    if (!document.getElementById("cello-scroll-styles")) {
-      var style = document.createElement("style");
-      style.id = "cello-scroll-styles";
-      style.textContent =
-        ".cello-animate { opacity: 0; transform: translateY(24px); transition: opacity 0.5s ease, transform 0.5s ease; }" +
-        ".cello-animate.visible { opacity: 1; transform: translateY(0); }";
-      document.head.appendChild(style);
+    if (!document.getElementById("cello-scroll-style")) {
+      var s = document.createElement("style");
+      s.id = "cello-scroll-style";
+      s.textContent = ".ca{opacity:0;transform:translateY(18px);transition:opacity 0.4s ease,transform 0.4s ease}.ca.v{opacity:1;transform:translateY(0)}";
+      document.head.appendChild(s);
     }
-
-    // Target cards, sections, admonitions, code blocks, and content blocks
-    var animatableSelectors = [
-      ".md-typeset .admonition",
-      ".md-typeset details",
-      ".md-typeset .tabbed-set",
-      ".md-typeset .highlight",
-      ".md-typeset table",
-      ".md-typeset blockquote",
-      ".md-typeset h2",
-      ".md-typeset .grid .card",
-      ".md-typeset .md-typeset > .grid",
+    var selectors = [
+      ".md-typeset .admonition", ".md-typeset details",
+      ".md-typeset .tabbed-set", ".md-typeset .highlight",
+      ".md-typeset table", ".md-typeset blockquote", ".md-typeset h2",
     ];
-
-    var elements = document.querySelectorAll(animatableSelectors.join(", "));
-    elements.forEach(function (el, index) {
-      el.classList.add("cello-animate");
-      // Stagger the transition delay for sequential appearance
-      el.style.transitionDelay = Math.min(index % 4, 3) * 0.08 + "s";
+    var els = document.querySelectorAll(selectors.join(","));
+    els.forEach(function (el, i) {
+      if (el.classList.contains("ca")) return;
+      el.classList.add("ca");
+      el.style.transitionDelay = (i % 4) * 0.07 + "s";
     });
 
-    var scrollObserver = new IntersectionObserver(
-      function (entries) {
-        entries.forEach(function (entry) {
-          if (entry.isIntersecting) {
-            entry.target.classList.add("visible");
-            scrollObserver.unobserve(entry.target);
-          }
-        });
-      },
-      { threshold: 0.1, rootMargin: "0px 0px -40px 0px" }
-    );
-
-    document.querySelectorAll(".cello-animate").forEach(function (el) {
-      scrollObserver.observe(el);
+    var unobservedEls = [];
+    els.forEach(function (el) {
+      if (!el.classList.contains("v")) {
+        unobservedEls.push(el);
+      }
     });
+
+    if (unobservedEls.length === 0) return;
+
+    var obs = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (e.isIntersecting) { e.target.classList.add("v"); obs.unobserve(e.target); }
+      });
+    }, { threshold: 0.08, rootMargin: "0px 0px -30px 0px" });
+    unobservedEls.forEach(function (el) { obs.observe(el); });
   }
 
-  // ──────────────────────────────────────────────
-  // 8. Search Enhancement (Ctrl+K / Cmd+K)
-  // ──────────────────────────────────────────────
-  function initSearchEnhancement() {
-    var searchInput = document.querySelector(".md-search__input");
-    if (searchInput) {
-      var placeholder = searchInput.getAttribute("placeholder") || "Search";
-      var shortcut = navigator.platform.includes("Mac") ? " (\u2318+K)" : " (Ctrl+K)";
-      searchInput.setAttribute("placeholder", placeholder + shortcut);
+  // ── 9. Search Shortcut (Ctrl/Cmd+K) ──────────────────────────────────────
+  var searchShortcutRegistered = false;
+  function initSearchShortcut() {
+    var input = document.querySelector(".md-search__input");
+    if (input) {
+      var sc = navigator.platform.includes("Mac") ? " (⌘K)" : " (Ctrl+K)";
+      var currentPlaceholder = input.getAttribute("placeholder") || "Search";
+      if (!currentPlaceholder.includes("Ctrl+K") && !currentPlaceholder.includes("⌘K")) {
+        input.setAttribute("placeholder", currentPlaceholder + sc);
+      }
     }
+    
+    if (searchShortcutRegistered) return;
+    searchShortcutRegistered = true;
 
     document.addEventListener("keydown", function (e) {
-      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+      if ((e.metaKey || e.ctrlKey) && (e.key === "k" || e.key === "K")) {
         e.preventDefault();
-        var input = document.querySelector(".md-search__input");
-        if (input) {
-          input.focus();
+        var inp = document.querySelector(".md-search__input");
+        if (inp) {
+          var toggle = document.getElementById("__search");
+          if (toggle && !toggle.checked) {
+            toggle.checked = true;
+            toggle.dispatchEvent(new Event("change"));
+          }
+          inp.focus();
+          inp.select();
         }
       }
     });
   }
 
-  // ──────────────────────────────────────────────
-  // 9. Theme Toggle Smooth Transition
-  // ──────────────────────────────────────────────
-  function initThemeTransition() {
-    // Inject transition style for theme switches
-    if (!document.getElementById("cello-theme-transition")) {
-      var style = document.createElement("style");
-      style.id = "cello-theme-transition";
-      style.textContent =
-        "body.cello-theme-transitioning, " +
-        "body.cello-theme-transitioning * { " +
-        "  transition: background-color 0.3s ease, color 0.3s ease, " +
-        "  border-color 0.3s ease, box-shadow 0.3s ease !important; " +
-        "}";
-      document.head.appendChild(style);
-    }
-
-    // Observe the color scheme toggle buttons
-    var toggles = document.querySelectorAll(
-      "[data-md-color-scheme], .md-header__option label"
-    );
-    toggles.forEach(function (toggle) {
-      toggle.addEventListener("click", function () {
-        document.body.classList.add("cello-theme-transitioning");
-        setTimeout(function () {
-          document.body.classList.remove("cello-theme-transitioning");
-        }, 400);
-      });
-    });
-
-    // Also watch for changes via the palette toggle (Material for MkDocs)
-    var paletteInputs = document.querySelectorAll('input[name="__palette"]');
-    paletteInputs.forEach(function (input) {
-      input.addEventListener("change", function () {
-        document.body.classList.add("cello-theme-transitioning");
-        setTimeout(function () {
-          document.body.classList.remove("cello-theme-transitioning");
-        }, 400);
-      });
-    });
-  }
-
-  // ──────────────────────────────────────────────
-  // 10. Feedback System
-  // ──────────────────────────────────────────────
+  // ── 10. Feedback ──────────────────────────────────────────────────────────
   function initFeedback() {
-    var feedbackContainer = document.querySelector("[data-md-feedback]");
-    if (!feedbackContainer) return;
-
-    feedbackContainer
-      .querySelectorAll("[data-md-feedback-value]")
-      .forEach(function (button) {
-        button.addEventListener("click", function () {
-          var value = this.getAttribute("data-md-feedback-value");
-          var page = window.location.pathname;
-
-          // Send feedback (integrate with analytics as needed)
-          if (typeof gtag === "function") {
-            gtag("event", "feedback", {
-              event_category: "docs",
-              event_label: page,
-              value: value === "1" ? 1 : 0,
-            });
-          }
-
-          console.log("Feedback:", { page: page, value: value });
-          feedbackContainer.innerHTML =
-            '<p style="margin:0;padding:8px 0;">Thanks for your feedback!</p>';
-        });
+    var fc = document.querySelector("[data-md-feedback]");
+    if (!fc) return;
+    if (fc.classList.contains("feedback-initialized")) return;
+    fc.classList.add("feedback-initialized");
+    fc.querySelectorAll("[data-md-feedback-value]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var val = this.getAttribute("data-md-feedback-value");
+        if (typeof gtag === "function") {
+          gtag("event", "feedback", { event_category: "docs", event_label: location.pathname, value: val === "1" ? 1 : 0 });
+        }
+        fc.innerHTML = '<p style="margin:0;padding:8px 0;color:#2E7D32;font-weight:600;">Thanks for your feedback!</p>';
       });
+    });
   }
 
-  // ──────────────────────────────────────────────
-  // 11. Performance Monitoring
-  // ──────────────────────────────────────────────
-  function initPerfMonitoring() {
-    if (typeof performance !== "undefined" && performance.mark) {
-      performance.mark("cello-docs-loaded");
-    }
+  // ── Bootstrap ─────────────────────────────────────────────────────────────
+  if (typeof document$ !== "undefined") {
+    document$.subscribe(function () {
+      initTableSort();
+      initCopyFeedback();
+      initSmoothScroll();
+      initExternalLinks();
+      initDoubleSidebar();
+      initAnimatedCounters();
+      initTypingEffect();
+      initScrollAnimations();
+      initSearchShortcut();
+      initFeedback();
+    });
+  } else {
+    document.addEventListener("DOMContentLoaded", function () {
+      initTableSort();
+      initCopyFeedback();
+      initSmoothScroll();
+      initExternalLinks();
+      initDoubleSidebar();
+      initAnimatedCounters();
+      initTypingEffect();
+      initScrollAnimations();
+      initSearchShortcut();
+      initFeedback();
+    });
   }
-
-  // ──────────────────────────────────────────────
-  // Bootstrap on DOMContentLoaded
-  // ──────────────────────────────────────────────
-  document.addEventListener("DOMContentLoaded", function () {
-    initTableSort();
-    initCopyFeedback();
-    initSmoothScroll();
-    initExternalLinks();
-    initAnimatedCounters();
-    initTypingEffect();
-    initScrollAnimations();
-    initSearchEnhancement();
-    initThemeTransition();
-    initFeedback();
-    initPerfMonitoring();
-  });
 })();

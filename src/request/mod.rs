@@ -11,6 +11,7 @@ pub mod parsing;
 
 use pyo3::prelude::*;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use crate::json::{json_to_python, parse_json, python_to_json};
 use crate::multipart::parse_urlencoded;
@@ -57,6 +58,10 @@ pub struct Request {
 
     /// Lazy body cache (internal)
     lazy_cache: LazyCache,
+
+    /// Python-level Redis client injected when app.enable_redis() is configured.
+    /// Wrapped in Arc so Clone stays GIL-free (atomic refcount only).
+    pub redis_client: Option<Arc<PyObject>>,
 }
 
 /// Internal cache for lazy parsing results.
@@ -95,6 +100,7 @@ impl Request {
             content_type,
             context: HashMap::new(),
             lazy_cache: LazyCache::default(),
+            redis_client: None,
         }
     }
 
@@ -359,6 +365,24 @@ impl Request {
             _ => None,
         })
     }
+
+    /// Access the Redis client configured via app.enable_redis().
+    #[getter]
+    pub fn redis(&self, py: Python<'_>) -> PyResult<PyObject> {
+        self.redis_client
+            .as_ref()
+            .map(|arc| arc.clone_ref(py))
+            .ok_or_else(|| {
+                pyo3::exceptions::PyAttributeError::new_err(
+                    "Redis not configured. Call app.enable_redis() before using request.redis.",
+                )
+            })
+    }
+
+    /// Inject the Redis client into this request (called by the Python App wrapper).
+    pub fn _inject_redis(&mut self, client: PyObject) {
+        self.redis_client = Some(Arc::new(client));
+    }
 }
 
 impl Request {
@@ -374,6 +398,7 @@ impl Request {
             content_type: None,
             context: HashMap::new(),
             lazy_cache: LazyCache::default(),
+            redis_client: None,
         }
     }
 
@@ -399,6 +424,7 @@ impl Request {
             content_type,
             context: HashMap::new(),
             lazy_cache: LazyCache::default(),
+            redis_client: None,
         }
     }
 
@@ -417,6 +443,7 @@ impl Request {
             content_type: self.content_type.clone(),
             context: self.context.clone(),
             lazy_cache: LazyCache::default(),
+            redis_client: self.redis_client.clone(),
         }
     }
 

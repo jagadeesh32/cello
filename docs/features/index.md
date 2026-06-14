@@ -2,6 +2,15 @@
 title: Features
 description: Comprehensive feature documentation for Cello Framework - every capability at your fingertips
 icon: material/star-shooting
+tags:
+  - Python
+  - Web Framework
+  - Rust
+  - Middleware
+  - Authentication
+  - WebSocket
+  - REST API
+  - Performance
 ---
 
 # :material-star-shooting: Features

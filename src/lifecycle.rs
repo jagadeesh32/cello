@@ -143,17 +143,33 @@ impl PyHook {
     pub fn execute(&self) -> Result<(), String> {
         Python::with_gil(|py| {
             let result = self.handler.call0(py).map_err(|e| e.to_string())?;
-
             if self.is_async {
-                // Run async hook with asyncio.run()
-                let asyncio = py.import("asyncio").map_err(|e| e.to_string())?;
-                asyncio
-                    .call_method1("run", (result,))
-                    .map_err(|e| e.to_string())?;
+                Self::run_coroutine(py, &result)?;
             }
-
             Ok(())
         })
+    }
+
+    /// Drive a coroutine to completion, handling both running and idle event loops.
+    ///
+    /// `asyncio.run()` raises `RuntimeError` when a loop is already running (e.g. during
+    /// shutdown triggered from an async context). In that case we schedule the coroutine
+    /// onto the running loop from this (Tokio/non-loop) thread via `run_coroutine_threadsafe`
+    /// and block until it completes.
+    fn run_coroutine(py: Python<'_>, coro: &PyObject) -> Result<(), String> {
+        let asyncio = py.import("asyncio").map_err(|e| e.to_string())?;
+        // get_running_loop() raises RuntimeError when no loop is running; .ok() → None.
+        if let Ok(running_loop) = asyncio.call_method0("get_running_loop") {
+            let future = asyncio
+                .call_method1("run_coroutine_threadsafe", (coro, running_loop))
+                .map_err(|e| e.to_string())?;
+            future.call_method0("result").map_err(|e| e.to_string())?;
+        } else {
+            asyncio
+                .call_method1("run", (coro,))
+                .map_err(|e| e.to_string())?;
+        }
+        Ok(())
     }
 
     /// Execute with request argument.
@@ -332,8 +348,10 @@ impl LifecycleHooks {
     pub fn execute_shutdown(&self) -> Result<(), String> {
         for hook in self.on_shutdown.read().iter() {
             if let Err(e) = hook.execute() {
-                // Log but don't fail on shutdown hook errors
-                eprintln!("Shutdown hook error: {e}");
+                // KeyboardInterrupt is expected when CTRL+C initiates shutdown; suppress it.
+                if !e.contains("KeyboardInterrupt") {
+                    eprintln!("Shutdown hook error: {e}");
+                }
             }
         }
         Ok(())

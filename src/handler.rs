@@ -99,8 +99,14 @@ impl HandlerRegistry {
     /// 1. Caches async detection per handler (avoid inspect.iscoroutine every call)
     /// 2. Caches DI parameter resolution per handler (avoid inspect.signature every call)
     /// 3. Skips DI entirely when no singletons registered (atomic check, no lock)
-    /// 4. Single Python::with_gil call per request
+    /// 4. Three-phase GIL acquisition: call → await (GIL free) → serialize
     /// 5. Returns HandlerResult::JsonBytes for common dict returns (skips serde_json::Value)
+    ///
+    /// GIL RELEASE ARCHITECTURE:
+    ///   Phase 1 (GIL):    Call Python handler, do DI resolution, detect coroutine.
+    ///   Phase 2 (no GIL): pyo3-asyncio converts coroutine → Rust Future; Tokio awaits it.
+    ///                      GIL is released during Python I/O waits inside the coroutine.
+    ///   Phase 3 (GIL):    Serialize result back to HandlerResult.
     pub async fn invoke_async(
         &self,
         handler_id: usize,
@@ -115,38 +121,45 @@ impl HandlerRegistry {
         let has_dependencies = self.has_dependencies.load(Ordering::Relaxed)
             && dependency_container.has_py_singletons();
 
-        Python::with_gil(|py| {
-            let call_result = if has_dependencies {
-                // DI resolution needed - but cache the parameter info
-                if !meta.di_checked.load(Ordering::Relaxed) {
-                    // First call: introspect and cache DI params
-                    let mut di_params = Vec::new();
-                    if let Ok(inspect) = py.import("inspect") {
-                        if let Ok(sig) =
-                            inspect.call_method1("signature", (meta.handler.as_ref(py),))
-                        {
-                            if let Ok(parameters) = sig.getattr("parameters") {
-                                let cello_module = py.import("cello").ok();
-                                let depends_type =
-                                    cello_module.and_then(|m| m.getattr("Depends").ok());
+        // ── Phase 1 (GIL): call handler, detect coroutine ──────────────────────
+        let (raw_result, is_coroutine) =
+            Python::with_gil(|py| -> Result<(PyObject, bool), String> {
+                let call_result: PyObject = if has_dependencies {
+                    // DI resolution — cache parameter info on first call
+                    if !meta.di_checked.load(Ordering::Relaxed) {
+                        let mut di_params = Vec::new();
+                        if let Ok(inspect) = py.import("inspect") {
+                            if let Ok(sig) =
+                                inspect.call_method1("signature", (meta.handler.as_ref(py),))
+                            {
+                                if let Ok(parameters) = sig.getattr("parameters") {
+                                    let cello_module = py.import("cello").ok();
+                                    let depends_type =
+                                        cello_module.and_then(|m| m.getattr("Depends").ok());
 
-                                if let Ok(items) = parameters.call_method0("items") {
-                                    if let Ok(iter) = items.iter() {
-                                        for item in iter.flatten() {
-                                            if let (Ok(name), Ok(param)) = (
-                                                item.get_item(0)
-                                                    .and_then(|v| v.extract::<String>()),
-                                                item.get_item(1),
-                                            ) {
-                                                if let Ok(default) = param.getattr("default") {
-                                                    if let Some(dt) = &depends_type {
-                                                        if default.is_instance(dt).unwrap_or(false)
-                                                        {
-                                                            if let Ok(dep_name) = default
-                                                                .getattr("dependency")
-                                                                .and_then(|d| d.extract::<String>())
+                                    if let Ok(items) = parameters.call_method0("items") {
+                                        if let Ok(iter) = items.iter() {
+                                            for item in iter.flatten() {
+                                                if let (Ok(name), Ok(param)) = (
+                                                    item.get_item(0)
+                                                        .and_then(|v| v.extract::<String>()),
+                                                    item.get_item(1),
+                                                ) {
+                                                    if let Ok(default) = param.getattr("default") {
+                                                        if let Some(dt) = &depends_type {
+                                                            if default
+                                                                .is_instance(dt)
+                                                                .unwrap_or(false)
                                                             {
-                                                                di_params.push((name, dep_name));
+                                                                if let Ok(dep_name) = default
+                                                                    .getattr("dependency")
+                                                                    .and_then(|d| {
+                                                                        d.extract::<String>()
+                                                                    })
+                                                                {
+                                                                    di_params
+                                                                        .push((name, dep_name));
+                                                                }
                                                             }
                                                         }
                                                     }
@@ -157,85 +170,92 @@ impl HandlerRegistry {
                                 }
                             }
                         }
+                        *meta.di_params.write() = Some(di_params);
+                        meta.di_checked.store(true, Ordering::Relaxed);
                     }
-                    *meta.di_params.write() = Some(di_params);
-                    meta.di_checked.store(true, Ordering::Relaxed);
-                }
 
-                // Use cached DI params
-                let di_guard = meta.di_params.read();
-                let di_params = match di_guard.as_ref() {
-                    Some(params) => params,
-                    None => {
-                        // Fallback: DI params not yet cached (should not happen), use fast path
-                        let result = meta
-                            .handler
-                            .call1(py, (request,))
-                            .map_err(|e| format!("Handler error: {e}"))?;
-                        // Try direct bytes serialization
-                        match python_to_json_bytes_direct(py, result.as_ref(py))? {
-                            Some(bytes) => return Ok(HandlerResult::JsonBytes(bytes)),
-                            None => {
-                                return python_to_json(py, result.as_ref(py))
-                                    .map(HandlerResult::JsonValue)
+                    let di_guard = meta.di_params.read();
+                    match di_guard.as_ref() {
+                        Some(params) if params.is_empty() => {
+                            // No DI params — fast path
+                            meta.handler
+                                .call1(py, (request,))
+                                .map_err(|e| format!("Handler error: {e}"))?
+                        }
+                        Some(params) => {
+                            let kwargs = pyo3::types::PyDict::new(py);
+                            for (param_name, dep_name) in params {
+                                if let Some(dep_value) =
+                                    dependency_container.get_py_singleton(dep_name)
+                                {
+                                    let _ = kwargs.set_item(param_name, dep_value);
+                                }
                             }
+                            meta.handler
+                                .call(py, (request,), Some(kwargs))
+                                .map_err(|e| format!("Handler error: {e}"))?
+                        }
+                        None => {
+                            // Params not cached yet (should not happen); use fast path
+                            meta.handler
+                                .call1(py, (request,))
+                                .map_err(|e| format!("Handler error: {e}"))?
                         }
                     }
-                };
-
-                if di_params.is_empty() {
-                    // No DI params found - fast path
+                } else {
+                    // FAST PATH: direct call, no DI, no locks
                     meta.handler
                         .call1(py, (request,))
                         .map_err(|e| format!("Handler error: {e}"))?
+                };
+
+                // Cache async detection per handler (first call probes, then reads atomically)
+                let is_coro = if meta.async_checked.load(Ordering::Relaxed) {
+                    meta.is_async.load(Ordering::Relaxed)
                 } else {
-                    let kwargs = pyo3::types::PyDict::new(py);
-                    for (param_name, dep_name) in di_params {
-                        if let Some(dep_value) = dependency_container.get_py_singleton(dep_name) {
-                            let _ = kwargs.set_item(param_name, dep_value);
-                        }
-                    }
-                    meta.handler
-                        .call(py, (request,), Some(kwargs))
-                        .map_err(|e| format!("Handler error: {e}"))?
-                }
-            } else {
-                // FAST PATH: Direct call without DI - no locks, no introspection
-                meta.handler
-                    .call1(py, (request,))
-                    .map_err(|e| format!("Handler error: {e}"))?
-            };
+                    let is_async = py
+                        .import("inspect")
+                        .and_then(|inspect| {
+                            inspect.call_method1("iscoroutine", (call_result.as_ref(py),))
+                        })
+                        .and_then(|r| r.is_true())
+                        .unwrap_or(false);
+                    meta.is_async.store(is_async, Ordering::Relaxed);
+                    meta.async_checked.store(true, Ordering::Relaxed);
+                    is_async
+                };
 
-            // PERF: Cache async detection per handler
-            let is_coroutine = if meta.async_checked.load(Ordering::Relaxed) {
-                meta.is_async.load(Ordering::Relaxed)
-            } else {
-                // First call: detect and cache
-                let is_async = py
-                    .import("inspect")
-                    .and_then(|inspect| {
-                        inspect.call_method1("iscoroutine", (call_result.as_ref(py),))
-                    })
-                    .and_then(|r| r.is_true())
-                    .unwrap_or(false);
-                meta.is_async.store(is_async, Ordering::Relaxed);
-                meta.async_checked.store(true, Ordering::Relaxed);
-                is_async
-            };
+                // PyObject (Py<PyAny>) is Send — safe to move out of GIL closure
+                Ok((call_result, is_coro))
+            })?;
 
-            let final_result = if is_coroutine {
-                py.import("asyncio")
-                    .and_then(|asyncio| asyncio.call_method1("run", (call_result.as_ref(py),)))
-                    .map_err(|e| format!("Async handler error: {e}"))?
-            } else {
-                call_result.as_ref(py)
-            };
+        // ── Phase 2 (GIL released during I/O waits): drive coroutine via Tokio ─
+        //
+        // pyo3_asyncio::tokio::into_future wraps the Python coroutine as a Rust
+        // Future that Tokio can poll. The GIL is acquired only when the coroutine
+        // has work to do (Python bytecode execution) and released between steps,
+        // so other Tokio tasks can make progress during I/O waits.
+        let final_result: PyObject = if is_coroutine {
+            let future = Python::with_gil(|py| {
+                pyo3_asyncio::tokio::into_future(raw_result.as_ref(py))
+                    .map_err(|e| format!("Async setup error: {e}"))
+            })?;
+            // GIL is fully released here while Tokio drives the coroutine
+            future
+                .await
+                .map_err(|e| format!("Async handler error: {e}"))?
+        } else {
+            raw_result
+        };
 
-            // PERF: Try direct-to-bytes serialization first (skips serde_json::Value allocation)
-            // Falls back to Value path only for Response objects that need special handling
-            match python_to_json_bytes_direct(py, final_result)? {
+        // ── Phase 3 (GIL): serialize result ─────────────────────────────────────
+        Python::with_gil(|py| {
+            // PERF: Try direct-to-bytes first (skips serde_json::Value allocation)
+            match python_to_json_bytes_direct(py, final_result.as_ref(py))? {
                 Some(bytes) => Ok(HandlerResult::JsonBytes(bytes)),
-                None => python_to_json(py, final_result).map(HandlerResult::JsonValue),
+                None => {
+                    python_to_json(py, final_result.as_ref(py)).map(HandlerResult::JsonValue)
+                }
             }
         })
     }

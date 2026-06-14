@@ -2,7 +2,7 @@
 # https://squidfunk.github.io/mkdocs-material/
 
 site_name: Cello Framework
-site_url: https://cello-framework.vercel.app/
+site_url: https://cello.lineupcode.com
 site_description: Ultra-Fast Python Web Framework - Rust-powered performance with Python simplicity
 site_author: Jagadeesh Katla
 repo_url: https://github.com/jagadeesh32/cello
@@ -12,6 +12,11 @@ edit_uri: edit/main/docs/
 # Copyright
 copyright: Copyright &copy; 2024-2026 Jagadeesh Katla - MIT License
 
+# Exclude auxiliary includes from navigation
+exclude_docs: |
+  includes/abbreviations.md
+  examples/real/hello-world.md
+
 # Theme Configuration
 theme:
   name: material
@@ -19,25 +24,14 @@ theme:
   language: en
 
   # Logo and favicon
-  logo: logo.jpg
+  logo: logo-icon.svg
   favicon: logo.jpg
 
-  # Color palette
+  # Color palette - light only
   palette:
-    # Light mode (default)
     - scheme: default
       primary: custom
       accent: deep orange
-      toggle:
-        icon: material/brightness-7
-        name: Switch to dark mode
-    # Dark mode
-    - scheme: slate
-      primary: custom
-      accent: deep orange
-      toggle:
-        icon: material/brightness-4
-        name: Switch to light mode
 
   # Font
   font:
@@ -51,8 +45,6 @@ theme:
     - navigation.instant.prefetch
     - navigation.instant.progress
     - navigation.tracking
-    - navigation.tabs
-    - navigation.tabs.sticky
     - navigation.sections
     - navigation.expand
     - navigation.path
@@ -95,6 +87,13 @@ plugins:
       separator: '[\s\-,:!=\[\]()"/]+|(?!\b)(?=[A-Z][a-z])|\.(?!\d)|&[lg]t;'
   - minify:
       minify_html: true
+      minify_css: true
+      minify_js: true
+      cache_safe: true
+      css_files:
+        - stylesheets/extra.css
+      js_files:
+        - javascripts/extra.js
   - git-revision-date-localized:
       enable_creation_date: true
       type: timeago
@@ -102,7 +101,7 @@ plugins:
   # - git-committers:
   #     repository: jagadeesh32/cello
   #     branch: main
-  - tags
+  - tags:
   # Social cards disabled - requires cairosvg and PIL
   # - social:
   #     cards_layout_options:
@@ -170,10 +169,6 @@ markdown_extensions:
 
 # Extra configuration
 extra:
-  version:
-    provider: mike
-    default: stable
-
   # Social links
   social:
     - icon: fontawesome/brands/github
@@ -208,16 +203,6 @@ extra:
     deprecated: Deprecated
     enterprise: Enterprise feature
 
-  # Consent
-  consent:
-    title: Cookie consent
-    description: >-
-      We use cookies to recognize your repeated visits and preferences, as well
-      as to measure the effectiveness of our documentation and whether users
-      find what they're searching for.
-    actions:
-      - accept
-      - reject
 
 # Page tree (Navigation)
 nav:
@@ -262,6 +247,8 @@ nav:
       - Dependency Injection: features/advanced/dependency-injection.md
       - Background Tasks: features/advanced/background-tasks.md
       - Templates: features/advanced/templates.md
+      - MiniJinja Templates: features/templates.md
+      - MiniJinja Quick Reference: features/minijinja-templates.md
       - Static Files: features/advanced/static-files.md
       - File Uploads: features/advanced/file-uploads.md
       - DTOs & Validation: features/advanced/dto-validation.md
@@ -304,18 +291,58 @@ nav:
 
   - Examples:
     - examples/index.md
-    - Basic Examples:
+    - Beginner:
       - Hello World: examples/basic/hello-world.md
       - REST API: examples/basic/rest-api.md
       - Form Handling: examples/basic/forms.md
-    - Advanced Examples:
+      - Query Parameters: examples/basic/query-params.md
+      - JWT Auth: examples/basic/jwt-auth.md
+      - Database: examples/basic/database.md
+    - Intermediate:
+      - Async Handlers: examples/real/async-handlers.md
+      - Simple API with OpenAPI: examples/real/simple-api.md
+      - Blueprints & Routing: examples/real/blueprints-advanced.md
+      - DTO Validation: examples/real/dto-validation.md
+      - Lifecycle Hooks: examples/real/lifecycle-hooks.md
+      - Guards (RBAC): examples/real/guards.md
+      - Middleware Demo: examples/real/middleware-demo.md
+      - Smart Caching: examples/real/smart-caching.md
+      - Circuit Breaker: examples/real/circuit-breaker.md
+      - Streaming & SSE: examples/real/streaming-sse.md
+      - Background Tasks: examples/advanced/background-tasks.md
+      - GraphQL API: examples/advanced/graphql.md
+      - Redis Caching: examples/advanced/redis-caching.md
+      - File Storage: examples/advanced/file-storage.md
       - Full-Stack App: examples/advanced/fullstack.md
-      - Microservices: examples/advanced/microservices.md
       - Real-time Dashboard: examples/advanced/realtime-dashboard.md
-    - Enterprise Examples:
+    - Enterprise:
+      - Security Features: examples/real/security.md
+      - Auto OpenAPI Docs: examples/real/auto-openapi.md
+      - Advanced Middleware: examples/real/advanced-middleware.md
+      - Adaptive Rate Limiting: examples/real/adaptive-rate-limiting.md
+      - Database & Redis: examples/real/database-demo.md
+      - Enterprise Config: examples/real/enterprise-config.md
+      - Cluster Mode: examples/real/cluster-demo.md
+      - Health Checks: examples/enterprise/health-checks.md
+      - OAuth2: examples/enterprise/oauth2.md
+      - Rate Limiting: examples/enterprise/rate-limiting.md
       - Multi-tenant SaaS: examples/enterprise/multi-tenant.md
       - API Gateway: examples/enterprise/api-gateway.md
+      - Microservices: examples/advanced/microservices.md
+      - API Protocols: examples/real/api-protocols.md
+      - Advanced Patterns: examples/real/advanced-patterns.md
       - Event Sourcing: examples/enterprise/event-sourcing.md
+    - MiniJinja:
+      - Basic Templates: examples/real/minijinja-basic.md
+      - Advanced Templates: examples/real/minijinja-advanced.md
+      - Form Handling: examples/real/minijinja-forms.md
+      - Blog App: examples/real/minijinja-blog.md
+      - Email Templates: examples/real/minijinja-emails.md
+      - Macros & Reuse: examples/real/minijinja-macros.md
+    - Showcases:
+      - Complete Showcase: examples/real/complete-showcase.md
+      - Comprehensive Demo: examples/real/comprehensive-demo.md
+      - All Features Demo: examples/real/all-features.md
 
   - Enterprise:
     - enterprise/index.md
@@ -337,7 +364,10 @@ nav:
 
   - Release Notes:
     - releases/index.md
+    - v1.2.0: releases/v1.2.0.md
+    - v1.1.0: releases/v1.1.0.md
     - v1.0.1: releases/v1.0.1.md
+    - v1.0.0: releases/v1.0.0.md
     - v0.10.0: releases/v0.10.0.md
     - v0.9.0: releases/v0.9.0.md
     - v0.8.0: releases/v0.8.0.md

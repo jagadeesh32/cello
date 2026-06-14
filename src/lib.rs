@@ -52,6 +52,9 @@ pub mod template;
 // v1.1.0 - MiniJinja template engine
 pub mod minijinja_engine;
 
+// Rust-native async HTTP client
+pub mod http_client;
+
 use pyo3::prelude::*;
 use std::sync::Arc;
 
@@ -61,6 +64,7 @@ use router::Router;
 use server::Server;
 use sse::{SseEvent, SseStream};
 use websocket::{WebSocket, WebSocketMessage, WebSocketRegistry};
+
 
 /// The main Cello application class exposed to Python.
 ///
@@ -736,64 +740,73 @@ def openapi_handler(request):
         port: Option<u16>,
         workers: Option<usize>,
     ) -> PyResult<()> {
-        let host = host.unwrap_or("127.0.0.1");
+        let host_owned = host.unwrap_or("127.0.0.1").to_string();
         let port = port.unwrap_or(8000);
 
-        // Banner is printed by Python; Rust just runs the server
+        // Clone everything needed inside the Send + 'static async block.
+        let router = self.router.clone();
+        let handlers = self.handlers.clone();
+        let middleware = self.middleware.clone();
+        let websocket_handlers = self.websocket_handlers.clone();
+        let dependency_container = self.dependency_container.clone();
+        let guards = self.guards.clone();
+        let prometheus = self.prometheus.clone();
+        let startup_handlers = self.startup_handlers.clone();
+        let shutdown_handlers = self.shutdown_handlers.clone();
 
-        // Release the GIL and run the server
-        py.allow_threads(|| {
-            // PERF: Use single-threaded Tokio runtime per process.
-            // Parallelism comes from multi-process mode:
-            //   - Unix: os.fork() + SO_REUSEPORT for kernel load balancing
-            //   - Windows: multiprocessing.Process + SO_REUSEADDR
-            // Multi-threaded runtime causes GIL contention: N Tokio threads all compete
-            // for Python::with_gil, creating massive serialization overhead.
-            // Single-threaded runtime eliminates GIL contention within each worker process.
-            let mut builder = tokio::runtime::Builder::new_current_thread();
-            builder.enable_all();
+        // Configure pyo3-asyncio to use a single-threaded Tokio runtime.
+        //
+        // PERF: current_thread avoids GIL contention — N Tokio threads all competing
+        // for Python::with_gil creates massive serialization overhead. Parallelism comes
+        // from multi-process (fork + SO_REUSEPORT on Unix, subprocess on Windows).
+        //
+        // After this call, asyncio.get_event_loop() inside any Python handler returns the
+        // pyo3-asyncio Tokio-backed loop instead of _UnixSelectorEventLoop, proving that
+        // Python coroutines are now driven by Tokio. The GIL is released during I/O waits
+        // within coroutines — no uvloop needed, no external event loop optimisation.
+        let mut builder = tokio::runtime::Builder::new_current_thread();
+        builder.enable_all();
+        pyo3_asyncio::tokio::init(builder);
 
-            let rt = builder
-                .build()
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        // pyo3_asyncio::tokio::run creates a new Python asyncio event loop backed by
+        // our Tokio runtime, then runs the given future as a coroutine on that loop.
+        // The GIL is managed internally: released when Tokio is waiting, re-acquired
+        // only when Python bytecode needs to execute.
+        pyo3_asyncio::tokio::run(py, async move {
+            let mut config = server::ServerConfig::new(&host_owned, port);
+            config.workers = workers.unwrap_or(0);
 
-            rt.block_on(async {
-                let mut config = server::ServerConfig::new(host, port);
-                config.workers = workers.unwrap_or(0);
+            let server = Server::new(
+                config,
+                router,
+                handlers,
+                middleware,
+                websocket_handlers,
+                dependency_container,
+                guards,
+                prometheus,
+            );
 
-                let server = Server::new(
-                    config,
-                    self.router.clone(),
-                    self.handlers.clone(),
-                    self.middleware.clone(),
-                    self.websocket_handlers.clone(),
-                    self.dependency_container.clone(),
-                    self.guards.clone(),
-                    self.prometheus.clone(),
-                );
+            // Startup hooks — driven by Tokio so async def handlers work without asyncio.run()
+            for handler in &startup_handlers {
+                if let Err(e) = run_lifecycle_handler_async(handler.clone()).await {
+                    eprintln!("Error in startup handler: {e}");
+                }
+            }
 
-                // Execute startup handlers
-                Python::with_gil(|py| {
-                    for handler in &self.startup_handlers {
-                        if let Err(e) = call_lifecycle_handler(py, handler) {
-                            eprintln!("Error in startup handler: {e}");
-                        }
+            let _ = server.run().await;
+
+            // Shutdown hooks — KeyboardInterrupt is expected on CTRL+C, suppress it.
+            for handler in &shutdown_handlers {
+                match run_lifecycle_handler_async(handler.clone()).await {
+                    Err(e) if !e.to_string().contains("KeyboardInterrupt") => {
+                        eprintln!("Error in shutdown handler: {e}");
                     }
-                });
+                    _ => {}
+                }
+            }
 
-                let result = server.run().await;
-
-                // Execute shutdown handlers
-                Python::with_gil(|py| {
-                    for handler in &self.shutdown_handlers {
-                        if let Err(e) = call_lifecycle_handler(py, handler) {
-                            eprintln!("Error in shutdown handler: {e}");
-                        }
-                    }
-                });
-
-                result
-            })
+            Ok(())
         })
     }
 
@@ -2000,22 +2013,34 @@ impl PySagaConfig {
 }
 
 /// Helper to call lifecycle handlers (sync or async).
-fn call_lifecycle_handler(py: Python<'_>, handler: &PyObject) -> PyResult<()> {
-    // Call the handler. If it returns a coroutine, run it.
-    let result = handler.call0(py)?;
+/// Drive a lifecycle hook (startup/shutdown) to completion.
+///
+/// Handles both sync `def` and `async def` hooks. For async hooks the coroutine
+/// is driven by Tokio via pyo3-asyncio so the GIL is released during I/O waits,
+/// consistent with how request handlers are executed.
+async fn run_lifecycle_handler_async(handler: PyObject) -> Result<(), String> {
+    // Phase 1 (GIL): call the handler; detect whether it returned a coroutine.
+    let (result, is_coro) = Python::with_gil(|py| -> PyResult<(PyObject, bool)> {
+        let ret = handler.call0(py)?;
+        let inspect = py.import("inspect")?;
+        let is_coro = inspect
+            .call_method1("iscoroutine", (ret.as_ref(py),))?
+            .is_true()?;
+        Ok((ret, is_coro))
+    })
+    .map_err(|e| e.to_string())?;
 
-    let inspect = py.import("inspect")?;
-    let is_coroutine = inspect
-        .call_method1("iscoroutine", (result.as_ref(py),))?
-        .is_true()?;
-
-    if is_coroutine {
-        let asyncio = py.import("asyncio")?;
-        let _ = asyncio.call_method1("run", (result.as_ref(py),))?;
+    // Phase 2 (GIL released): await coroutine via Tokio if needed.
+    if is_coro {
+        let future = Python::with_gil(|py| {
+            pyo3_asyncio::tokio::into_future(result.as_ref(py)).map_err(|e| e.to_string())
+        })?;
+        future.await.map(|_| ()).map_err(|e| e.to_string())?;
     }
 
     Ok(())
 }
+
 
 /// Python module definition.
 #[pymodule]
@@ -2062,6 +2087,10 @@ fn _cello(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
 
     // v1.1.0 - MiniJinja Template Engine
     m.add_class::<minijinja_engine::PyMiniJinjaEngine>()?;
+
+    // Rust-native async HTTP client
+    m.add_class::<http_client::PyAsyncClient>()?;
+    m.add_class::<http_client::PyHttpResponse>()?;
 
     // v0.7.0+ / v0.8.0 - Enterprise & Data Layer Configuration Classes
     m.add_class::<PyOpenTelemetryConfig>()?;
