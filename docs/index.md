@@ -37,7 +37,7 @@ hide:
 [:material-package-variant: PyPI](https://pypi.org/project/cello-framework/){ .md-button }
 
 <div class="hero-badges">
-  <code class="badge-version">v1.3.0</code>
+  <code class="badge-version">v1.4.0</code>
   <code class="badge-tests">464 tests passing</code>
   <code class="badge-license">MIT License</code>
   <code class="badge-python">Python 3.12+</code>
@@ -360,26 +360,26 @@ Everything below is built in and runs on the Rust hot path:
 
 <!-- ===== WHAT'S NEW ===== -->
 
-## :material-creation: What's New in v1.3.0
+## :material-creation: What's New in v1.4.0
 
 <div class="whats-new-box" markdown>
 
-!!! tip "v1.3.0 — Async Rework, Native Data Layer, Plugin Audit & Three-Pillar Upgrades"
+!!! tip "v1.4.0 — The Native Core"
 
-    A large release built around Cello's three pillars — **Speed, Simplicity, Security**.
+    One model declaration, compiled once in Rust, now drives the ORM, request validation, response serialization and OpenAPI — built around **Speed, Simplicity, Security**.
 
-    - :material-sync: **Persistent asyncio loop** — `async def` handlers run on one long-lived event loop, so loop-bound resources (aiohttp/asyncpg pools, `asyncio.Lock`) survive across requests and the GIL is released during I/O.
+    - :material-speedometer: **Speed** — return a queryset (`return {"users": qs}`) and Cello builds the response JSON in Rust straight from Postgres rows: **19.7× faster** on a 200-row list, and single-row `get`/`create` are 4–5× faster (paired benchmark in the release notes). A rebuilt async bridge removes extra thread hops from every database and Redis call.
 
-    - :material-database: **Native data layer + ORM** — a real Postgres pool and async Redis client (incl. `rediss://` TLS) plus a built-in async ORM, replacing the old mock layer.
+    - :material-shield-lock: **Security** — ORM identifier injection closed, `write_only`/`read_only` model fields, and Postgres TLS with libpq-style `sslmode` (`verify-full` recommended).
 
-    - :material-check-decagram: **Full plugin audit** — every `enable_*` verified end-to-end; fixed health-check/GraphQL/Prometheus 404s, the BasicAuth challenge, JWT `iat`, security-headers config, and a timeout panic.
+    - :material-check-decagram: **Simplicity** — `body=Model` is validated natively and documented in OpenAPI from the same model; Q objects, aggregates, `select_related`/`prefetch_related`, `bulk_create`/`bulk_update`; experimental `python -m cello migrate`.
 
-    - :material-tune: **Three-pillar upgrades** — full security headers (CSP, Permissions-Policy, cross-origin isolation), gzip-compressed cache HITs, and declarative `body=` request validation (400 on bad input).
+    - :material-database: **Real Postgres types** — exact NUMERIC, arrays, intervals, datetime/UUID binding and a `DatabaseError` hierarchy (still `RuntimeError`).
 
-    - :material-shield-lock: **Security & DoS hardening** — CSRF/skip-path/CORS/BasicAuth/SSE fixes, request body-size limits and header/body/handler timeouts.
+    - :material-alert: **Deliberate breaks** — undeclared column names now raise `FieldError`, out-of-range integers raise instead of wrapping, and a few more; each is listed with its migration in the release notes.
 
-    [:material-tag: Full Release Notes](releases/v1.3.0.md){ .md-button .md-button--primary }
-    [:material-book-open-variant: Migration Guide](releases/migration.md){ .md-button }
+    [:material-tag: Full Release Notes](releases/v1.4.0.md){ .md-button .md-button--primary }
+    [:material-book-open-variant: ORM & Data Layer](data-layer.md){ .md-button }
 
 </div>
 

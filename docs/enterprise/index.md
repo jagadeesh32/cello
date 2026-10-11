@@ -216,23 +216,20 @@ graph TB
 === ":material-database: Database Pooling"
 
     ```python title="Async connection pool with transactions"
-    from cello import App
-    from cello.enterprise import Database
+    from cello import App, DatabaseConfig
 
     app = App()
-    db = Database(
+    app.enable_database(DatabaseConfig(
         url="postgresql://localhost/mydb",
         pool_size=20,
-        max_overflow=10,
-        pool_timeout=30,
-        health_check_interval=60
-    )
+        sslmode="verify-full",
+    ))
 
     @app.post("/orders")
     async def create_order(request):
         data = request.json()
-        async with db.transaction() as tx:
-            order = await tx.fetch_one(
+        async with request.database.transaction() as tx:
+            order = await tx.fetchrow(
                 "INSERT INTO orders (user_id, total) VALUES ($1, $2) RETURNING *",
                 data["user_id"], data["total"]
             )

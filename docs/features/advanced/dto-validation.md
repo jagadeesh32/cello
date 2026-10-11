@@ -48,6 +48,59 @@ def create_user(request, user):        # `user` is a validated UserDTO
     and it is validated automatically, returning **422** on failure. Use `body=`
     when you want the clearer, decorator-declared contract.
 
+### Native validation with ORM models (v1.4.0)
+
+Pass a `cello.orm` model to `body=` and the body is validated **in Rust**,
+straight off the raw request bytes, against the model's compiled schema. The
+same field declaration drives the table, the validation, the serialization and
+the OpenAPI schema — you declare the shape once.
+
+```python
+from cello.orm import Model, AutoField, CharField, BooleanField, IntegerField
+
+class User(Model):
+    id       = AutoField()                                   # read-only on input
+    email    = CharField(max_length=255)
+    password = CharField(max_length=128, write_only=True)    # never serialized
+    age      = IntegerField()
+    active   = BooleanField(default=True)
+
+@app.post("/users", body=User)
+async def create(request, user: User):    # an unsaved User instance
+    await user.save(using=request.database)
+    return user                            # serialized in Rust, no password
+```
+
+Parsing, type checks, coercion and constraints happen in one pass; there is no
+intermediate Python dict. Every error is collected, not just the first.
+
+| Rule | Behaviour |
+|---|---|
+| Status / shape | `400 {"detail": [{"loc": [...], "msg": ..., "type": ...}]}` — the frozen `body=` contract. `type`/`msg` use the same vocabulary as the Pydantic path (`missing`, `int_parsing`, `string_too_long`, ...). Input values are **not** echoed back. |
+| Malformed JSON | `{"loc": ["body"], "msg": "Invalid JSON body", "type": "value_error.json"}`, as before. Includes invalid UTF-8, trailing data, and nesting deeper than 128 levels. |
+| Not an object | `{"loc": ["body"], "type": "model_type", ...}` |
+| Required | `null=False` with no default (and not `auto_now_add`). Absent optional fields are filled exactly as `Model(**data)` fills them: literal defaults, callables called, mutable defaults copied, otherwise `None`. |
+| Unknown keys | Ignored (the existing `body=` default). |
+| `AutoField` / `read_only=True` | Ignored on input, like unknown keys — a client cannot set `id` and turn `save()` into an `UPDATE` of another row. |
+| `write_only=True` | Accepted on input; omitted by `to_dict()` and when a model is returned from a handler. |
+| ForeignKey | Accepted as `author_id` (the `to_dict()` key) or `author`. |
+| Integers | ints, whole floats (`42.0`), booleans, numeric strings (`" 42 "`, `"1_000"`, `"4.0"`); range-checked (`INTEGER` 32-bit, `BIGINT` 64-bit). |
+| Floats | numbers, booleans, numeric strings. |
+| Booleans | `true/false`, `0/1`, and `"true"/"false"/"yes"/"no"/"on"/"off"/"t"/"f"/"y"/"n"/"1"/"0"` in any case. |
+| Strings | strings only; `max_length` counts characters. A string containing U+0000 is rejected (`string_null_byte`) — Postgres refuses it in text columns. |
+| `DateTimeField` | ISO-8601 / RFC 3339 (`T` or space, `Z`/offset; naive = UTC), a bare date, or a Unix timestamp. Stored as the RFC 3339 string a `TIMESTAMPTZ` row reads back as. |
+| `JSONField` | any JSON value; U+0000 in any nested string or key is rejected (`string_null_byte`), as jsonb refuses it. Custom `sql_type` columns are passed through unchecked. |
+| Body size | `App.set_limits(LimitsConfig(max_body_size=...))` is enforced (413) before validation. Bodies over 32 KB are parsed with the GIL released. |
+
+A model with a custom `__init__` still has it called (`cls(**validated)`), as in
+1.3; otherwise the instance is built directly, with the same attributes
+`Model.__init__` would set. Pydantic models, dataclasses and plain classes keep their existing paths.
+
+Routes with `body=` also get a real OpenAPI `requestBody`: ORM models from the
+compiled schema (`type`/`format`, `maxLength`, `required`, `nullable`,
+`readOnly`, `writeOnly`, literal `default`s), Pydantic models from their JSON
+schema, both under `components/schemas` and shared between routes.
+
 ```
 Client Request                 DTO Layer                    Internal Model
 {                              Filter & Validate            {

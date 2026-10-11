@@ -214,6 +214,43 @@ limits = LimitsConfig(
 
 ---
 
+## Database Configuration
+
+`app.enable_database(DatabaseConfig(...))` creates the native Postgres pool. Full
+reference: [Database API](../api/database.md#databaseconfig).
+
+```python
+from cello import App, DatabaseConfig
+
+app = App()
+app.enable_database(DatabaseConfig(
+    url="postgresql://app:secret@db.internal:5432/app",
+    pool_size=10,
+    sslmode="verify-full",
+    sslrootcert="/etc/cello/db-ca.pem",
+))
+```
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `url` | required | Postgres URL or libpq DSN. libpq query keys such as `?sslmode=...` are honoured. |
+| `pool_size` | `10` | Maximum pooled connections. |
+| `sslmode` | `None` (behaves as `prefer`) | `disable`, `prefer`, `require`, `verify-ca`, `verify-full`. Overrides an `sslmode` in the URL. |
+| `sslrootcert` | `None` | PEM CA file to trust. When omitted or `"system"`, the bundled Mozilla roots are used. |
+| `sslcert` / `sslkey` | `None` | PEM client certificate and unencrypted private key; both are required together. |
+
+**The default `sslmode` is `prefer`**: the connection is encrypted when the server
+offers TLS and plaintext otherwise, and nothing is verified. A server with TLS
+enabled therefore now gets an encrypted connection where 1.3.x used plaintext.
+Use `sslmode="verify-full"` in production, or `sslmode="disable"` to force
+plaintext. `app.database.sslmode` reports the effective mode.
+
+The `min_idle`, `max_lifetime_secs`, `connection_timeout_secs`,
+`idle_timeout_secs` and `application_name` options are accepted but not applied
+by the native Postgres pool in 1.4.0.
+
+---
+
 ## Environment Behavior
 
 | Setting | Development | Production |

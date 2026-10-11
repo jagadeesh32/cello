@@ -56,6 +56,48 @@ def _coerce_body(model, data):
         return None, [{"loc": ["body"], "msg": str(e), "type": "value_error"}]
 
 
+def _native_validator(model):
+    """A Rust ``BodyValidator`` when ``model`` is a cello ORM model, else None.
+
+    ORM models are validated natively against their compiled schema (v1.4.0):
+    straight off the raw body bytes, in one pass, with no intermediate dict.
+    """
+    if not isinstance(model, type) or getattr(model, "_meta", None) is None:
+        return None
+    try:
+        from cello.orm import Model
+        from cello._cello import BodyValidator
+    except ImportError:
+        return None
+    if not issubclass(model, Model) or model is Model:
+        return None
+    defaults = _init_defaults(model) if model.__init__ is Model.__init__ else None
+    return BodyValidator(model._meta.schema, model, defaults)
+
+
+def _init_defaults(model):
+    """``{field: (mode, value)}``: how ``Model.__init__`` fills an absent field,
+    so the native validator can build the instance without calling it. ``None``
+    (call the class instead) if the ORM's init plan is not available."""
+    from cello import orm
+
+    plan = getattr(model._meta, "init_plan", None)
+    modes = {
+        getattr(orm, "_D_NONE", object()): "none",
+        getattr(orm, "_D_VALUE", object()): "value",
+        getattr(orm, "_D_CALL", object()): "call",
+        getattr(orm, "_D_COPY", object()): "copy",
+    }
+    if plan is None:
+        return None
+    out = {}
+    for name, _fk_col, mode, default in plan:
+        if mode not in modes:
+            return None
+        out[name] = (modes[mode], default)
+    return out
+
+
 def wrap_handler_with_body(handler, model):
     """Wrap a handler so the JSON request body is parsed and validated against
     ``model`` before the handler runs.
@@ -63,8 +105,9 @@ def wrap_handler_with_body(handler, model):
     On success the validated instance is injected into the handler (into the
     parameter annotated with ``model`` if present, otherwise the first
     non-``request`` parameter). On failure a ``400`` response is returned with a
-    ``{"detail": [...]}`` body. Works with Pydantic models, dataclasses, and
-    plain classes constructible from the decoded JSON.
+    ``{"detail": [...]}`` body. Works with cello ORM models (validated natively
+    in Rust against the model's compiled schema), Pydantic models, dataclasses,
+    and plain classes constructible from the decoded JSON.
     """
     # Decide which parameter receives the validated body.
     target = None
@@ -81,7 +124,14 @@ def wrap_handler_with_body(handler, model):
     except (TypeError, ValueError, NameError):
         pass
 
+    native = _native_validator(model)
+
     def _validate(request):
+        if native is not None:
+            result = native(request)
+            if result.__class__ is Response:
+                return None, result
+            return result, None
         try:
             data = request.json()
         except (ValueError, TypeError, UnicodeDecodeError, RuntimeError):

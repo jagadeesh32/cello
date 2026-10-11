@@ -64,16 +64,22 @@ Incoming Request
     ▼
 Tokio Async Runtime (Rust)
     │
-    ├─ sync handler  → Executed directly on worker thread
+    ├─ sync handler  → Executed directly on the server thread
+    │                  (or the blocking pool, if it blocks)
     │
-    └─ async handler → Scheduled on Python asyncio event loop
-                       managed by Tokio via pyo3-asyncio
+    └─ async handler → Scheduled on one persistent Python asyncio
+                       event loop; the result is serialized there
+                       and handed back to Rust
 ```
 
 Key points:
 
-- **Sync handlers** run on Tokio worker threads with minimal overhead.
-- **Async handlers** are dispatched to a Python asyncio event loop that Tokio manages.
+- **Sync handlers** run on the server thread with minimal overhead.
+- **Async handlers** run on a single persistent asyncio event loop, so loop-bound
+  objects (`asyncio.Lock`, client sessions, pools) survive across requests.
+- **Native async I/O** (`request.database`, `request.redis`, `AsyncClient`) runs on
+  a dedicated Rust I/O thread without the GIL; results are turned into Python
+  objects on the event loop when your `await` resumes.
 - You never need to call `asyncio.run()` or create an event loop yourself.
 
 ---

@@ -386,14 +386,14 @@ Adds the following endpoints:
 ```python
 app.enable_openapi(
     title="My API",
-    version="1.3.0"
+    version="1.4.0"
 )
 ```
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `title` | `str` | `"Cello API"` | API title |
-| `version` | `str` | `"1.3.0"` | API version |
+| `version` | `str` | `"1.4.0"` | API version |
 
 ---
 
@@ -403,9 +403,9 @@ app.enable_openapi(
 
 Enable database connection pooling.
 
-> *Since v0.8.0*
+> *Since v0.8.0 (native pool since v1.3.0)*
 
-Configures an async connection pool for PostgreSQL, MySQL, or SQLite. Supports connection health monitoring, automatic reconnection, and query statistics.
+Creates the native PostgreSQL connection pool (`deadpool-postgres`). After this call the pool is available as `app.database` and, inside handlers, as `request.database` (alias `request.db`). TLS follows libpq's `sslmode` (default `prefer`).
 
 ```python
 from cello import App, DatabaseConfig
@@ -414,15 +414,16 @@ app = App()
 app.enable_database(DatabaseConfig(
     url="postgresql://user:pass@localhost/mydb",
     pool_size=20,
-    max_lifetime_secs=1800
+    sslmode="verify-full",
+    sslrootcert="/etc/cello/db-ca.pem",
 ))
 ```
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `config` | `DatabaseConfig` | `DatabaseConfig("sqlite://cello.db")` | Database configuration instance |
+| `config` | `DatabaseConfig` | required | Database configuration instance. Passing `None` raises `ValueError`. |
 
-When `config` is `None`, a default SQLite database at `sqlite://cello.db` is used.
+Only PostgreSQL is supported. See [`DatabaseConfig`](database.md#databaseconfig) for every option and [Database API](database.md) for the query methods.
 
 ### `app.enable_redis(config)`
 

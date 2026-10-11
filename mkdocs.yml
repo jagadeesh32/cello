@@ -252,6 +252,9 @@ nav:
       - Static Files: features/advanced/static-files.md
       - File Uploads: features/advanced/file-uploads.md
       - DTOs & Validation: features/advanced/dto-validation.md
+      - Blocking Handlers & Threadpool: features/advanced/threadpool.md
+      - Database, ORM & Redis: data-layer.md
+      - Migrations (experimental): features/advanced/migrations.md
 
   - Learn:
     - learn/index.md
@@ -283,6 +286,8 @@ nav:
       - Middleware: reference/api/middleware.md
       - Guards: reference/api/guards.md
       - Context: reference/api/context.md
+      - ORM: reference/api/orm.md
+      - Database: reference/api/database.md
     - Configuration:
       - Server Config: reference/config/server.md
       - Security Config: reference/config/security.md
@@ -322,6 +327,11 @@ nav:
       - Advanced Middleware: examples/real/advanced-middleware.md
       - Adaptive Rate Limiting: examples/real/adaptive-rate-limiting.md
       - Database & Redis: examples/real/database-demo.md
+      - Database, Redis & ORM: examples/real/database-orm.md
+      - Advanced ORM Tour: examples/real/orm-advanced.md
+      - Native Schema (body=Model): examples/real/native-schema.md
+      - Migrations Walkthrough: examples/real/migrations.md
+      - Postgres TLS: examples/real/postgres-tls.md
       - Enterprise Config: examples/real/enterprise-config.md
       - Cluster Mode: examples/real/cluster-demo.md
       - Health Checks: examples/enterprise/health-checks.md
@@ -365,6 +375,8 @@ nav:
 
   - Release Notes:
     - releases/index.md
+    - v1.4.0: releases/v1.4.0.md
+    - v1.4.0 (design plan): releases/v1.4.0-plan.md
     - v1.3.0: releases/v1.3.0.md
     - v1.2.4: releases/v1.2.4.md
     - v1.2.3: releases/v1.2.3.md

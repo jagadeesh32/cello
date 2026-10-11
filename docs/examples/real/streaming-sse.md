@@ -22,7 +22,7 @@ Server-Sent Events (SSE) let a server push a sequence of messages to a client ov
 ```python
 #!/usr/bin/env python3
 """
-Streaming Responses Demo for Cello v1.3.0.
+Streaming Responses Demo for Cello v1.4.0.
 Run with: python examples/streaming_demo.py
 Test:
     curl -N http://127.0.0.1:8000/sse/events

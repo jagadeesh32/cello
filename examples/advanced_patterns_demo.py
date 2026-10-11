@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Cello Framework v1.3.0 - Advanced Patterns Demo
+Cello Framework v1.4.0 - Advanced Patterns Demo
 ================================================
 
 Demonstrates the three major architectural patterns introduced in v1.3.0:
@@ -608,7 +608,7 @@ def home(request):
     """
     return {
         "framework": "Cello",
-        "version": "1.3.0",
+        "version": "1.4.0",
         "features": {
             "event_sourcing": {
                 "description": "Store all state changes as immutable events",
@@ -974,7 +974,7 @@ async def on_shutdown():
 if __name__ == "__main__":
     print("""
     ================================================================
-    Cello Framework v1.3.0 - Advanced Patterns Demo
+    Cello Framework v1.4.0 - Advanced Patterns Demo
     ================================================================
 
     Features demonstrated:

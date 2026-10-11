@@ -316,6 +316,17 @@ pub struct MetricsSnapshot {
 // Shutdown Coordinator
 // ============================================================================
 
+/// Whether unhandled handler errors are described to the client (development) or
+/// replaced by a generic 500 (production). Error text can carry database messages,
+/// constraint names and row values, so production must never echo it. Default is
+/// on; `App.run()` turns it off when `debug` is false.
+static EXPOSE_ERROR_DETAILS: AtomicBool = AtomicBool::new(true);
+
+/// Set whether unhandled handler errors are described in 500 responses.
+pub fn set_expose_error_details(expose: bool) {
+    EXPOSE_ERROR_DETAILS.store(expose, Ordering::Relaxed);
+}
+
 /// Coordinates graceful shutdown.
 pub struct ShutdownCoordinator {
     /// Shutdown signal sender
@@ -567,9 +578,16 @@ impl Server {
             }
         });
 
+        // Created once, outside the loop: a `ctrl_c()` future only observes
+        // signals delivered after it was created, so re-creating it on every
+        // iteration lost a SIGINT that landed while an accepted connection was
+        // being set up — under load the server then ignored Ctrl-C and hung.
+        let ctrl_c = tokio::signal::ctrl_c();
+        tokio::pin!(ctrl_c);
+
         loop {
             tokio::select! {
-                _ = tokio::signal::ctrl_c() => {
+                _ = &mut ctrl_c => {
                     shutdown.shutdown();
                     break;
                 }
@@ -1148,7 +1166,12 @@ async fn handle_request(
         },
         Err(err) => {
             metrics.inc_errors();
-            Response::error(500, &err)
+            if EXPOSE_ERROR_DETAILS.load(Ordering::Relaxed) {
+                Response::error(500, &err)
+            } else {
+                eprintln!("[cello] 500 {method_str} {path}: {err}");
+                Response::error(500, "Internal Server Error")
+            }
         }
     };
 

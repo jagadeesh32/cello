@@ -168,6 +168,8 @@ The most commonly used classes and functions at a glance.
 | [`Depends`](api/context.md) | `cello` | Dependency injection marker |
 | [`RoleGuard`](api/guards.md) | `cello` | Role-based access guard |
 | [`PermissionGuard`](api/guards.md) | `cello` | Permission-based access guard |
+| [`Model`, `QuerySet`, `Q`](api/orm.md) | `cello.orm` | Built-in async ORM |
+| [`DatabaseConfig`, `Database`, `DatabaseError`](api/database.md) | `cello` | Native Postgres pool, transactions and errors |
 | [`JwtConfig`](config/security.md) | `cello.middleware` | JWT authentication config |
 | [`RateLimitConfig`](config/middleware.md) | `cello.middleware` | Rate limiting config |
 | [`SessionConfig`](config/security.md) | `cello.middleware` | Session management config |

@@ -402,6 +402,83 @@ Battle-tested patterns for large-scale production systems. These examples demons
 
 ---
 
+## :material-database: Data Layer & ORM
+
+Runnable examples for the native Postgres and Redis layer and the 1.4.0 ORM. Each one is a single file in `examples/` with captured output on its page.
+
+<div class="grid cards" markdown>
+
+-   :material-database:{ .lg .middle } **Database, Redis & ORM**
+
+    ---
+
+    :material-star::material-star: Intermediate  { .md-tag }
+
+    Real PostgreSQL and Redis pools: raw queries, `@transactional`, the built-in ORM and a Redis cache-through list.
+
+    **Features used:** `enable_database` `enable_redis` `@transactional` `Model.objects` `Redis cache`
+
+    [:octicons-arrow-right-24: Full Example](real/database-orm.md)
+
+-   :material-database-search:{ .lg .middle } **Advanced ORM Tour**
+
+    ---
+
+    :material-star::material-star::material-star: Advanced  { .md-tag }
+
+    Q objects, aggregates and GROUP BY, `select_related` / `prefetch_related`, bulk writes, returned querysets and ambient transactions.
+
+    **Features used:** `Q` `aggregate` `annotate` `select_related` `bulk_create` `fetch_json`
+
+    ```python
+    @app.get("/books/search")
+    async def search(request):
+        return {"books": Book.objects.filter(
+            Q(title__icontains="rust") | Q(views__gte=1000), ~Q(draft=True))}
+    ```
+
+    [:octicons-arrow-right-24: Full Example](real/orm-advanced.md)
+
+-   :material-shield-check:{ .lg .middle } **Native Schema**
+
+    ---
+
+    :material-star::material-star: Intermediate  { .md-tag }
+
+    One model declaration drives request validation, serialization and OpenAPI. No database required.
+
+    **Features used:** `body=Model` `read_only` `write_only` `OpenAPI`
+
+    [:octicons-arrow-right-24: Full Example](real/native-schema.md)
+
+-   :material-database-sync:{ .lg .middle } **Migrations Walkthrough**
+
+    ---
+
+    :material-star::material-star::material-star: Advanced  { .md-tag }
+
+    Generate, review and apply SQL migrations from your models with the experimental `cello migrate` command.
+
+    **Features used:** `cello migrate` `make` `apply` `status` `--allow-destructive`
+
+    [:octicons-arrow-right-24: Full Example](real/migrations.md)
+
+-   :material-lock-check:{ .lg .middle } **Postgres TLS**
+
+    ---
+
+    :material-star::material-star: Intermediate  { .md-tag }
+
+    Open a connection per `sslmode` and inspect it through `pg_stat_ssl`. Shows `prefer`, `require`, `verify-ca` and `verify-full`.
+
+    **Features used:** `DatabaseConfig(sslmode=...)` `sslrootcert` `pg_stat_ssl`
+
+    [:octicons-arrow-right-24: Full Example](real/postgres-tls.md)
+
+</div>
+
+---
+
 ## :material-map: Example Architecture
 
 How Cello's features layer together in a typical application.

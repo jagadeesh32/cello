@@ -57,9 +57,14 @@ pub mod http_client;
 
 // Persistent asyncio event loop used to drive async def handlers.
 pub mod async_loop;
+// Rust future -> asyncio awaitable bridge (single `cello-io` thread) for native I/O.
+pub mod async_bridge;
 
 // Native async data layer: real Postgres pool + Redis client (issue #5).
 pub mod db;
+
+// v1.4.0 - Compiled ORM schema registry (one spec per model).
+pub mod schema;
 
 use pyo3::prelude::*;
 use std::sync::Arc;
@@ -95,6 +100,8 @@ pub struct Cello {
     read_header_timeout_secs: u64,
     /// Timeout (seconds, 0 = disabled) for a single handler to produce a response.
     handler_timeout_secs: u64,
+    /// Maximum number of blocking threads available for offloaded sync handlers.
+    blocking_threads: usize,
     /// Native Postgres pool built by `enable_database()`, exposed as `app.database`
     /// and injected into each request as `request.database`.
     database_client: Option<Py<db::PyDatabase>>,
@@ -127,6 +134,9 @@ impl Cello {
             read_body_timeout_secs: 0,
             read_header_timeout_secs: 0,
             handler_timeout_secs: 0,
+            // 64 concurrent blocking handlers is enough to absorb typical blocking
+            // I/O without the memory and GIL contention of a very large pool.
+            blocking_threads: 64,
             database_client: None,
             redis_client: None,
         }
@@ -197,6 +207,19 @@ impl Cello {
         self.read_header_timeout_secs = config.read_header_timeout;
         self.read_body_timeout_secs = config.read_body_timeout;
         self.handler_timeout_secs = config.handler_timeout;
+    }
+
+    /// Configure the blocking threadpool used for blocking sync handlers.
+    ///
+    /// Pass a `ThreadPoolConfig`. Must be called before `run()` — the pool size is
+    /// fixed when the runtime is built.
+    pub fn set_threadpool(&mut self, config: &PyThreadPoolConfig) {
+        self.blocking_threads = config.size.max(1);
+        self.handlers.set_offload_threshold_us(if config.adaptive {
+            config.offload_threshold_ms.saturating_mul(1_000)
+        } else {
+            u64::MAX
+        });
     }
 
     /// Enable CORS middleware.
@@ -286,6 +309,9 @@ impl Cello {
     pub fn register_singleton(&mut self, name: String, value: PyObject) {
         self.dependency_container
             .register_py_singleton(&name, value);
+        // Without this the registry's fast-path check stays false and `Depends(...)`
+        // parameters are never resolved — the handler receives the Depends marker.
+        self.handlers.set_has_dependencies(true);
     }
 
     /// Enable logging middleware.
@@ -608,10 +634,18 @@ impl Cello {
     /// `transaction` (see `db::PyDatabase`).
     #[pyo3(signature = (config))]
     pub fn enable_database(&mut self, py: Python<'_>, config: PyDatabaseConfig) -> PyResult<()> {
-        let database = db::PyDatabase::connect(&config.url, config.pool_size)?;
+        let tls_opts = db::tls::TlsOptions {
+            sslmode: config.sslmode.clone(),
+            sslrootcert: config.sslrootcert.clone(),
+            sslcert: config.sslcert.clone(),
+            sslkey: config.sslkey.clone(),
+        };
+        let database = db::PyDatabase::connect(&config.url, config.pool_size, tls_opts)?;
+        let sslmode = database.ssl_mode();
         self.database_client = Some(Py::new(py, database)?);
         println!("🗄️  Database pool enabled (native deadpool-postgres):");
         println!("   Pool size: {}", config.pool_size);
+        println!("   TLS:       sslmode={}", sslmode.as_str());
         Ok(())
     }
 
@@ -802,7 +836,7 @@ impl Cello {
         version: Option<String>,
     ) -> PyResult<()> {
         let title = title.unwrap_or_else(|| "Cello API".to_string());
-        let version = version.unwrap_or_else(|| "1.3.0".to_string());
+        let version = version.unwrap_or_else(|| "1.4.0".to_string());
 
         // Store title and version for later use
         let title_clone = title.clone();
@@ -901,6 +935,13 @@ def openapi_handler(request):
         Ok(())
     }
 
+    /// Choose whether unhandled handler errors are described in 500 responses
+    /// (development) or replaced by a generic `Internal Server Error` with the
+    /// details written to the server log (production).
+    pub fn set_expose_errors(&self, expose: bool) {
+        server::set_expose_error_details(expose);
+    }
+
     /// Start the HTTP server.
     #[pyo3(signature = (host=None, port=None, workers=None))]
     pub fn run(
@@ -926,6 +967,7 @@ def openapi_handler(request):
 
         // Limits/timeouts are plain Copy values captured for the server config.
         let max_body_size = self.max_body_size;
+        let blocking_threads = self.blocking_threads;
         let read_body_timeout_secs = self.read_body_timeout_secs;
         let read_header_timeout_secs = self.read_header_timeout_secs;
         let handler_timeout_secs = self.handler_timeout_secs;
@@ -945,6 +987,9 @@ def openapi_handler(request):
         py.allow_threads(|| {
             tokio::runtime::Builder::new_current_thread()
                 .enable_all()
+                // Bounds the blocking pool that offloaded sync handlers, async
+                // coroutine waits, and background tasks all share.
+                .max_blocking_threads(blocking_threads)
                 .build()
                 .expect("failed to build Tokio runtime")
                 .block_on(async move {
@@ -981,6 +1026,14 @@ def openapi_handler(request):
                     }
 
                     let _ = server.run().await;
+
+                    // Ctrl-C (SIGINT) is delivered to CPython's own handler as well as
+                    // Tokio's, which leaves a KeyboardInterrupt pending. The first Python
+                    // call below would raise it, dropping the hook's coroutine un-awaited
+                    // (and the error is filtered out below). Consume it so the hooks run.
+                    Python::with_gil(|py| {
+                        let _ = py.check_signals();
+                    });
 
                     // Shutdown hooks
                     for handler in &shutdown_handlers {
@@ -1075,6 +1128,43 @@ impl PyLimitsConfig {
             max_body_size,
             max_connections,
             max_requests_per_connection,
+        }
+    }
+}
+
+/// Python-exposed blocking-threadpool configuration.
+///
+/// Sync `def` handlers run inline on the server thread by default, which is the
+/// fastest path for handlers that just build and return a value. A handler that
+/// *blocks* (sleep, database driver, socket I/O) would stall the server thread for
+/// its whole duration, so Cello times sync handlers and moves any that exceed
+/// `offload_threshold_ms` onto a bounded pool of OS threads, permanently.
+///
+/// Note the pool is shared with async-coroutine waits and background tasks, so size
+/// it for the total of those plus concurrent blocking handlers.
+#[pyclass(name = "ThreadPoolConfig")]
+#[derive(Clone)]
+pub struct PyThreadPoolConfig {
+    /// Maximum number of blocking threads.
+    #[pyo3(get, set)]
+    pub size: usize,
+    /// Sync handler duration (milliseconds) above which it is moved to the pool.
+    #[pyo3(get, set)]
+    pub offload_threshold_ms: u64,
+    /// When false, only handlers marked `blocking=True` are offloaded.
+    #[pyo3(get, set)]
+    pub adaptive: bool,
+}
+
+#[pymethods]
+impl PyThreadPoolConfig {
+    #[new]
+    #[pyo3(signature = (size=64, offload_threshold_ms=1, adaptive=true))]
+    pub fn new(size: usize, offload_threshold_ms: u64, adaptive: bool) -> Self {
+        Self {
+            size,
+            offload_threshold_ms,
+            adaptive,
         }
     }
 }
@@ -1803,12 +1893,27 @@ pub struct PyDatabaseConfig {
     pub idle_timeout_secs: u64,
     #[pyo3(get, set)]
     pub application_name: Option<String>,
+    /// libpq `sslmode`: `disable` | `prefer` (default) | `require` |
+    /// `verify-ca` | `verify-full`. Overrides an `sslmode` in the URL.
+    #[pyo3(get, set)]
+    pub sslmode: Option<String>,
+    /// PEM file with the CA certificate(s) to trust (`"system"` = bundled
+    /// Mozilla roots). Overrides `sslrootcert` in the URL.
+    #[pyo3(get, set)]
+    pub sslrootcert: Option<String>,
+    /// PEM client certificate (chain) for certificate authentication.
+    #[pyo3(get, set)]
+    pub sslcert: Option<String>,
+    /// PEM private key for `sslcert`.
+    #[pyo3(get, set)]
+    pub sslkey: Option<String>,
 }
 
 #[pymethods]
 impl PyDatabaseConfig {
     #[new]
-    #[pyo3(signature = (url, pool_size=10, min_idle=1, max_lifetime_secs=1800, connection_timeout_secs=5, idle_timeout_secs=300, application_name=None))]
+    #[pyo3(signature = (url, pool_size=10, min_idle=1, max_lifetime_secs=1800, connection_timeout_secs=5, idle_timeout_secs=300, application_name=None, sslmode=None, sslrootcert=None, sslcert=None, sslkey=None))]
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         url: &str,
         pool_size: usize,
@@ -1817,6 +1922,10 @@ impl PyDatabaseConfig {
         connection_timeout_secs: u64,
         idle_timeout_secs: u64,
         application_name: Option<String>,
+        sslmode: Option<String>,
+        sslrootcert: Option<String>,
+        sslcert: Option<String>,
+        sslkey: Option<String>,
     ) -> Self {
         Self {
             url: url.to_string(),
@@ -1826,12 +1935,17 @@ impl PyDatabaseConfig {
             connection_timeout_secs,
             idle_timeout_secs,
             application_name,
+            sslmode,
+            sslrootcert,
+            sslcert,
+            sslkey,
         }
     }
 
     /// Create PostgreSQL config.
     #[staticmethod]
-    #[pyo3(signature = (host, port=5432, database="postgres", user="postgres", password=None, pool_size=10))]
+    #[pyo3(signature = (host, port=5432, database="postgres", user="postgres", password=None, pool_size=10, sslmode=None, sslrootcert=None))]
+    #[allow(clippy::too_many_arguments)]
     pub fn postgres(
         host: &str,
         port: u16,
@@ -1839,13 +1953,27 @@ impl PyDatabaseConfig {
         user: &str,
         password: Option<String>,
         pool_size: usize,
+        sslmode: Option<String>,
+        sslrootcert: Option<String>,
     ) -> Self {
         let url = if let Some(pw) = password {
             format!("postgresql://{user}:{pw}@{host}:{port}/{database}")
         } else {
             format!("postgresql://{user}@{host}:{port}/{database}")
         };
-        Self::new(&url, pool_size, 1, 1800, 5, 300, Some("cello".to_string()))
+        Self::new(
+            &url,
+            pool_size,
+            1,
+            1800,
+            5,
+            300,
+            Some("cello".to_string()),
+            sslmode,
+            sslrootcert,
+            None,
+            None,
+        )
     }
 }
 
@@ -2398,6 +2526,7 @@ fn _cello(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     // Configuration classes
     m.add_class::<PyTimeoutConfig>()?;
     m.add_class::<PyLimitsConfig>()?;
+    m.add_class::<PyThreadPoolConfig>()?;
     m.add_class::<PyClusterConfig>()?;
     m.add_class::<PyTlsConfig>()?;
     m.add_class::<PyHttp2Config>()?;
@@ -2426,6 +2555,24 @@ fn _cello(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_class::<db::PyDatabase>()?;
     m.add_class::<db::PyTransaction>()?;
     m.add_class::<db::PyRedis>()?;
+    // v1.4.0 - Database exception hierarchy (SQLSTATE → DatabaseError subclasses)
+    db::error::register(_py, m)?;
+
+    // v1.4.0 - ORM schema registry
+    m.add_class::<schema::PyModelSpec>()?;
+    m.add_class::<schema::PyFieldSpec>()?;
+    m.add_function(wrap_pyfunction!(schema::python::schema_register, m)?)?;
+    m.add_function(wrap_pyfunction!(schema::python::schema_compile_field, m)?)?;
+    m.add_function(wrap_pyfunction!(schema::python::schema_get, m)?)?;
+    m.add_function(wrap_pyfunction!(schema::python::schema_count, m)?)?;
+    // v1.4.0 Phase 04 - alias validation for aggregates / annotations
+    m.add_function(wrap_pyfunction!(schema::python::schema_ident, m)?)?;
+    // v1.4.0 Phase 05 - experimental `cello migrate` session
+    m.add_class::<schema::migrate_conn::PyMigrationConnection>()?;
+    schema::native::register(m)?;
+    // v1.4.0 Phase 02 - row pipeline (pre-serialized rows, ORM serializer hooks)
+    m.add_class::<db::RawJson>()?;
+    m.add_function(wrap_pyfunction!(schema::runtime::orm_bind, m)?)?;
 
     // v0.7.0+ / v0.8.0 - Enterprise & Data Layer Configuration Classes
     m.add_class::<PyOpenTelemetryConfig>()?;

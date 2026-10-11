@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Streaming Responses Demo for Cello v1.3.0.
+Streaming Responses Demo for Cello v1.4.0.
 
 This example demonstrates streaming capabilities including:
 - Server-Sent Events (SSE)
@@ -35,7 +35,7 @@ def home(request):
     """Home endpoint showing streaming features."""
     return {
         "message": "Cello Streaming Demo",
-        "version": "1.3.0",
+        "version": "1.4.0",
         "features": {
             "sse": "Server-Sent Events for real-time updates",
             "streaming": "Large response streaming",

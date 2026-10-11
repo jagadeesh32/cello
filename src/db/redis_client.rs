@@ -2,8 +2,8 @@
 //!
 //! Backed by the `redis` crate's `aio::ConnectionManager` (a multiplexed,
 //! auto-reconnecting connection). Commands return Python awaitables via
-//! `pyo3_asyncio::tokio::future_into_py`, so the GIL is released during the
-//! Redis round-trip.
+//! `crate::async_bridge`: the round trip runs on the `cello-io` thread without
+//! the GIL and the reply is converted on the event-loop thread.
 //!
 //! ```python
 //! await request.redis.set("k", "v", ex=60)
@@ -19,6 +19,8 @@ use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyTuple};
 use redis::aio::ConnectionManager;
 use tokio::sync::Mutex;
+
+use crate::async_bridge as bridge;
 
 fn rt_err(msg: impl std::fmt::Display) -> PyErr {
     pyo3::exceptions::PyRuntimeError::new_err(msg.to_string())
@@ -113,13 +115,13 @@ impl PyRedis {
     fn run<'py>(&self, py: Python<'py>, cmd: redis::Cmd) -> PyResult<&'py PyAny> {
         let client = self.client.clone();
         let manager = self.manager.clone();
-        pyo3_asyncio::tokio::future_into_py(py, async move {
+        bridge::future_into_py_with(py, async move {
             let mut conn = get_conn(client, manager).await?;
             let value: redis::Value = cmd
                 .query_async(&mut conn)
                 .await
                 .map_err(|e| rt_err(format!("Redis command failed: {e}")))?;
-            Ok(Python::with_gil(|py| redis_value_to_py(py, &value)))
+            Ok(move |py: Python<'_>| Ok(redis_value_to_py(py, &value)))
         })
     }
 }
@@ -405,9 +407,9 @@ impl PyRedis {
     /// transparently reconnects).
     fn close<'py>(&self, py: Python<'py>) -> PyResult<&'py PyAny> {
         let manager = self.manager.clone();
-        pyo3_asyncio::tokio::future_into_py(py, async move {
+        bridge::future_into_py(py, async move {
             *manager.lock().await = None;
-            Ok(Python::with_gil(|py| py.None()))
+            Ok(())
         })
     }
 

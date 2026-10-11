@@ -1,7 +1,7 @@
 //! Rust-native async HTTP client exposed to Python via PyO3.
 //!
 //! Backed by reqwest + Tokio. The GIL is never held during network I/O —
-//! coroutines are driven by `pyo3_asyncio::tokio::future_into_py`, so HTTP
+//! requests run on the `cello-io` thread via `crate::async_bridge`, so HTTP
 //! wait time is pure Rust with no Python scheduler overhead.
 
 use std::collections::HashMap;
@@ -95,7 +95,7 @@ impl PyAsyncClient {
         headers: Option<HashMap<String, String>>,
     ) -> PyResult<&'py PyAny> {
         let client = self.client.clone();
-        pyo3_asyncio::tokio::future_into_py(py, async move {
+        crate::async_bridge::future_into_py(py, async move {
             dispatch(client.get(&url), headers, None, None).await
         })
     }
@@ -112,7 +112,7 @@ impl PyAsyncClient {
     ) -> PyResult<&'py PyAny> {
         let json_bytes = to_json_bytes(py, json)?;
         let client = self.client.clone();
-        pyo3_asyncio::tokio::future_into_py(py, async move {
+        crate::async_bridge::future_into_py(py, async move {
             dispatch(client.post(&url), headers, json_bytes, content).await
         })
     }
@@ -129,7 +129,7 @@ impl PyAsyncClient {
     ) -> PyResult<&'py PyAny> {
         let json_bytes = to_json_bytes(py, json)?;
         let client = self.client.clone();
-        pyo3_asyncio::tokio::future_into_py(py, async move {
+        crate::async_bridge::future_into_py(py, async move {
             dispatch(client.put(&url), headers, json_bytes, content).await
         })
     }
@@ -146,7 +146,7 @@ impl PyAsyncClient {
     ) -> PyResult<&'py PyAny> {
         let json_bytes = to_json_bytes(py, json)?;
         let client = self.client.clone();
-        pyo3_asyncio::tokio::future_into_py(py, async move {
+        crate::async_bridge::future_into_py(py, async move {
             dispatch(client.patch(&url), headers, json_bytes, content).await
         })
     }
@@ -160,7 +160,7 @@ impl PyAsyncClient {
         headers: Option<HashMap<String, String>>,
     ) -> PyResult<&'py PyAny> {
         let client = self.client.clone();
-        pyo3_asyncio::tokio::future_into_py(py, async move {
+        crate::async_bridge::future_into_py(py, async move {
             dispatch(client.delete(&url), headers, None, None).await
         })
     }
@@ -168,7 +168,7 @@ impl PyAsyncClient {
     /// Async context manager support — `async with AsyncClient() as client`.
     fn __aenter__<'py>(slf: PyRef<'py, Self>, py: Python<'py>) -> PyResult<&'py PyAny> {
         let py_self = slf.into_py(py);
-        pyo3_asyncio::tokio::future_into_py(py, async move { Ok(py_self) })
+        crate::async_bridge::ready(py, py_self)
     }
 
     fn __aexit__<'py>(
@@ -178,7 +178,7 @@ impl PyAsyncClient {
         _exc_val: PyObject,
         _exc_tb: PyObject,
     ) -> PyResult<&'py PyAny> {
-        pyo3_asyncio::tokio::future_into_py(py, async { Ok(Python::with_gil(|py| py.None())) })
+        crate::async_bridge::ready(py, py.None())
     }
 }
 
@@ -201,14 +201,14 @@ fn to_json_bytes(py: Python<'_>, json: Option<PyObject>) -> PyResult<Option<Vec<
 
 /// Build and fire the request, then collect the response into a `PyHttpResponse`.
 ///
-/// The GIL is held only for the final `into_py` call; all network I/O runs
-/// without the GIL.
+/// Runs entirely without the GIL; the response object is created on the
+/// event-loop thread when the awaitable resolves.
 async fn dispatch(
     mut builder: reqwest::RequestBuilder,
     headers: Option<HashMap<String, String>>,
     json_bytes: Option<Vec<u8>>,
     content: Option<Vec<u8>>,
-) -> PyResult<PyObject> {
+) -> PyResult<PyHttpResponse> {
     if let Some(hdrs) = headers {
         for (k, v) in hdrs {
             builder = builder.header(k.as_str(), v.as_str());
@@ -240,5 +240,5 @@ async fn dispatch(
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?
         .to_vec();
 
-    Python::with_gil(|py| Ok(PyHttpResponse { status, body, hdrs }.into_py(py)))
+    Ok(PyHttpResponse { status, body, hdrs })
 }

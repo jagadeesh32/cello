@@ -102,7 +102,7 @@ if __name__ == "__main__":
 
 ```bash
 python app.py
-# 🐍 Cello v1.2.0 server starting at http://127.0.0.1:8000
+#   ➜  Server:    http://127.0.0.1:8000
 ```
 
 ---
@@ -169,13 +169,20 @@ python app.py
 | 📈 **Prometheus Metrics** | Production-ready metrics at `/metrics` |
 | 🔌 **Circuit Breaker** | Fault tolerance with automatic recovery |
 
-### Data Layer Features (v0.8.0)
+### Data Layer (native, v1.4.0)
 
 | Feature | Description |
 |---------|-------------|
-| 🗄️ **Enhanced DB Pooling** | Async connection pool with health monitoring & reconnection |
-| 🔴 **Redis Integration** | Async Redis client with pool, Pub/Sub, cluster mode |
-| 🔄 **Transactions** | Automatic transaction management with decorator support |
+| 🗄️ **Native Postgres pool** | `deadpool-postgres` pool with a prepared-statement cache; TLS via libpq `sslmode` (default `prefer`, use `verify-full` in production) |
+| 🧬 **One model, one registry** | A model is compiled once into a Rust schema registry that drives the ORM, `body=Model` validation, serialization and OpenAPI |
+| 🧰 **Built-in async ORM** | Typed fields, `Q` objects, aggregates and `GROUP BY`, `select_related` / `prefetch_related`, `bulk_create` / `bulk_update` |
+| ⚡ **Row → JSON fast path** | `return {"users": qs}`, `await qs.json()` and `db.fetch_json()` encode rows straight from Postgres to JSON on the I/O thread |
+| 🔴 **Redis** | Async Redis client (incl. `rediss://`, Lua scripting) |
+| 🔄 **Transactions** | `async with db.transaction()` and `@transactional`; ORM calls inside use the open transaction |
+| 🚨 **Typed database errors** | `UniqueViolation`, `ForeignKeyViolation`, ... with `.sqlstate` / `.constraint` (all still `RuntimeError`) |
+| 🧭 **Migrations (experimental)** | `python -m cello migrate --experimental {make,apply,status,sql}` |
+
+See the [ORM](docs/reference/api/orm.md) and [Database](docs/reference/api/database.md) references.
 
 ### API Protocol Features (v0.9.0)
 
@@ -201,39 +208,68 @@ python app.py
 
 ## 📘 Examples
 
-### Data Layer Features (v0.8.0)
+### Runnable examples (v1.4.0 data layer)
+
+Each file lives in `examples/` and has a page with captured output in the [examples docs](https://cello.lineupcode.com/examples/).
+
+| Example | What it shows |
+|---------|---------------|
+| `examples/database_orm_demo.py` | Native Postgres and Redis pools, `@transactional`, the ORM |
+| `examples/orm_advanced_demo.py` | `Q` objects, aggregates, `select_related` / `prefetch_related`, bulk writes, returned querysets, ambient transactions |
+| `examples/native_schema_demo.py` | `body=Model` validation, serialization and OpenAPI from one declaration |
+| `examples/migrations_demo.py` | `python -m cello migrate --experimental` end to end |
+| `examples/postgres_tls_demo.py` | Postgres `sslmode` / `sslrootcert` and `pg_stat_ssl` |
+
+### Data Layer (v1.4.0)
 
 ```python
-from cello import App, DatabaseConfig, RedisConfig
+from cello import App, DatabaseConfig, RedisConfig, UniqueViolation, Response
 from cello.database import transactional
+from cello.orm import Model, AutoField, CharField, BooleanField, setup
 
 app = App()
 
-# Enable database connection pooling
 app.enable_database(DatabaseConfig(
     url="postgresql://user:pass@localhost/mydb",
     pool_size=20,
-    max_lifetime_secs=1800
+    sslmode="verify-full",          # default is "prefer"
 ))
+app.enable_redis(RedisConfig(url="redis://localhost:6379"))
 
-# Enable Redis connection
-app.enable_redis(RedisConfig(
-    url="redis://localhost:6379",
-    pool_size=10
-))
+class User(Model):
+    id = AutoField()
+    name = CharField(max_length=100)
+    email = CharField(max_length=255, unique=True)
+    active = BooleanField(default=True)
+
+@app.on_event("startup")
+async def startup():
+    setup(app.database)
+    await User.create_table()
+
+@app.get("/users")
+async def users(request):
+    # Returned querysets are encoded straight from Postgres rows to JSON in Rust
+    return {"users": User.objects.filter(active=True).order_by("id")}
+
+@app.post("/users", body=User)      # validated natively; 400 {"detail": [...]} on bad input
+async def create(request, body):
+    try:
+        return await body.save()
+    except UniqueViolation:
+        return Response.json({"error": "email taken"}, status=409)
 
 @app.post("/transfer")
 @transactional
-async def transfer(request):
-    # Automatic transaction management
+async def transfer(request, tx):
+    await tx.execute("UPDATE accounts SET balance = balance - $1 WHERE id = $2", 100, 1)
+    await tx.execute("UPDATE accounts SET balance = balance + $1 WHERE id = $2", 100, 2)
     return {"success": True}
-
-@app.get("/")
-def home(request):
-    return {"status": "ok", "version": "1.2.0"}
 
 app.run()
 ```
+
+Headline numbers from a paired local benchmark against 1.3.0 (both servers running at the same time, `wrk -t2 -c32`, local Postgres; method and caveats in the [release notes](docs/releases/v1.4.0.md)): a 200-row list returned as a queryset is **19.7×** faster, `Model.objects.get` **5.4×**, `create` **4.6×**. Endpoints that do not touch the database are unchanged within noise.
 
 ### API Protocol Features (v0.9.0)
 
@@ -282,7 +318,7 @@ app.enable_rabbitmq(RabbitMQConfig(url="amqp://localhost:5672"))
 
 @app.get("/")
 def home(request):
-    return {"status": "ok", "version": "1.3.0", "protocols": ["graphql", "grpc", "kafka", "rabbitmq"]}
+    return {"status": "ok", "version": "1.4.0", "protocols": ["graphql", "grpc", "kafka", "rabbitmq"]}
 
 app.run()
 ```
@@ -320,7 +356,7 @@ app.enable_prometheus(endpoint="/metrics")
 
 @app.get("/")
 def home(request):
-    return {"status": "ok", "version": "1.2.0"}
+    return {"status": "ok", "version": "1.4.0"}
 
 app.run()
 ```
@@ -588,6 +624,38 @@ cargo fmt
 ---
 
 ## 📋 Release History
+
+### v1.4.0 — The Native Core (Oct 2026)
+
+One model declaration, compiled once in Rust, drives the ORM, request validation, response serialization and OpenAPI.
+
+- **Speed:** prepared-statement cache for every Postgres query; new async bridge (database and Redis calls no longer hop through extra threads); response serializer dispatches on concrete types first (~5.5×); **Rust row → JSON pipeline** — `return {"users": qs}`, `await qs.json()` and `db.fetch_json()` are encoded straight from Postgres rows, byte-identical to `to_dict()`. Paired local benchmark vs 1.3.0: 200-row list **19.7×**, `get` 5.4×, `create` 4.6× (method and caveats in the [release notes](docs/releases/v1.4.0.md))
+- **Security:** ORM identifier injection closed (every identifier resolves through the schema registry); `write_only` / `read_only` model fields; Postgres TLS with libpq-style `sslmode`; fixed an exit-time crash and Ctrl-C being ignored under load; production 500 responses no longer expose exception text (logged instead); `async def` shutdown hooks now run on Ctrl-C
+- **Simplicity:** native `body=Model` validation and OpenAPI request schemas generated from the same model; exact NUMERIC, arrays, intervals and datetime/UUID binding with a `DatabaseError` hierarchy; Q objects, aggregates, `select_related` / `prefetch_related`, `bulk_create` / `bulk_update`; experimental `python -m cello migrate`
+- **Breaking:** undeclared column names raise `FieldError`; out-of-range integers raise instead of wrapping; `fetchrow` / `fetchval` return the first row; `exclude()` is null-safe; `filter(x=None)` means `IS NULL`; default `sslmode` is `prefer` — see the migration notes in the release notes
+
+### v1.3.0 — Async Rework, Native Data Layer & Three-Pillar Upgrades (Jul 2026)
+
+- `async def` handlers run on one persistent asyncio loop; native Postgres pool, async Redis client (incl. `rediss://`) and built-in async ORM replace the old mock layer
+- Full audit of every `enable_*` plugin (health-check / GraphQL / Prometheus 404s, BasicAuth challenge, JWT `iat`, security-headers config, timeout panic fixed)
+- Full security headers, gzip-compressed cache hits, declarative `body=` request validation, adaptive threadpool offload for blocking sync handlers
+- CSRF / skip-path / CORS / BasicAuth / SSE hardening; request body-size limits and header / body / handler timeouts
+
+### v1.2.4 — Critical Async Fix (Jun 2026)
+
+- Fixed every `async def` handler returning 500 since v1.2.1
+
+### v1.2.3 — Full Middleware Python API (Jun 2026)
+
+- `cello.middleware` module, `app.use()` dispatcher, six new `enable_*` methods; all documentation import paths corrected
+
+### v1.2.2 — Security & Bug Fixes (Jun 2026)
+
+- CSRF double-submit cookie `HttpOnly` fix; middleware `skip_path` prefix bypass fixed; rate limiter window reset fixed
+
+### v1.2.1 — Critical Bug Fixes (Jun 2026)
+
+- Server port was never bound; `ProblemDetails` export added; `And` / `Or` guards accept `*args` and list styles
 
 ### v1.2.0 — Bug Fixes & Rust-Native AsyncClient (Jun 2026)
 

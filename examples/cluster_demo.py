@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Cluster Mode & Production Deployment Demo for Cello v1.3.0.
+Cluster Mode & Production Deployment Demo for Cello v1.4.0.
 
 This example demonstrates production deployment configurations including:
 - Cluster mode (multi-worker processes)
@@ -112,7 +112,7 @@ def home(request):
     """Home endpoint with cluster information."""
     return {
         "message": "Cello Cluster Mode Demo",
-        "version": "1.3.0",
+        "version": "1.4.0",
         "deployment": {
             "mode": "cluster",
             "features": [

@@ -5,6 +5,7 @@ icon: material/tag-multiple
 tags:
   - Release Notes
   - Changelog
+  - v1.4.0
   - v1.3.0
   - Migration
 ---
@@ -13,7 +14,27 @@ tags:
 
 ---
 
-## :material-new-box: Latest Release — v1.3.0
+## :material-new-box: Latest Release — v1.4.0
+
+!!! success "Cello v1.4.0 — The Native Core (October 2026)"
+
+    One model declaration, compiled once in Rust, drives the ORM, validation, serialization and OpenAPI.
+
+    **Highlights:**
+
+    - :material-speedometer: **Up to 19.7× faster ORM list endpoints** — return a queryset and the response JSON is built in Rust straight from Postgres rows; single-row get/create are 4–5× faster (paired benchmark, see the notes)
+    - :material-sync: **New async bridge** — database and Redis calls no longer hop through extra threads; async handlers go straight to the persistent loop; fixes the exit-time crash and lost Ctrl-C
+    - :material-shield-lock: **Security** — ORM identifier injection closed, `write_only`/`read_only` fields, Postgres TLS (`sslmode`, `verify-full`)
+    - :material-check-decagram: **Native `body=Model` validation** and OpenAPI request schemas generated from the model
+    - :material-database: **Real Postgres types** — NUMERIC, arrays, intervals, datetimes/UUID binding, `DatabaseError` hierarchy
+    - :material-source-branch: **ORM features** — Q objects, aggregates, `select_related`/`prefetch_related`, `bulk_create`/`bulk_update`, experimental `cello migrate`
+    - :material-alert: **Deliberate breaks** — see the migration notes in the release page
+
+[:material-arrow-right: Read the v1.4.0 release notes](v1.4.0.md)
+
+---
+
+## Previous Release — v1.3.0
 
 !!! success "Cello v1.3.0 — Async Rework, Native Data Layer, Plugin Audit & Three-Pillar Upgrades (July 2026)"
 
@@ -38,6 +59,7 @@ tags:
 ```mermaid
 timeline
     title Cello Framework Releases
+    2026-10 : v1.4.0 - The Native Core - Rust Schema Registry, Row to JSON Pipeline, Native Validation, Postgres TLS
     2026-07 : v1.3.0 - Async Rework, Native Data Layer, Plugin Audit & Three-Pillar Upgrades
     2026-06 : v1.2.4 - Critical Fix: async def Handlers
             : v1.2.3 - Full Middleware Python API & Docs Fixes
@@ -62,6 +84,16 @@ timeline
 ## :material-history: All Releases
 
 <div class="grid cards" markdown>
+
+-   :material-engine:{ .lg .middle } **v1.4.0** — The Native Core
+
+    ---
+
+    One model declaration drives the ORM, validation, serialization and OpenAPI. Prepared-statement cache, new async bridge, Rust row → JSON pipeline (up to 19.7× faster list endpoints), native `body=Model` validation, Postgres TLS, Q objects / aggregates / relations / bulk operations, experimental `cello migrate`.
+
+    :material-calendar: October 2026
+
+    [:octicons-arrow-right-24: Release Notes](v1.4.0.md)
 
 -   :material-sync:{ .lg .middle } **v1.3.0** — Async Rework, Data Layer & Upgrades
 
@@ -241,7 +273,8 @@ timeline
 
 | Version | Status | Support Until |
 |:--------|:-------|:--------------|
-| **1.2.x** | :material-check-circle:{ style="color: #4caf50" } **Active** | Current |
+| **1.4.x** | :material-check-circle:{ style="color: #4caf50" } **Active** | Current |
+| 1.3.x, 1.2.x | :material-wrench:{ style="color: #ffab40" } Maintenance | To be announced |
 | 1.1.x | :material-wrench:{ style="color: #ffab40" } Maintenance | December 2026 |
 | 1.0.x | :material-wrench:{ style="color: #ffab40" } Maintenance | October 2026 |
 | 0.10.x | :material-shield-alert:{ style="color: #ff9800" } Security Only | August 2026 |
@@ -262,13 +295,13 @@ timeline
     pip install --upgrade cello-framework
 
     # Pin to a specific version
-    pip install cello-framework==1.3.0
+    pip install cello-framework==1.4.0
     ```
 
 === "requirements.txt"
 
     ```text
-    cello-framework>=1.3.0,<2.0.0
+    cello-framework>=1.4.0,<2.0.0
     ```
 
 === "pyproject.toml"
@@ -276,7 +309,7 @@ timeline
     ```toml
     [project]
     dependencies = [
-        "cello-framework>=1.3.0,<2.0.0",
+        "cello-framework>=1.4.0,<2.0.0",
     ]
     ```
 

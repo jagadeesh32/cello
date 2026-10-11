@@ -21,7 +21,7 @@ This example serves as a comprehensive integration environment demonstrating Cel
 """
 Cello Advanced Features Demo
 
-This example demonstrates all the new middleware features implemented in Cello v1.3.0:
+This example demonstrates all the new middleware features implemented in Cello v1.4.0:
 
 🎯 Features Demonstrated:
 1. ✅ Dependency Injection
@@ -117,7 +117,7 @@ user_service = UserService(database)
 def home(request):
     """Home page with feature overview"""
     return {
-        "message": "🎸 Cello v1.3.0 - Advanced Features Demo",
+        "message": "🎸 Cello v1.4.0 - Advanced Features Demo",
         "features": {
             "dependency_injection": "Built-in DI container",
             "guards": "Role-based access control (RBAC)",
@@ -145,7 +145,7 @@ def health(request):
     """Health check endpoint"""
     return {
         "status": "healthy",
-        "version": "1.3.0",
+        "version": "1.4.0",
         "features": ["di", "guards", "metrics", "caching", "dtos", "exceptions"],
     }
 
@@ -155,7 +155,7 @@ def documentation(request):
     """API documentation"""
     return {
         "title": "Cello Advanced Features API",
-        "version": "1.3.0",
+        "version": "1.4.0",
         "description": "Demonstrates all new middleware features",
         "features": {
             "dependency_injection": {

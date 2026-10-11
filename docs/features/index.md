@@ -303,22 +303,23 @@ Everything below ships in the box and runs on the Rust hot path:
 === ":material-database: Database & Redis"
 
     ```python title="Async database and Redis"
-    from cello import App
-    from cello.enterprise import Database, Redis
+    from cello import App, DatabaseConfig, RedisConfig
 
     app = App()
-    db = Database("postgresql://localhost/mydb", pool_size=20)
-    cache = Redis("redis://localhost:6379")
+    app.enable_database(DatabaseConfig(url="postgresql://localhost/mydb", pool_size=20))
+    app.enable_redis(RedisConfig(url="redis://localhost:6379"))
 
     @app.get("/users/{id}")
     async def get_user(request):
         user_id = request.params["id"]
-        cached = await cache.get(f"user:{user_id}")
+        cached = await request.redis.get(f"user:{user_id}")
         if cached:
-            return cached
-        user = await db.fetch_one("SELECT * FROM users WHERE id = $1", user_id)
-        await cache.set(f"user:{user_id}", user, ttl=300)
-        return user
+            return {"user": cached}
+        user = await request.database.fetchrow(
+            "SELECT * FROM users WHERE id = $1", int(user_id)
+        )
+        await request.redis.set(f"user:{user_id}", str(user), ex=300)
+        return {"user": user}
     ```
 
 ---

@@ -22,7 +22,7 @@ Cello ships with a suite of built-in middleware that you can activate with a sin
 ```python
 #!/usr/bin/env python3
 """
-Middleware System Demo for Cello v1.3.0.
+Middleware System Demo for Cello v1.4.0.
 Run with: python examples/middleware_demo.py
 Then test with:
     curl -v http://127.0.0.1:8000/
@@ -38,7 +38,7 @@ app.enable_compression(min_size=1024)
 
 @app.get("/")
 def home(request):
-    return {"message": "Cello Middleware Demo", "version": "1.3.0",
+    return {"message": "Cello Middleware Demo", "version": "1.4.0",
             "enabled_middleware": ["CORS", "Logging", "Compression"]}
 
 @app.get("/cors-demo")
@@ -83,7 +83,7 @@ app.register_blueprint(api)
 def custom_headers(request):
     response = Response.json({"message": "Response with custom headers"})
     response.set_header("X-Custom-Header", "custom-value")
-    response.set_header("X-Powered-By", "Cello/1.3.0")
+    response.set_header("X-Powered-By", "Cello/1.4.0")
     return response
 
 @app.get("/cache-headers")

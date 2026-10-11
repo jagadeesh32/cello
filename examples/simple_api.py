@@ -26,7 +26,7 @@ OPENAPI_SPEC = {
     "openapi": "3.0.3",
     "info": {
         "title": "Cello Sample API",
-        "version": "1.3.0",
+        "version": "1.4.0",
         "description": "A sample REST API built with Cello Framework"
     },
     "paths": {
@@ -339,7 +339,7 @@ def redoc_ui(request):
 
 @app.get("/")
 def home(request):
-    return {"message": "Welcome to Cello API!", "version": "1.3.0"}
+    return {"message": "Welcome to Cello API!", "version": "1.4.0"}
 
 
 @app.get("/health")

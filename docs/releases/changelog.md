@@ -9,6 +9,107 @@ All notable changes to the Cello Framework are documented here. Each version lin
 
 ---
 
+## v1.4.0 -- The Native Core
+
+One model declaration, compiled once in Rust, drives the ORM, request validation, response serialization and OpenAPI.
+
+**Speed:**
+- Prepared-statement cache for every Postgres query (with automatic recovery after schema changes)
+- New async bridge: database and Redis calls no longer hop through extra threads; async handlers run directly on the persistent loop
+- Response serializer dispatches on concrete Python types first (~5.5x on a 200-row response)
+- Row to JSON pipeline: a returned queryset (`return {"users": qs}`), `await qs.json()` and `db.fetch_json()` are encoded in Rust straight from Postgres rows, byte-identical to `to_dict()`
+- Paired benchmark against 1.3.0: 200-row list 19.7x, `get` 5.4x, `create` 4.6x (see the release notes for method and caveats)
+
+**Security:**
+- ORM identifier injection closed: every identifier resolves through the schema registry (undeclared names raise `FieldError`)
+- `write_only` / `read_only` model fields; request bodies reject U+0000 and ignore client-sent primary keys
+- Postgres TLS with libpq-style `sslmode` (`verify-full` recommended) for the pool and migrations
+- Fixed an exit-time crash and Ctrl-C being ignored under load
+- Production (`debug` off) 500 responses no longer include the exception text; it is logged instead
+- `async def` shutdown hooks now run when the server is stopped with Ctrl-C
+
+**Simplicity:**
+- Rust schema registry; native `body=Model` validation (400 `{"detail": [...]}` unchanged) and OpenAPI request schemas generated from the model
+- Value layer rewrite: exact NUMERIC, arrays, intervals, datetime/UUID binding, `DatabaseError` hierarchy
+- Q objects, aggregates / `annotate`, `select_related` / `prefetch_related`, reverse accessors, `bulk_create` / `bulk_update`
+- Experimental `python -m cello migrate --experimental`
+
+**Breaking changes:** undeclared column names raise `FieldError`; out-of-range integers raise instead of wrapping; `fetchrow` / `fetchval` return the first row; `exclude()` is null-safe; `filter(x=None)` means `IS NULL`; default Postgres `sslmode` is `prefer`. Each is listed with its migration in the release notes.
+
+[Full release notes](v1.4.0.md)
+
+---
+
+## v1.3.0 -- Async Rework, Native Data Layer & Three-Pillar Upgrades
+
+- `async def` handlers run on one persistent asyncio loop (loop-bound resources survive across requests; GIL released during I/O)
+- Native Postgres pool and async Redis client (including `rediss://` TLS), plus a built-in async ORM, replacing the old mock layer
+- Full audit of every `enable_*` plugin: fixed health-check / GraphQL / Prometheus 404s, BasicAuth challenge, JWT `iat`, security-headers config and a timeout panic
+- Full security headers (CSP, Permissions-Policy, cross-origin isolation), gzip-compressed cache hits, declarative `body=` request validation
+- Adaptive threadpool offload for blocking sync handlers (94 to 3,735 rps on a 10 ms handler)
+- CSRF / skip-path / CORS / BasicAuth / SSE hardening; request body-size limits and header / body / handler timeouts
+
+[Full release notes](v1.3.0.md)
+
+---
+
+## v1.2.4 -- Critical Async Fix
+
+- Fixed every `async def` handler returning 500 since v1.2.1 (coroutines now driven correctly after the server-startup change)
+
+[Full release notes](v1.2.4.md)
+
+---
+
+## v1.2.3 -- Full Middleware Python API
+
+- `cello.middleware` module (`JwtAuth`, `BasicAuth`, `ApiKeyAuth`, `CsrfConfig`, `AdaptiveRateLimitConfig`), `app.use()` dispatcher
+- Six new `enable_*` methods (`enable_jwt`, `enable_session`, `enable_security_headers`, `enable_csrf`, `enable_basic_auth`, `enable_api_key`)
+- All documentation import paths corrected
+
+[Full release notes](v1.2.3.md)
+
+---
+
+## v1.2.2 -- Security & Bug Fixes
+
+- CSRF double-submit cookie `HttpOnly` fix (it broke all AJAX apps)
+- Middleware `skip_path` prefix-bypass fixed via `path_matches_skip()`
+- Rate limiter fixed-window start now resets correctly
+
+[Full release notes](v1.2.2.md)
+
+---
+
+## v1.2.1 -- Critical Bug Fixes
+
+- Server port was never bound; fixed
+- `ProblemDetails` was missing from the Python module export
+- `And` / `Or` guards accept both `*args` and list styles
+
+[Full release notes](v1.2.1.md)
+
+---
+
+## v1.2.0 -- Redis Lua Scripting & Rust-Native AsyncClient
+
+- Shutdown coroutines are now awaited; `KeyboardInterrupt` no longer leaks into shutdown output; `request.redis` no longer raises `AttributeError`
+- Redis Lua scripting: `eval`, `evalsha`, `script_load`
+- `AsyncClient` rewritten on `reqwest` + Tokio: GIL never held during HTTP I/O, HTTP/2, gzip, rustls
+
+[Full release notes](v1.2.0.md)
+
+---
+
+## v1.1.0 -- MiniJinja Templates
+
+- Built-in Jinja2-compatible template engine (`MiniJinjaEngine`, `app.enable_templates()`, `app.render()`, `app.render_string()`)
+- HTML auto-escaping, global variables, full template syntax
+
+[Full release notes](v1.1.0.md)
+
+---
+
 ## v1.0.1 -- Cross-Platform & Compatibility Patch
 
 **Cross-Platform Fixes:**

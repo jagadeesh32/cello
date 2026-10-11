@@ -518,6 +518,85 @@ pub fn redoc_html(openapi_url: &str, title: &str) -> String {
 }
 
 // ============================================================================
+// Model schemas from the schema registry (v1.4.0 Phase 03)
+// ============================================================================
+
+/// OpenAPI 3.0 schema object for an ORM model, generated from its compiled
+/// [`ModelSpec`](crate::schema::ModelSpec) — the same spec `body=Model`
+/// validates against, so the documented contract and the enforced one cannot
+/// drift apart.
+///
+/// * Property keys are the `to_dict()` keys (a ForeignKey is `<name>_id`).
+/// * `required` lists exactly what native validation requires.
+/// * `readOnly` marks fields ignored on input (`AutoField`, `read_only=True`);
+///   `writeOnly` marks `write_only=True` fields, which are never serialized.
+/// * `nullable`, `maxLength`, `format` and literal `default`s come from the
+///   column declaration. Custom `sql_type` columns are left untyped.
+pub fn model_schema(spec: &crate::schema::ModelSpec) -> serde_json::Value {
+    use crate::schema::validate::{accepts_input, is_required};
+    use crate::schema::{DefaultSpec, Literal, PgType};
+    use serde_json::{json, Map, Value};
+
+    let mut props = Map::new();
+    let mut required = Vec::new();
+    for f in &spec.fields {
+        let mut s = match &f.pg_type {
+            Some(PgType::Serial | PgType::Integer) => json!({"type": "integer", "format": "int32"}),
+            Some(PgType::BigInt) => json!({"type": "integer", "format": "int64"}),
+            Some(PgType::DoublePrecision) => json!({"type": "number", "format": "double"}),
+            Some(PgType::Boolean) => json!({"type": "boolean"}),
+            Some(PgType::Varchar(_) | PgType::Text) => json!({"type": "string"}),
+            Some(PgType::Timestamptz) => json!({"type": "string", "format": "date-time"}),
+            Some(PgType::Jsonb) => json!({}),
+            Some(PgType::Custom(ddl)) => json!({ "description": format!("Column type {ddl}") }),
+            None => json!({}),
+        };
+        let obj = s.as_object_mut().expect("schema literal is an object");
+        if let (Some(n), Some(PgType::Varchar(_) | PgType::Text)) = (f.max_length, &f.pg_type) {
+            obj.insert("maxLength".into(), n.into());
+        }
+        if f.nullable {
+            obj.insert("nullable".into(), true.into());
+        }
+        if !accepts_input(f) {
+            obj.insert("readOnly".into(), true.into());
+        }
+        if f.write_only() {
+            obj.insert("writeOnly".into(), true.into());
+        }
+        if let DefaultSpec::Literal(lit) = &f.default {
+            let v = match lit {
+                Literal::Bool(b) => Some(Value::Bool(*b)),
+                Literal::Int(t) => t.parse::<i64>().ok().map(Value::from),
+                Literal::Float(t) => t
+                    .parse::<f64>()
+                    .ok()
+                    .and_then(serde_json::Number::from_f64)
+                    .map(Value::Number),
+                Literal::Text(t) => Some(Value::String(t.clone())),
+                Literal::Other(_) => None,
+            };
+            if let Some(v) = v {
+                obj.insert("default".into(), v);
+            }
+        }
+        if is_required(f) {
+            required.push(Value::String(f.output_key().to_string()));
+        }
+        props.insert(f.output_key().to_string(), s);
+    }
+    let mut schema = json!({
+        "title": spec.name,
+        "type": "object",
+        "properties": Value::Object(props),
+    });
+    if !required.is_empty() {
+        schema["required"] = Value::Array(required);
+    }
+    schema
+}
+
+// ============================================================================
 // Tests
 // ============================================================================
 
@@ -527,7 +606,7 @@ mod tests {
 
     #[test]
     fn test_openapi_generator() {
-        let generator = OpenAPIGenerator::new("Test API", "1.3.0")
+        let generator = OpenAPIGenerator::new("Test API", "1.4.0")
             .description("A test API")
             .add_jwt_auth();
 

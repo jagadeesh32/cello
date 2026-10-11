@@ -4,7 +4,26 @@
 //! with serde_json as fallback.
 
 use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyList, PyTuple};
+use pyo3::types::{PyBool, PyDict, PyFloat, PyList, PyLong, PyString, PyTuple};
+
+use crate::db::RawJson;
+use crate::schema::runtime::{classify, OrmKind};
+use crate::schema::PyModelSpec;
+
+/// A queryset found inside a handler's return value. The serializer leaves a
+/// hole at byte `at` of the body; `src/handler.rs` runs the query and splices
+/// the rows' JSON in (see `QuerySet.json()`).
+pub struct Hole {
+    pub at: usize,
+    pub queryset: PyObject,
+}
+
+/// Holes in one serialized body, in body order.
+pub type Holes = Vec<Hole>;
+
+const QUERYSET_HERE: &str = "a QuerySet can only be serialized as (part of) a handler's return \
+     value, where Cello runs it after the handler returns; here, use `await qs.json()` \
+     (pre-serialized rows) or `await qs` (model instances)";
 
 /// Parse JSON string to serde_json::Value.
 /// Uses SIMD acceleration on x86_64 and aarch64 (NEON), falls back to serde_json
@@ -61,6 +80,23 @@ pub fn python_to_json(py: Python<'_>, obj: &PyAny) -> Result<serde_json::Value, 
     // Handle None
     if obj.is_none() {
         return Ok(serde_json::Value::Null);
+    }
+
+    // PERF: concrete-type fast paths first (see `write_json_value`).
+    if let Ok(s) = obj.downcast::<PyString>() {
+        return Ok(serde_json::Value::String(
+            s.to_str().map_err(|e| e.to_string())?.to_owned(),
+        ));
+    }
+    if let Ok(b) = obj.downcast::<PyBool>() {
+        return Ok(serde_json::Value::Bool(b.is_true()));
+    }
+    if obj.downcast::<PyLong>().is_ok() {
+        if let Ok(i) = obj.extract::<i64>() {
+            return Ok(serde_json::Value::Number(i.into()));
+        }
+    } else if let Ok(f) = obj.downcast::<PyFloat>() {
+        return Ok(serde_json::json!(f.value()));
     }
 
     // Handle bool (must come before int check since bool is subclass of int in Python)
@@ -122,6 +158,19 @@ pub fn python_to_json(py: Python<'_>, obj: &PyAny) -> Result<serde_json::Value, 
         return Ok(serde_json::Value::Array(items));
     }
 
+    // Native ORM values (1.4.0 Phase 02).
+    if let Ok(raw) = obj.downcast::<PyCell<RawJson>>() {
+        return serde_json::from_slice(&raw.get().bytes).map_err(|e| e.to_string());
+    }
+    match classify(py, obj).map_err(|e| e.to_string())? {
+        OrmKind::Model | OrmKind::ModelCustom => {
+            let d = obj.call_method0("to_dict").map_err(|e| e.to_string())?;
+            return python_to_json(py, d);
+        }
+        OrmKind::QuerySet => return Err(QUERYSET_HERE.to_string()),
+        OrmKind::Other => {}
+    }
+
     // Handle Response object - check by class name
     let class_name = obj.get_type().name().unwrap_or("");
     if class_name == "Response" {
@@ -168,16 +217,27 @@ pub fn python_to_json(py: Python<'_>, obj: &PyAny) -> Result<serde_json::Value, 
 }
 
 /// PERF: Convert a Python object directly to JSON bytes, skipping intermediate serde_json::Value.
-/// Returns Ok(Some(bytes)) for normal dicts/lists/primitives,
-/// Returns Ok(None) for Response objects (caller must fall back to python_to_json).
+/// Returns Ok(Some((bytes, holes))) for dicts/lists/primitives and native ORM
+/// values (a returned queryset leaves a [`Hole`]); Ok(None) for Response
+/// objects (caller must fall back to python_to_json).
 #[inline]
-pub fn python_to_json_bytes_direct(py: Python<'_>, obj: &PyAny) -> Result<Option<Vec<u8>>, String> {
+pub fn python_to_json_bytes_direct(
+    py: Python<'_>,
+    obj: &PyAny,
+) -> Result<Option<(Vec<u8>, Holes)>, String> {
+    let mut holes = Holes::new();
     // PERF: Check for dict/list FIRST (common case) before the expensive class name check.
     // Most handlers return dicts, so fast-path that.
     if obj.downcast::<PyDict>().is_ok() || obj.downcast::<PyList>().is_ok() {
         let mut buf = Vec::with_capacity(128);
-        write_json_value(py, obj, &mut buf)?;
-        return Ok(Some(buf));
+        write_json_value(py, obj, &mut buf, &mut holes)?;
+        return Ok(Some((buf, holes)));
+    }
+
+    // A queryset, model instance or RawJSON returned on its own.
+    let mut buf = Vec::new();
+    if write_orm(py, obj, &mut buf, &mut holes)? {
+        return Ok(Some((buf, holes)));
     }
 
     // Check primitives
@@ -188,21 +248,128 @@ pub fn python_to_json_bytes_direct(py: Python<'_>, obj: &PyAny) -> Result<Option
         || obj.extract::<String>().is_ok()
     {
         let mut buf = Vec::with_capacity(64);
-        write_json_value(py, obj, &mut buf)?;
-        return Ok(Some(buf));
+        write_json_value(py, obj, &mut buf, &mut holes)?;
+        return Ok(Some((buf, holes)));
     }
 
     // Not a simple type - likely a Response object, fall back to Value path
     Ok(None)
 }
 
+/// Serialize `obj` exactly as a handler's return value is serialized, for
+/// values that must be complete now (no querysets).
+pub fn encode_value(py: Python<'_>, obj: &PyAny) -> Result<Vec<u8>, String> {
+    let mut holes = Holes::new();
+    let mut buf = Vec::with_capacity(128);
+    write_json_value(py, obj, &mut buf, &mut holes)?;
+    if !holes.is_empty() {
+        return Err(QUERYSET_HERE.to_string());
+    }
+    Ok(buf)
+}
+
+/// Write a native ORM value: `RawJSON` verbatim, a model instance as its
+/// `to_dict()`, a queryset as a [`Hole`]. `Ok(false)` for anything else.
+fn write_orm(
+    py: Python<'_>,
+    obj: &PyAny,
+    buf: &mut Vec<u8>,
+    holes: &mut Holes,
+) -> Result<bool, String> {
+    if let Ok(raw) = obj.downcast::<PyCell<RawJson>>() {
+        buf.extend_from_slice(&raw.get().bytes);
+        return Ok(true);
+    }
+    match classify(py, obj).map_err(|e| e.to_string())? {
+        OrmKind::Model => write_model(py, obj, buf, holes)?,
+        OrmKind::ModelCustom => {
+            let d = obj.call_method0("to_dict").map_err(|e| e.to_string())?;
+            write_json_value(py, d, buf, holes)?;
+        }
+        OrmKind::QuerySet => holes.push(Hole {
+            at: buf.len(),
+            queryset: obj.into(),
+        }),
+        OrmKind::Other => return Ok(false),
+    }
+    Ok(true)
+}
+
+/// A model instance as the JSON of its `to_dict()`, written directly (no
+/// intermediate dict). Keys and values come from the same plan as the native
+/// `to_dict()` (`PyModelSpec::out_plan`).
+fn write_model(
+    py: Python<'_>,
+    obj: &PyAny,
+    buf: &mut Vec<u8>,
+    holes: &mut Holes,
+) -> Result<(), String> {
+    let err = |e: PyErr| e.to_string();
+    let cell = obj
+        .getattr(pyo3::intern!(py, "_meta"))
+        .and_then(|m| m.getattr(pyo3::intern!(py, "schema")))
+        .map_err(err)?
+        .downcast::<PyCell<PyModelSpec>>()
+        .map_err(|e| e.to_string())?;
+    let spec = cell.get();
+    buf.push(b'{');
+    for (i, entry) in spec.out_plan(py).iter().enumerate() {
+        if i > 0 {
+            buf.push(b',');
+        }
+        buf.extend_from_slice(&entry.key_json);
+        let value = spec.out_value(obj, entry).map_err(err)?;
+        write_json_value(py, value.as_ref(py), buf, holes)?;
+    }
+    buf.push(b'}');
+    Ok(())
+}
+
 /// Write a Python object as JSON directly to a byte buffer.
-fn write_json_value(py: Python<'_>, obj: &PyAny, buf: &mut Vec<u8>) -> Result<(), String> {
+fn write_json_value(
+    py: Python<'_>,
+    obj: &PyAny,
+    buf: &mut Vec<u8>,
+    holes: &mut Holes,
+) -> Result<(), String> {
     use std::io::Write;
 
     // Handle None
     if obj.is_none() {
         buf.extend_from_slice(b"null");
+        return Ok(());
+    }
+
+    // PERF: dispatch on the concrete type first. The extract chain below raises
+    // (and discards) a Python exception for every failed attempt, so a string
+    // used to pay for four exceptions before it was written. The chain stays as
+    // the fallback for subclasses and foreign numeric types (`__index__`/`__float__`).
+    if let Ok(s) = obj.downcast::<PyString>() {
+        write_json_string(s.to_str().map_err(|e| e.to_string())?, buf);
+        return Ok(());
+    }
+    if let Ok(dict) = obj.downcast::<PyDict>() {
+        return write_json_dict(py, dict, buf, holes);
+    }
+    if let Ok(list) = obj.downcast::<PyList>() {
+        return write_json_seq(py, list.iter(), buf, holes);
+    }
+    if let Ok(b) = obj.downcast::<PyBool>() {
+        buf.extend_from_slice(if b.is_true() { b"true" } else { b"false" });
+        return Ok(());
+    }
+    if obj.downcast::<PyLong>().is_ok() {
+        if let Ok(i) = obj.extract::<i64>() {
+            write!(buf, "{i}").map_err(|e| e.to_string())?;
+            return Ok(());
+        }
+    } else if let Ok(f) = obj.downcast::<PyFloat>() {
+        write_json_f64(f.value(), buf);
+        return Ok(());
+    }
+
+    // Native ORM values: RawJSON, model instances, querysets (Phase 02).
+    if write_orm(py, obj, buf, holes)? {
         return Ok(());
     }
 
@@ -226,99 +393,111 @@ fn write_json_value(py: Python<'_>, obj: &PyAny, buf: &mut Vec<u8>) -> Result<()
 
     // Handle float
     if let Ok(f) = obj.extract::<f64>() {
-        if f.is_finite() {
-            write!(buf, "{f}").map_err(|e| e.to_string())?;
-        } else {
-            buf.extend_from_slice(b"null");
-        }
-        return Ok(());
-    }
-
-    // Handle string - need to JSON-escape
-    if let Ok(s) = obj.extract::<String>() {
-        write_json_string(&s, buf);
-        return Ok(());
-    }
-
-    // Handle list
-    if let Ok(list) = obj.downcast::<PyList>() {
-        buf.push(b'[');
-        for (i, item) in list.iter().enumerate() {
-            if i > 0 {
-                buf.push(b',');
-            }
-            write_json_value(py, item, buf)?;
-        }
-        buf.push(b']');
-        return Ok(());
-    }
-
-    // Handle dict
-    if let Ok(dict) = obj.downcast::<PyDict>() {
-        buf.push(b'{');
-        let mut first = true;
-        for (key, value) in dict.iter() {
-            let key_str = key
-                .extract::<String>()
-                .map_err(|_| "Dict keys must be strings".to_string())?;
-            if !first {
-                buf.push(b',');
-            }
-            first = false;
-            write_json_string(&key_str, buf);
-            buf.push(b':');
-            write_json_value(py, value, buf)?;
-        }
-        buf.push(b'}');
+        write_json_f64(f, buf);
         return Ok(());
     }
 
     // Handle tuple
     if let Ok(tuple) = obj.downcast::<PyTuple>() {
-        buf.push(b'[');
-        for (i, item) in tuple.iter().enumerate() {
-            if i > 0 {
-                buf.push(b',');
-            }
-            write_json_value(py, item, buf)?;
-        }
-        buf.push(b']');
-        return Ok(());
+        return write_json_seq(py, tuple.iter(), buf, holes);
     }
 
     Err(format!("Cannot convert Python object to JSON: {obj:?}"))
 }
 
+/// A float as JSON: Rust's shortest round-trip `Display` (never an exponent),
+/// and `null` for NaN / infinity.
+#[inline]
+pub(crate) fn write_json_f64(f: f64, buf: &mut Vec<u8>) {
+    use std::io::Write;
+    if f.is_finite() {
+        // Writing to a Vec cannot fail.
+        let _ = write!(buf, "{f}");
+    } else {
+        buf.extend_from_slice(b"null");
+    }
+}
+
+/// An integer as JSON.
+#[inline]
+pub(crate) fn write_json_i64(i: i64, buf: &mut Vec<u8>) {
+    use std::io::Write;
+    let _ = write!(buf, "{i}");
+}
+
+fn write_json_seq<'py>(
+    py: Python<'py>,
+    items: impl Iterator<Item = &'py PyAny>,
+    buf: &mut Vec<u8>,
+    holes: &mut Holes,
+) -> Result<(), String> {
+    buf.push(b'[');
+    for (i, item) in items.enumerate() {
+        if i > 0 {
+            buf.push(b',');
+        }
+        write_json_value(py, item, buf, holes)?;
+    }
+    buf.push(b']');
+    Ok(())
+}
+
+fn write_json_dict(
+    py: Python<'_>,
+    dict: &PyDict,
+    buf: &mut Vec<u8>,
+    holes: &mut Holes,
+) -> Result<(), String> {
+    buf.push(b'{');
+    let mut first = true;
+    for (key, value) in dict.iter() {
+        let key_str = key
+            .downcast::<PyString>()
+            .ok()
+            .and_then(|k| k.to_str().ok())
+            .ok_or_else(|| "Dict keys must be strings".to_string())?;
+        if !first {
+            buf.push(b',');
+        }
+        first = false;
+        write_json_string(key_str, buf);
+        buf.push(b':');
+        write_json_value(py, value, buf, holes)?;
+    }
+    buf.push(b'}');
+    Ok(())
+}
+
 /// Write a JSON-escaped string to the buffer.
 #[inline]
-fn write_json_string(s: &str, buf: &mut Vec<u8>) {
+pub(crate) fn write_json_string(s: &str, buf: &mut Vec<u8>) {
+    // PERF: copy runs of bytes that need no escaping in one go.
+    let bytes = s.as_bytes();
+    buf.reserve(bytes.len() + 2);
     buf.push(b'"');
-    for byte in s.bytes() {
+    let mut start = 0;
+    for (i, &byte) in bytes.iter().enumerate() {
+        if byte >= 0x20 && byte != b'"' && byte != b'\\' {
+            continue;
+        }
+        buf.extend_from_slice(&bytes[start..i]);
+        start = i + 1;
         match byte {
             b'"' => buf.extend_from_slice(b"\\\""),
             b'\\' => buf.extend_from_slice(b"\\\\"),
             b'\n' => buf.extend_from_slice(b"\\n"),
             b'\r' => buf.extend_from_slice(b"\\r"),
             b'\t' => buf.extend_from_slice(b"\\t"),
-            b if b < 0x20 => {
+            b => {
                 // Control characters: \u00XX
+                const HEX: &[u8; 16] = b"0123456789abcdef";
                 buf.extend_from_slice(b"\\u00");
-                let high = b >> 4;
-                let low = b & 0x0f;
-                buf.push(if high < 10 {
-                    b'0' + high
-                } else {
-                    b'a' + high - 10
-                });
-                buf.push(if low < 10 {
-                    b'0' + low
-                } else {
-                    b'a' + low - 10
-                });
+                buf.push(HEX[(b >> 4) as usize]);
+                buf.push(HEX[(b & 0x0f) as usize]);
             }
-            _ => buf.push(byte),
         }
     }
+    buf.extend_from_slice(&bytes[start..]);
     buf.push(b'"');
 }
 

@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "cello-framework"
-version = "1.3.0"
+version = "1.4.0"
 description = "Ultra-fast Rust-powered Python async web framework"
 readme = "README.md"
 license = { text = "MIT" }
@@ -27,6 +27,9 @@ classifiers = [
     "Operating System :: MacOS",
     "Operating System :: POSIX :: Linux",
 ]
+
+[project.scripts]
+cello = "cello.__main__:main"
 
 [project.urls]
 Homepage = "https://github.com/jagadeesh32/cello"

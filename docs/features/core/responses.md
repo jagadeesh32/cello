@@ -205,10 +205,10 @@ Return an XML response. Cello converts Python dicts to XML in Rust:
 @app.get("/data.xml")
 def xml_data(request):
     return Response.xml(
-        {"name": "Cello", "version": "1.3.0"},
+        {"name": "Cello", "version": "1.4.0"},
         root_name="framework"
     )
-    # Produces: <framework><name>Cello</name><version>1.3.0</version></framework>
+    # Produces: <framework><name>Cello</name><version>1.4.0</version></framework>
 ```
 
 ---

@@ -74,7 +74,7 @@ if __name__ == "__main__":
 ```bash title="Terminal output"
 $ python app.py
   ___ ___| | | ___
- / __/ _ \ | |/ _ \   Cello v1.3.0
+ / __/ _ \ | |/ _ \   Cello v1.4.0
 | (_|  __/ | | (_) |  Rust-powered Python Web Framework
  \___\___|_|_|\___/
 

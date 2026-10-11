@@ -62,7 +62,84 @@ def _validate_wrap(func, body):
     if body is not None:
         return wrap_handler_with_body(func, body)
     return wrap_handler_with_validation(func)
-from .database import transactional
+
+
+_VALIDATION_ERRORS_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "detail": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "loc": {"type": "array", "items": {"type": "string"}},
+                    "msg": {"type": "string"},
+                    "type": {"type": "string"},
+                },
+            },
+        }
+    },
+}
+
+
+def _component_name(model, components, owners):
+    """A components/schemas name for ``model``: its class name, suffixed when a
+    different model already uses that name. The same model always maps to the
+    same component, so routes sharing a body model share one schema."""
+    base = model.__name__
+    name, n = base, 1
+    while name in owners and owners[name] is not model:
+        n += 1
+        name = f"{base}{n}"
+    return name
+
+
+def _body_openapi_schema(model, components, owners):
+    """OpenAPI schema (a ``$ref``) for a route's ``body=`` model, adding the
+    model to ``components``. ``None`` when the model cannot describe itself
+    (dataclasses, plain classes)."""
+    if model is None:
+        return None
+    from cello._cello import ModelSpec, schema_openapi
+
+    meta = getattr(model, "_meta", None)
+    schema = getattr(meta, "schema", None)
+    if isinstance(schema, ModelSpec):
+        name = _component_name(model, components, owners)
+        if name not in owners:
+            owners[name] = model
+            components[name] = schema_openapi(schema)
+        return {"$ref": f"#/components/schemas/{name}"}
+    json_schema = getattr(model, "model_json_schema", None)
+    if callable(json_schema):
+        name = _component_name(model, components, owners)
+        if name not in owners:
+            try:
+                doc = json_schema(ref_template="#/components/schemas/{model}")
+            except Exception:  # noqa: BLE001 - docs must never break the app
+                return None
+            for def_name, def_schema in doc.pop("$defs", {}).items():
+                components.setdefault(def_name, def_schema)
+            owners[name] = model
+            components[name] = doc
+        return {"$ref": f"#/components/schemas/{name}"}
+    return None
+
+
+def _mark_blocking(handler, blocking):
+    """Record an explicit `blocking=` override for the offload policy.
+
+    Sync handlers are normally timed and moved to the blocking threadpool only
+    once observed to block. `True` pools the handler from the very first request;
+    `False` pins it inline. Read by the Rust handler registry at registration.
+    """
+    if blocking is not None:
+        try:
+            handler.__cello_blocking__ = bool(blocking)
+        except AttributeError:
+            pass  # callable object with no writable __dict__; stays adaptive
+    return handler
+from .database import transactional, TransactionAborted
 from .guards import (
     Guard,
     Role as RoleGuard,
@@ -94,6 +171,7 @@ from cello._cello import (
 from cello._cello import (
     TimeoutConfig,
     LimitsConfig,
+    ThreadPoolConfig,
     ClusterConfig,
     TlsConfig,
     Http2Config,
@@ -135,6 +213,25 @@ from cello._cello import (
     Database,
     Transaction,
     Redis,
+)
+
+# v1.4.0 - Pre-serialized query rows (`await queryset.json()`)
+from cello._cello import RawJSON
+
+# v1.4.0 - Database exceptions (SQLSTATE-mapped; DatabaseError subclasses RuntimeError)
+from cello._cello import (
+    DatabaseError,
+    IntegrityError,
+    UniqueViolation,
+    NotNullViolation,
+    ForeignKeyViolation,
+    CheckViolation,
+    DataError,
+    ParameterTypeError,
+    ParameterRangeError,
+    ParameterValueError,
+    OperationalError,
+    ProgrammingError,
 )
 
 # v0.9.0 - API Protocol features
@@ -252,6 +349,7 @@ __all__ = [
     # Advanced Configuration
     "TimeoutConfig",
     "LimitsConfig",
+    "ThreadPoolConfig",
     "ClusterConfig",
     "TlsConfig",
     "Http2Config",
@@ -294,6 +392,21 @@ __all__ = [
     "Redis",
     "Transaction",
     "transactional",
+    "TransactionAborted",
+    "RawJSON",
+    # v1.4.0 - Database exceptions
+    "DatabaseError",
+    "IntegrityError",
+    "UniqueViolation",
+    "NotNullViolation",
+    "ForeignKeyViolation",
+    "CheckViolation",
+    "DataError",
+    "ParameterTypeError",
+    "ParameterRangeError",
+    "ParameterValueError",
+    "OperationalError",
+    "ProgrammingError",
     # v0.9.0 - API Protocol features
     "GrpcConfig",
     "KafkaConfig",
@@ -311,7 +424,7 @@ __all__ = [
     "validate_rate_limit_config",
     "validate_tls_config",
 ]
-__version__ = "1.3.0"
+__version__ = "1.4.0"
 
 
 class Blueprint:
@@ -341,42 +454,42 @@ class Blueprint:
         """Get the blueprint's name."""
         return self._bp.name
 
-    def get(self, path: str, guards: list = None, body: type = None):
+    def get(self, path: str, guards: list = None, body: type = None, blocking: bool = None):
         """Register a GET route."""
         def decorator(func):
-            wrapped = _apply_guards(_validate_wrap(func, body), guards)
+            wrapped = _mark_blocking(_apply_guards(_validate_wrap(func, body), guards), blocking)
             self._bp.get(path, wrapped)
             return wrapped
         return decorator
 
-    def post(self, path: str, guards: list = None, body: type = None):
+    def post(self, path: str, guards: list = None, body: type = None, blocking: bool = None):
         """Register a POST route."""
         def decorator(func):
-            wrapped = _apply_guards(_validate_wrap(func, body), guards)
+            wrapped = _mark_blocking(_apply_guards(_validate_wrap(func, body), guards), blocking)
             self._bp.post(path, wrapped)
             return wrapped
         return decorator
 
-    def put(self, path: str, guards: list = None, body: type = None):
+    def put(self, path: str, guards: list = None, body: type = None, blocking: bool = None):
         """Register a PUT route."""
         def decorator(func):
-            wrapped = _apply_guards(_validate_wrap(func, body), guards)
+            wrapped = _mark_blocking(_apply_guards(_validate_wrap(func, body), guards), blocking)
             self._bp.put(path, wrapped)
             return wrapped
         return decorator
 
-    def delete(self, path: str, guards: list = None, body: type = None):
+    def delete(self, path: str, guards: list = None, body: type = None, blocking: bool = None):
         """Register a DELETE route."""
         def decorator(func):
-            wrapped = _apply_guards(_validate_wrap(func, body), guards)
+            wrapped = _mark_blocking(_apply_guards(_validate_wrap(func, body), guards), blocking)
             self._bp.delete(path, wrapped)
             return wrapped
         return decorator
 
-    def patch(self, path: str, guards: list = None, body: type = None):
+    def patch(self, path: str, guards: list = None, body: type = None, blocking: bool = None):
         """Register a PATCH route."""
         def decorator(func):
-            wrapped = _apply_guards(_validate_wrap(func, body), guards)
+            wrapped = _mark_blocking(_apply_guards(_validate_wrap(func, body), guards), blocking)
             self._bp.patch(path, wrapped)
             return wrapped
         return decorator
@@ -475,7 +588,7 @@ class App:
         self._database = None  # Native Postgres pool; set by enable_database()
         self.state = _AppState()  # Scratch namespace for user-held resources
 
-    def _register_route(self, method: str, path: str, func, tags: list = None, summary: str = None, description: str = None):
+    def _register_route(self, method: str, path: str, func, tags: list = None, summary: str = None, description: str = None, body: type = None):
         """Internal: Register a route and track metadata for OpenAPI."""
         # Extract docstring if no description provided
         doc = func.__doc__ or ""
@@ -489,10 +602,11 @@ class App:
             "handler": func.__name__,
             "summary": route_summary,
             "description": route_description,
-            "tags": tags or []
+            "tags": tags or [],
+            "body": body,
         })
 
-    def get(self, path: str, tags: list = None, summary: str = None, description: str = None, guards: list = None, body: type = None):
+    def get(self, path: str, tags: list = None, summary: str = None, description: str = None, guards: list = None, body: type = None, blocking: bool = None):
         """
         Register a GET route.
 
@@ -512,60 +626,60 @@ class App:
                 return {"message": f"Hello, {request.params['name']}!"}
         """
         def decorator(func):
-            wrapped = _apply_guards(_validate_wrap(self._make_redis_aware(func), body), guards)
+            wrapped = _mark_blocking(_apply_guards(_validate_wrap(self._make_redis_aware(func), body), guards), blocking)
             self._app.get(path, wrapped)
-            self._register_route("GET", path, func, tags, summary, description)
+            self._register_route("GET", path, func, tags, summary, description, body=body)
             return wrapped
         return decorator
 
-    def post(self, path: str, tags: list = None, summary: str = None, description: str = None, guards: list = None, body: type = None):
+    def post(self, path: str, tags: list = None, summary: str = None, description: str = None, guards: list = None, body: type = None, blocking: bool = None):
         """Register a POST route."""
         def decorator(func):
-            wrapped = _apply_guards(_validate_wrap(self._make_redis_aware(func), body), guards)
+            wrapped = _mark_blocking(_apply_guards(_validate_wrap(self._make_redis_aware(func), body), guards), blocking)
             self._app.post(path, wrapped)
-            self._register_route("POST", path, func, tags, summary, description)
+            self._register_route("POST", path, func, tags, summary, description, body=body)
             return wrapped
         return decorator
 
-    def put(self, path: str, tags: list = None, summary: str = None, description: str = None, guards: list = None, body: type = None):
+    def put(self, path: str, tags: list = None, summary: str = None, description: str = None, guards: list = None, body: type = None, blocking: bool = None):
         """Register a PUT route."""
         def decorator(func):
-            wrapped = _apply_guards(_validate_wrap(self._make_redis_aware(func), body), guards)
+            wrapped = _mark_blocking(_apply_guards(_validate_wrap(self._make_redis_aware(func), body), guards), blocking)
             self._app.put(path, wrapped)
-            self._register_route("PUT", path, func, tags, summary, description)
+            self._register_route("PUT", path, func, tags, summary, description, body=body)
             return wrapped
         return decorator
 
-    def delete(self, path: str, tags: list = None, summary: str = None, description: str = None, guards: list = None, body: type = None):
+    def delete(self, path: str, tags: list = None, summary: str = None, description: str = None, guards: list = None, body: type = None, blocking: bool = None):
         """Register a DELETE route."""
         def decorator(func):
-            wrapped = _apply_guards(_validate_wrap(self._make_redis_aware(func), body), guards)
+            wrapped = _mark_blocking(_apply_guards(_validate_wrap(self._make_redis_aware(func), body), guards), blocking)
             self._app.delete(path, wrapped)
-            self._register_route("DELETE", path, func, tags, summary, description)
+            self._register_route("DELETE", path, func, tags, summary, description, body=body)
             return wrapped
         return decorator
 
-    def patch(self, path: str, tags: list = None, summary: str = None, description: str = None, guards: list = None, body: type = None):
+    def patch(self, path: str, tags: list = None, summary: str = None, description: str = None, guards: list = None, body: type = None, blocking: bool = None):
         """Register a PATCH route."""
         def decorator(func):
-            wrapped = _apply_guards(_validate_wrap(self._make_redis_aware(func), body), guards)
+            wrapped = _mark_blocking(_apply_guards(_validate_wrap(self._make_redis_aware(func), body), guards), blocking)
             self._app.patch(path, wrapped)
-            self._register_route("PATCH", path, func, tags, summary, description)
+            self._register_route("PATCH", path, func, tags, summary, description, body=body)
             return wrapped
         return decorator
 
-    def options(self, path: str, guards: list = None):
+    def options(self, path: str, guards: list = None, blocking: bool = None):
         """Register an OPTIONS route."""
         def decorator(func):
-            wrapped = _apply_guards(wrap_handler_with_validation(self._make_redis_aware(func)), guards)
+            wrapped = _mark_blocking(_apply_guards(wrap_handler_with_validation(self._make_redis_aware(func)), guards), blocking)
             self._app.options(path, wrapped)
             return wrapped
         return decorator
 
-    def head(self, path: str, guards: list = None):
+    def head(self, path: str, guards: list = None, blocking: bool = None):
         """Register a HEAD route."""
         def decorator(func):
-            wrapped = _apply_guards(wrap_handler_with_validation(self._make_redis_aware(func)), guards)
+            wrapped = _mark_blocking(_apply_guards(wrap_handler_with_validation(self._make_redis_aware(func)), guards), blocking)
             self._app.head(path, wrapped)
             return wrapped
         return decorator
@@ -591,7 +705,7 @@ class App:
             return func
         return decorator
 
-    def route(self, path: str, methods: list = None):
+    def route(self, path: str, methods: list = None, blocking: bool = None):
         """
         Register a route that handles multiple HTTP methods.
 
@@ -603,7 +717,7 @@ class App:
             methods = ["GET"]
 
         def decorator(func):
-            wrapped = wrap_handler_with_validation(self._make_redis_aware(func))
+            wrapped = _mark_blocking(wrap_handler_with_validation(self._make_redis_aware(func)), blocking)
             for method in methods:
                 method_upper = method.upper()
                 if method_upper == "GET":
@@ -726,6 +840,29 @@ class App:
             config: TimeoutConfig instance.
         """
         self._app.set_timeouts(config)
+        return self
+
+    def set_threadpool(self, config: "ThreadPoolConfig"):
+        """Configure the blocking threadpool used for blocking sync handlers.
+
+        Sync ``def`` handlers run inline on the server thread, which is the fastest
+        path for handlers that simply build and return a value. A handler that
+        *blocks* — ``time.sleep``, a synchronous database driver, a synchronous HTTP
+        client — would otherwise hold that thread for its full duration and stall
+        every other connection. Cello times sync handlers and permanently moves any
+        that exceed ``offload_threshold_ms`` onto a bounded pool of OS threads, so
+        blocking calls overlap instead of serialising.
+
+        Only handlers that release the GIL benefit; pure-Python CPU-bound work is
+        still serialised by the GIL no matter which thread it runs on.
+
+        The pool is shared with async coroutine waits and background tasks, so size
+        it for all three. Must be called before ``run()``.
+
+        Args:
+            config: ThreadPoolConfig instance.
+        """
+        self._app.set_threadpool(config)
         return self
 
     def enable_jwt(self, config: "JwtConfig", skip_paths: list = None):
@@ -987,7 +1124,7 @@ class App:
         """
         self._app.invalidate_cache(tags)
 
-    def enable_openapi(self, title: str = "Cello API", version: str = "1.3.0"):
+    def enable_openapi(self, title: str = "Cello API", version: str = "1.4.0"):
         """
         Enable OpenAPI documentation endpoints.
 
@@ -998,7 +1135,7 @@ class App:
 
         Args:
             title: API title (default: "Cello API")
-            version: API version (default: "1.3.0")
+            version: API version (default: "1.4.0")
         """
         # Store for closure
         api_title = title
@@ -1063,6 +1200,8 @@ class App:
         def openapi_handler(request):
             # Auto-generate paths from registered routes
             paths = {}
+            components = {}
+            owners = {}  # component name -> model it documents (dedup)
             
             for route in app_ref._routes:
                 path = route["path"]
@@ -1111,8 +1250,22 @@ class App:
                         for p in params
                     ]
                 
+                # A `body=` model documents its schema (ORM models from the
+                # compiled registry, Pydantic models from their JSON schema).
+                body_schema = _body_openapi_schema(route.get("body"), components, owners)
+                if body_schema is not None:
+                    operation["requestBody"] = {
+                        "required": True,
+                        "content": {"application/json": {"schema": body_schema}},
+                    }
+                    operation["responses"]["400"] = {
+                        "description": "Request body failed validation",
+                        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ValidationErrors"}}},
+                    }
+                    components.setdefault("ValidationErrors", _VALIDATION_ERRORS_SCHEMA)
                 # Add request body for POST/PUT/PATCH
-                if method in ["post", "put", "patch"]:
+                # Add request body for POST/PUT/PATCH
+                elif method in ["post", "put", "patch"]:
                     operation["requestBody"] = {
                         "content": {
                             "application/json": {
@@ -1133,7 +1286,8 @@ class App:
                     "version": api_version,
                     "description": f"{api_title} - Powered by Cello Framework"
                 },
-                "paths": paths
+                "paths": paths,
+                **({"components": {"schemas": components}} if components else {}),
             }
 
         print("📚 OpenAPI docs enabled:")
@@ -1153,7 +1307,7 @@ class App:
         """
         Enable database connection pooling.
 
-        Configures an async connection pool for PostgreSQL, MySQL, or SQLite.
+        Configures an async connection pool for PostgreSQL (native, deadpool-backed).
         Supports connection health monitoring, automatic reconnection, and
         query statistics.
 
@@ -1169,6 +1323,12 @@ class App:
                 pool_size=20,
                 max_lifetime_secs=1800
             ))
+
+        TLS follows libpq's ``sslmode`` (URL query key or ``DatabaseConfig``
+        option): ``disable``, ``prefer`` (default), ``require``, ``verify-ca``,
+        ``verify-full`` (recommended for production), plus ``sslrootcert``,
+        ``sslcert`` and ``sslkey``. Bad certificate paths raise ``ValueError``
+        here. See docs/data-layer.md#tls-encrypted-connections.
         """
         if config is None:
             raise ValueError(
@@ -1555,7 +1715,9 @@ class App:
         Args:
             host: Host address to bind to (default: "127.0.0.1")
             port: Port to bind to (default: 8000)
-            debug: Enable debug mode (default: True in dev, False in prod)
+            debug: Enable debug mode (default: True in dev, False in prod). With debug
+                off, unhandled handler errors return a generic 500 and the details
+                are written to the server log instead of the response.
             env: Environment "development" or "production" (default: "development")
             workers: Number of worker threads (default: CPU count)
             reload: Enable hot reload (default: False)
@@ -1647,6 +1809,11 @@ class App:
                 p.terminate()
                 p.wait()
                 time.sleep(0.5)
+
+        # Unhandled handler errors are described to the client only in debug mode;
+        # in production they can carry database messages and row values, so the
+        # client gets a generic 500 and the details go to the server log.
+        self._app.set_expose_errors(bool(debug))
 
         # Configure App
         if logs:
