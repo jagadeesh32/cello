@@ -243,6 +243,17 @@ impl Cello {
             .set_exception_handler(exception_type, handler);
     }
 
+    /// Choose whether unhandled handler errors are *described* in 5xx responses
+    /// (development) or replaced by a generic Problem Details body with the
+    /// details written to the server log (production).
+    ///
+    /// Default is `true`; `App.run()` passes its `debug` flag here, so the
+    /// production default is off. Handlers registered with
+    /// `@app.exception_handler(...)` still receive the untouched error.
+    pub fn set_expose_errors(&self, expose: bool) {
+        error::set_expose_error_details(expose);
+    }
+
     /// Enable CORS middleware.
     #[pyo3(signature = (origins=None))]
     pub fn enable_cors(&mut self, origins: Option<Vec<String>>) {
@@ -1161,6 +1172,16 @@ def openapi_handler(request):
                     }
 
                     let _ = server.run().await;
+
+                    // Ctrl-C is delivered to CPython's own SIGINT handler as well
+                    // as to Tokio's, which leaves a KeyboardInterrupt pending on the
+                    // interpreter. The first Python call below would then raise it,
+                    // dropping the hook's coroutine un-awaited (and the error is
+                    // filtered out by the match below). Consume it so async shutdown
+                    // hooks actually run.
+                    Python::attach(|py| {
+                        let _ = py.check_signals();
+                    });
 
                     // Shutdown hooks
                     for handler in shutdown_handlers {

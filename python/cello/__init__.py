@@ -2010,7 +2010,9 @@ class App:
         Args:
             host: Host address to bind to (default: "127.0.0.1")
             port: Port to bind to (default: 8000)
-            debug: Enable debug mode (default: True in dev, False in prod)
+            debug: Enable debug mode (default: True in dev, False in prod). With
+                debug off, an unhandled handler error returns a generic 500 and the
+                details are written to the server log instead of the response.
             env: Environment "development" or "production" (default: "development")
             workers: Number of worker threads (default: CPU count)
             reload: Enable hot reload (default: False)
@@ -2039,6 +2041,10 @@ class App:
         # so all routes get properly registered, then run as single worker.
         if os.environ.get("CELLO_WORKER") == "1":
             os.environ.pop("CELLO_WORKER", None)  # Prevent grandchild workers
+            # The parent resolved `debug` before spawning; inherit its decision so
+            # a production worker does not start describing unhandled errors.
+            # Missing means an older/foreign launcher: stay redacted (safe).
+            self._app.set_expose_errors(os.environ.get("CELLO_DEBUG", "0") == "1")
             try:
                 self._app.run(host, port, None)
             except (KeyboardInterrupt, SystemExit):
@@ -2102,6 +2108,15 @@ class App:
                 p.terminate()
                 p.wait()
                 time.sleep(0.5)
+
+        # Unhandled handler errors are *described* to the client only in debug
+        # mode. In production the message can carry exception text, tracebacks
+        # and database diagnostics (constraint names, row values), so the client
+        # gets a generic 500 and the details go to the server log instead.
+        # Handlers registered with @app.exception_handler(...) are unaffected.
+        # CELLO_DEBUG carries the decision into re-executed workers.
+        os.environ["CELLO_DEBUG"] = "1" if debug else "0"
+        self._app.set_expose_errors(bool(debug))
 
         # Configure App
         if logs:

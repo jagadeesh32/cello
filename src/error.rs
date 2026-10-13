@@ -12,11 +12,49 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use thiserror::Error;
 
 use crate::json::python_to_json;
 use crate::request::Request;
 use crate::response::Response;
+
+/// Whether *unhandled* error details are described to the client (development)
+/// or replaced by a generic Problem Details body (production).
+///
+/// An unhandled handler error carries the Python exception's message (and, in
+/// debug mode, its traceback) and a database failure carries server diagnostics
+/// such as constraint names and row values, so echoing either to a client leaks
+/// internals. `App.run(debug=False)` turns this off: the details go to the
+/// server log and the response keeps only the Problem Details skeleton.
+///
+/// Only the *default* 5xx response is affected. Handlers registered with
+/// `@app.exception_handler(...)` / `add_status_handler` still receive the
+/// untouched error, so redaction can never silence a handler the user wrote.
+static EXPOSE_ERROR_DETAILS: AtomicBool = AtomicBool::new(true);
+
+/// Set whether unhandled-error details are described in 5xx responses.
+pub fn set_expose_error_details(expose: bool) {
+    EXPOSE_ERROR_DETAILS.store(expose, Ordering::Relaxed);
+}
+
+/// Whether unhandled-error details are described in 5xx responses.
+pub fn expose_error_details() -> bool {
+    EXPOSE_ERROR_DETAILS.load(Ordering::Relaxed)
+}
+
+/// Whether this error's message is internal detail that must not reach clients.
+///
+/// Client-facing errors (`Validation`, `NotFound`, `BadRequest`, …) carry a
+/// message written for the caller, and so do framework 504s; the ones below are
+/// the variants whose text comes from an exception or the database.
+fn is_internal_detail(error: &AppError) -> bool {
+    match error {
+        AppError::Internal(_) | AppError::Handler(_) | AppError::PythonException(_) => true,
+        AppError::Custom { status, .. } => *status >= 500,
+        _ => false,
+    }
+}
 
 /// RFC 7807 Problem Details structure.
 ///
@@ -235,6 +273,19 @@ impl AppError {
     /// Convert to Response.
     pub fn to_response(&self) -> Response {
         self.to_problem_details().to_response()
+    }
+
+    /// Convert to a Response with every internal detail removed.
+    ///
+    /// Keeps the Problem Details skeleton (type / title / status) so the body is
+    /// still valid RFC 7807, but drops `detail` and the machine-readable
+    /// extensions (`exception_type`, `traceback`, …) — the fields that can carry
+    /// an exception message, a traceback, or Postgres diagnostics.
+    pub fn to_redacted_response(&self) -> Response {
+        let mut details = self.to_problem_details();
+        details.detail = None;
+        details.extensions.clear();
+        details.to_response()
     }
 }
 
@@ -561,6 +612,23 @@ impl ErrorHandlerRegistry {
             }
         }
 
+        // Outside debug mode the details of an unhandled error never reach the
+        // client: the message can carry the Python exception text (and, in debug
+        // mode, its traceback) or a database error with constraint names and row
+        // values. The response keeps only the Problem Details skeleton and the
+        // real error goes to the server log. This runs last, after every branch
+        // above, so nothing can put the detail back. Reaching here means no
+        // user-registered handler matched, so nothing a user wrote is overridden.
+        if !expose_error_details() && is_internal_detail(error) {
+            eprintln!(
+                "[cello] unhandled {} {method} {path}: {error}",
+                error.status_code(),
+                method = request.method,
+                path = request.path,
+            );
+            response = error.to_redacted_response();
+        }
+
         response
     }
 
@@ -707,5 +775,59 @@ mod tests {
         assert_eq!(error.field, "email");
         assert_eq!(error.message, "Invalid email format");
         assert_eq!(error.code, "invalid_format");
+    }
+
+    /// Only errors whose text comes from an exception or the database are
+    /// redacted; a 4xx message is written for the caller and stays.
+    #[test]
+    fn test_only_internal_details_are_redacted() {
+        let python_error = AppError::PythonException(PythonExceptionInfo {
+            exception_type: "ValueError".into(),
+            message: "secret".into(),
+            traceback: None,
+            file: None,
+            line: None,
+            exception: None,
+        });
+        assert!(is_internal_detail(&python_error));
+        assert!(is_internal_detail(&AppError::Internal("secret".into())));
+        assert!(is_internal_detail(&AppError::Custom {
+            status: 503,
+            message: "secret".into(),
+            type_uri: None,
+        }));
+
+        assert!(!is_internal_detail(&AppError::NotFound("no such user".into())));
+        assert!(!is_internal_detail(&AppError::Timeout("took too long".into())));
+        assert!(!is_internal_detail(&AppError::Custom {
+            status: 409,
+            message: "conflict".into(),
+            type_uri: None,
+        }));
+    }
+
+    #[test]
+    fn test_redacted_response_drops_the_detail_and_extensions() {
+        let error = AppError::PythonException(PythonExceptionInfo {
+            exception_type: "psycopg.errors.UniqueViolation".into(),
+            message: "duplicate key value violates unique constraint users_pkey".into(),
+            traceback: Some("traceback: users_pkey".into()),
+            file: None,
+            line: None,
+            exception: None,
+        });
+
+        let full = String::from_utf8(error.to_response().body_buffer().to_vec()).unwrap();
+        assert!(full.contains("users_pkey"));
+        assert!(full.contains("exception_type"));
+
+        let redacted =
+            String::from_utf8(error.to_redacted_response().body_buffer().to_vec()).unwrap();
+        assert!(!redacted.contains("users_pkey"));
+        assert!(!redacted.contains("exception_type"));
+        // The Problem Details skeleton survives, so clients still get RFC 7807.
+        assert!(redacted.contains("\"status\":500"));
+        assert!(redacted.contains("Internal Server Error"));
+        assert_eq!(error.to_redacted_response().status, 500);
     }
 }

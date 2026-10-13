@@ -915,7 +915,7 @@ app.run(
 |--------|------|---------|-------------|
 | `host` | `str` | `"127.0.0.1"` | Host address to bind to |
 | `port` | `int` | `8000` | Port number to bind to |
-| `debug` | `bool` | `None` | Enable debug mode (defaults to `True` in dev, `False` in prod) |
+| `debug` | `bool` | `None` | Enable debug mode (defaults to `True` in dev, `False` in prod). With it off, an unhandled handler error returns a generic 500 and the details are written to the server log — see [Debug vs. Production Errors](../errors.md#debug-vs-production-errors) |
 | `env` | `str` | `"development"` | Environment: `"development"` or `"production"` |
 | `workers` | `int` | `None` | Number of worker processes (defaults to CPU count in production, 1 in debug) |
 | `reload` | `bool` | `False` | Enable hot reload (watches `.py` files for changes) |

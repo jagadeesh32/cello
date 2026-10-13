@@ -232,14 +232,34 @@ def handle_guard_error(request, exc):
 
 ## Debug vs. Production Errors
 
-| Behavior | Development | Production |
-|----------|-------------|------------|
-| Error detail | Full stack trace | Generic message |
+| Behavior | Development (`debug=True`) | Production (`debug=False`) |
+|----------|----------------------------|----------------------------|
+| Error detail | The exception message | Generic message |
 | Status code | Accurate | Accurate |
-| Exception type | Included | Hidden |
-| Request context | Included | Hidden |
+| Problem Details `type` / `title` | Included | Included |
+| `exception_type` extension | Included | Hidden |
+| Server log | — | The full error, with method and path |
 
-In production (`--env production`), Cello returns a generic `500 Internal Server Error` for unhandled exceptions to avoid leaking implementation details.
+The switch follows `debug`, not `env`: `app.run(debug=False)` (or a production
+`env`, whose default is `debug=False`) redacts the details of an **unhandled**
+error. The message of such an error is the Python exception's text — and, for a
+database failure, a message that can carry constraint names and row values — so
+the client gets the RFC 7807 skeleton with `detail` and the extensions dropped,
+and the real error is written to the server log as
+`[cello] unhandled 500 GET /path: ValueError: ...`.
+
+Only the *default* 5xx response is redacted. A handler you register yourself is
+never overridden — it still receives the original error object:
+
+```python
+@app.exception_handler(ValueError)
+def on_value_error(request, exc):
+    log.warning("handler failed: %s", exc)   # the real message
+    return {"error": "something went wrong"}  # what the client sees
+```
+
+`raise NotFoundError("user 42 missing")` and the other 4xx classes are not
+affected: their message is written for the caller and is sent as-is.
 
 ---
 

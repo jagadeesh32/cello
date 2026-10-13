@@ -655,9 +655,17 @@ impl Server {
             }
         });
 
+        // Created once, outside the loop: a `ctrl_c()` future only observes
+        // signals delivered after it was created, so re-creating it on every
+        // iteration dropped a SIGINT that landed while an accepted connection
+        // was being set up. Under load the server then ignored Ctrl-C and hung
+        // until the next connection arrived.
+        let ctrl_c = tokio::signal::ctrl_c();
+        tokio::pin!(ctrl_c);
+
         loop {
             tokio::select! {
-                _ = tokio::signal::ctrl_c() => {
+                _ = &mut ctrl_c => {
                     shutdown.shutdown();
                     break;
                 }

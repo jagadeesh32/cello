@@ -93,6 +93,16 @@ async def create(request):
 | `transaction()` | an async-context-manager transaction |
 | `ping()` / `close()` | connectivity check / close the pool |
 
+### Prepared statements
+
+Every query is prepared through the pooled connection's statement cache. The
+first call with a given SQL string does the Parse/Describe round trip; every
+later call reuses the server-side statement, so a repeated query costs one round
+trip instead of two. Nothing to configure: use `$1` parameters as usual and the
+same SQL text is what gets cached (`tokio-postgres` bounds the per-connection
+cache and evicts on its own, so SQL built from interpolated values cannot grow
+it without limit).
+
 ### Type mapping
 
 `bool/int/float/str/bytes` map to their SQL equivalents; `dict`/`list` map to

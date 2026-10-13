@@ -25,8 +25,8 @@ use pyo3::IntoPyObjectExt;
 use pyo3::prelude::*;
 use pyo3::types::PyTuple;
 use tokio::sync::Mutex;
-use tokio_postgres::NoTls;
 use tokio_postgres::types::ToSql;
+use tokio_postgres::{NoTls, Statement};
 
 use super::value::{SqlParam, py_params_to_sqlparams, row_to_pydict};
 
@@ -37,6 +37,18 @@ fn rt_err(msg: impl std::fmt::Display) -> PyErr {
 /// Borrow a `Vec<SqlParam>` as the `&[&(dyn ToSql + Sync)]` slice tokio-postgres wants.
 fn as_sql_refs(params: &[SqlParam]) -> Vec<&(dyn ToSql + Sync)> {
     params.iter().map(|p| p as &(dyn ToSql + Sync)).collect()
+}
+
+/// Prepare `sql` through the connection's statement cache.
+///
+/// `client.execute("SQL", params)` parses, describes and binds on every call —
+/// two round trips per query. Preparing once per distinct SQL text makes the
+/// repeated case (every ORM call, every request) a single round trip. The cache
+/// lives on the pooled connection, so it survives check-out/return with
+/// `RecyclingMethod::Fast`; `tokio-postgres` bounds it and evicts on its own, so
+/// SQL built from interpolated values cannot grow it without limit.
+async fn prepare_cached(client: &Object, sql: &str) -> Result<Statement, tokio_postgres::Error> {
+    client.prepare_cached(sql).await
 }
 
 /// Native Postgres connection pool.
@@ -83,8 +95,9 @@ impl PyDatabase {
         let pool = self.pool.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let client = pool.get().await.map_err(rt_err)?;
+            let stmt = prepare_cached(&client, &sql).await.map_err(rt_err)?;
             let refs = as_sql_refs(&sql_params);
-            let n = client.execute(&sql, &refs).await.map_err(rt_err)?;
+            let n = client.execute(&stmt, &refs).await.map_err(rt_err)?;
             Ok::<i64, PyErr>(n as i64)
         })
     }
@@ -101,8 +114,9 @@ impl PyDatabase {
         let pool = self.pool.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let client = pool.get().await.map_err(rt_err)?;
+            let stmt = prepare_cached(&client, &sql).await.map_err(rt_err)?;
             let refs = as_sql_refs(&sql_params);
-            let rows = client.query(&sql, &refs).await.map_err(rt_err)?;
+            let rows = client.query(&stmt, &refs).await.map_err(rt_err)?;
             Python::attach(|py| {
                 let out = pyo3::types::PyList::empty(py);
                 for row in &rows {
@@ -125,8 +139,9 @@ impl PyDatabase {
         let pool = self.pool.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let client = pool.get().await.map_err(rt_err)?;
+            let stmt = prepare_cached(&client, &sql).await.map_err(rt_err)?;
             let refs = as_sql_refs(&sql_params);
-            let row = client.query_opt(&sql, &refs).await.map_err(rt_err)?;
+            let row = client.query_opt(&stmt, &refs).await.map_err(rt_err)?;
             Python::attach(|py| match row {
                 Some(r) => row_to_pydict(py, &r),
                 None => Ok(py.None()),
@@ -146,8 +161,9 @@ impl PyDatabase {
         let pool = self.pool.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let client = pool.get().await.map_err(rt_err)?;
+            let stmt = prepare_cached(&client, &sql).await.map_err(rt_err)?;
             let refs = as_sql_refs(&sql_params);
-            let row = client.query_opt(&sql, &refs).await.map_err(rt_err)?;
+            let row = client.query_opt(&stmt, &refs).await.map_err(rt_err)?;
             Python::attach(|py| match row {
                 Some(r) if !r.is_empty() => {
                     let dict = row_to_pydict(py, &r)?;
@@ -265,8 +281,9 @@ impl PyTransaction {
             let client = guard
                 .as_ref()
                 .ok_or_else(|| rt_err("transaction is not active (use `async with`)"))?;
+            let stmt = prepare_cached(client, &sql).await.map_err(rt_err)?;
             let refs = as_sql_refs(&sql_params);
-            let n = client.execute(&sql, &refs).await.map_err(rt_err)?;
+            let n = client.execute(&stmt, &refs).await.map_err(rt_err)?;
             Ok::<i64, PyErr>(n as i64)
         })
     }
@@ -286,8 +303,9 @@ impl PyTransaction {
             let client = guard
                 .as_ref()
                 .ok_or_else(|| rt_err("transaction is not active (use `async with`)"))?;
+            let stmt = prepare_cached(client, &sql).await.map_err(rt_err)?;
             let refs = as_sql_refs(&sql_params);
-            let rows = client.query(&sql, &refs).await.map_err(rt_err)?;
+            let rows = client.query(&stmt, &refs).await.map_err(rt_err)?;
             Python::attach(|py| {
                 let out = pyo3::types::PyList::empty(py);
                 for row in &rows {
@@ -313,8 +331,9 @@ impl PyTransaction {
             let client = guard
                 .as_ref()
                 .ok_or_else(|| rt_err("transaction is not active (use `async with`)"))?;
+            let stmt = prepare_cached(client, &sql).await.map_err(rt_err)?;
             let refs = as_sql_refs(&sql_params);
-            let row = client.query_opt(&sql, &refs).await.map_err(rt_err)?;
+            let row = client.query_opt(&stmt, &refs).await.map_err(rt_err)?;
             Python::attach(|py| match row {
                 Some(r) => row_to_pydict(py, &r),
                 None => Ok(py.None()),
