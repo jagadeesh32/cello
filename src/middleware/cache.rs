@@ -267,38 +267,29 @@ impl CacheStore for InMemoryCacheStore {
 
     async fn set(&self, key: &str, response: CachedResponse) -> Result<(), CacheError> {
         let mut store = self.store.write();
-        store.insert(key.to_string(), response);
-
-        // Cleanup in a separate task to avoid blocking
-        let store_clone = Arc::clone(&self.store);
-        let max_size = self.max_size;
-        tokio::spawn(async move {
-            let mut store = store_clone.write();
-            if store.len() > max_size {
-                // Remove expired entries first
-                let mut valid_entries: HashMap<String, CachedResponse> = store
+        // Keys are partly client-controlled (query string), so the map must be
+        // bounded. Evict in place under the lock we already hold: expired
+        // entries first, then the oldest tenth, so eviction cost is amortised.
+        if store.len() >= self.max_size && !store.contains_key(key) {
+            store.retain(|_, entry| !entry.is_expired());
+            if store.len() >= self.max_size {
+                let mut by_age: Vec<(SystemTime, String)> = store
                     .iter()
-                    .filter(|(_, entry)| !entry.is_expired())
-                    .map(|(k, v)| (k.clone(), v.clone()))
+                    .map(|(k, v)| (v.cached_at, k.clone()))
                     .collect();
-
-                // If still over limit, remove oldest
-                if valid_entries.len() > max_size {
-                    let mut entries: Vec<_> = valid_entries.iter().collect();
-                    entries.sort_by_key(|(_, entry)| entry.cached_at);
-                    let to_keep: Vec<String> = entries
-                        .iter()
-                        .skip(valid_entries.len() - max_size)
-                        .map(|(key, _)| (*key).clone())
-                        .collect();
-
-                    valid_entries.retain(|key, _| to_keep.contains(key));
+                let evict =
+                    ((self.max_size / 10).max(1) + store.len() - self.max_size).min(by_age.len());
+                // Partition around the cut instead of sorting: O(n), not
+                // O(n log n), under the write lock.
+                if evict > 0 && evict < by_age.len() {
+                    by_age.select_nth_unstable_by_key(evict - 1, |(t, _)| *t);
                 }
-
-                *store = valid_entries;
+                for (_, k) in by_age.into_iter().take(evict) {
+                    store.remove(&k);
+                }
             }
-        });
-
+        }
+        store.insert(key.to_string(), response);
         Ok(())
     }
 
@@ -363,6 +354,12 @@ pub struct CacheConfig {
     pub compress: bool,
     /// Minimum identity-body size (bytes) before a HIT is gzipped.
     pub compress_min_size: usize,
+    /// Cache requests that carry `Authorization` or `Cookie`. Off by default:
+    /// such responses are usually per-user, and a shared entry would serve one
+    /// user's data to another. When on, those headers become part of the key.
+    pub cache_authenticated: bool,
+    /// Largest response body (bytes) that is stored; bigger ones are not cached.
+    pub max_entry_size: usize,
 }
 
 impl Default for CacheConfig {
@@ -372,7 +369,9 @@ impl Default for CacheConfig {
             key_builder: Arc::new(DefaultCacheKeyBuilder::new()),
             default_ttl: 300, // 5 minutes
             methods: vec!["GET".to_string(), "HEAD".to_string()],
-            status_codes: vec![200, 201, 202, 203, 204, 205, 206, 207, 208, 226],
+            // Only complete, reusable representations. 206 depends on `Range`
+            // (not in the key) and 201/202/205 describe one-off actions.
+            status_codes: vec![200, 203, 204],
             exclude_paths: vec!["/health".to_string(), "/metrics".to_string()],
             include_paths: Vec::new(),
             include_query: true,
@@ -384,6 +383,8 @@ impl Default for CacheConfig {
             vary_headers: Vec::new(),
             compress: true,
             compress_min_size: 1024,
+            cache_authenticated: false,
+            max_entry_size: 1024 * 1024,
         }
     }
 }
@@ -447,6 +448,11 @@ impl CacheConfig {
         self.enable_conditional = enable;
         self
     }
+
+    pub fn cache_authenticated(mut self, enable: bool) -> Self {
+        self.cache_authenticated = enable;
+        self
+    }
 }
 
 // ============================================================================
@@ -488,6 +494,11 @@ impl CacheMiddleware {
             return false;
         }
 
+        // Credentialed requests are per-user unless explicitly opted in.
+        if !self.config.cache_authenticated && carries_credentials(request) {
+            return false;
+        }
+
         // If include_paths is specified, only cache those
         if !self.config.include_paths.is_empty() {
             return self
@@ -502,7 +513,47 @@ impl CacheMiddleware {
 
     /// Check if response should be cached.
     fn should_cache_response(&self, response: &Response) -> bool {
-        self.config.status_codes.contains(&response.status)
+        if !self.config.status_codes.contains(&response.status)
+            || response.deferred_file().is_some()
+            || response.body_bytes().len() > self.config.max_entry_size
+        {
+            return false;
+        }
+        // A response that sets a cookie is specific to its recipient.
+        if response.header("Set-Cookie").is_some()
+            || response
+                .extra_headers()
+                .iter()
+                .any(|(k, _)| k.eq_ignore_ascii_case("set-cookie"))
+        {
+            return false;
+        }
+        // Honour the handler's own caching instructions.
+        if let Some(cc) = response.header("Cache-Control") {
+            let cc = cc.to_ascii_lowercase();
+            if cc.contains("no-store") || cc.contains("private") || cc.contains("no-cache") {
+                return false;
+            }
+        }
+        if response.header("Vary").is_some_and(|v| v.trim() == "*") {
+            return false;
+        }
+        true
+    }
+
+    /// The cache key, extended with the caller's credentials when
+    /// authenticated caching is enabled so entries are never shared across users.
+    fn cache_key(&self, request: &Request) -> String {
+        let mut key = self.config.key_builder.build_key(request);
+        if self.config.cache_authenticated && carries_credentials(request) {
+            use std::collections::hash_map::DefaultHasher;
+            use std::hash::{Hash, Hasher};
+            let mut hasher = DefaultHasher::new();
+            request.headers.get("authorization").hash(&mut hasher);
+            request.headers.get("cookie").hash(&mut hasher);
+            key.push_str(&format!("|cred:{:x}", hasher.finish()));
+        }
+        key
     }
 
     /// Generate ETag for response.
@@ -605,9 +656,6 @@ impl CacheMiddleware {
     }
 
     /// Restore Response from cached response.
-    #[allow(dead_code)]
-    /// Restore Response from cached response.
-    #[allow(dead_code)]
     fn restore_response(&self, cached: &CachedResponse, accept_gzip: bool) -> Response {
         let mut response = Response::new(cached.status);
 
@@ -635,7 +683,7 @@ impl CacheMiddleware {
                     response.set_header("Content-Encoding", "gzip");
                     // Cached under a key that ignores Accept-Encoding, so signal
                     // that the representation varies by it.
-                    response.set_header("Vary", "Accept-Encoding");
+                    crate::middleware::add_vary(&mut response, "Accept-Encoding");
                 }
                 Err(_) => response.set_body(cached.body.clone()),
             }
@@ -643,15 +691,10 @@ impl CacheMiddleware {
             response.set_body(cached.body.clone());
         }
 
-        // Add cache headers
+        // Add cache headers. `Cache-Control` is whatever the handler sent (it is
+        // part of the stored headers); the server-side TTL is not advertised to
+        // browsers or shared caches.
         response.set_header("X-Cache", "HIT");
-
-        if cached.remaining_ttl() > 0 {
-            response.set_header(
-                "Cache-Control",
-                &format!("max-age={}", cached.remaining_ttl()),
-            );
-        }
 
         // Add ETag and Last-Modified if available
         if let Some(etag) = &cached.etag {
@@ -683,7 +726,7 @@ impl AsyncMiddleware for CacheMiddleware {
             }
 
             // Build cache key
-            let cache_key = self.config.key_builder.build_key(request);
+            let cache_key = self.cache_key(request);
 
             // Store cache key in request context for after() method
             request.context.insert(
@@ -703,8 +746,7 @@ impl AsyncMiddleware for CacheMiddleware {
                     let accept_gzip = request
                         .headers
                         .get("accept-encoding")
-                        .map(|v| v.to_ascii_lowercase().contains("gzip"))
-                        .unwrap_or(false);
+                        .is_some_and(|v| crate::middleware::accepts_gzip(v));
 
                     // Return cached response
                     let response = self.restore_response(&cached, accept_gzip);
@@ -729,6 +771,22 @@ impl AsyncMiddleware for CacheMiddleware {
         Box::pin(async move {
             // Check if this request should be cached (skip if already handled or ignored)
             if !self.should_cache_request(request) {
+                return Ok(MiddlewareAction::Continue);
+            }
+            // The session / CSRF cookies are added by sync `after` hooks, which
+            // run after this one, so `Set-Cookie` is not visible yet. A response
+            // that wrote the session or rendered a freshly issued CSRF token is
+            // specific to this visitor and must not become a shared entry.
+            let wrote_session = request.session.as_ref().is_some_and(|h| {
+                let st = h.lock();
+                st.modified || st.regenerate || st.destroyed
+            });
+            if wrote_session
+                || request
+                    .context
+                    .contains_key(crate::middleware::csrf::FRESH_TOKEN_KEY)
+            {
+                response.set_header("X-Cache", "BYPASS");
                 return Ok(MiddlewareAction::Continue);
             }
 
@@ -760,12 +818,9 @@ impl AsyncMiddleware for CacheMiddleware {
                         let _ = store.set(&key, cached).await;
                     });
 
-                    // Add cache headers to response
+                    // Server-side cache only: no `Cache-Control` is added, so
+                    // browsers and shared caches follow the handler's headers.
                     response.set_header("X-Cache", "MISS");
-                    response.set_header(
-                        "Cache-Control",
-                        &format!("max-age={}", self.config.default_ttl),
-                    );
                 } else {
                     response.set_header("X-Cache", "BYPASS");
                 }
@@ -787,6 +842,11 @@ impl AsyncMiddleware for CacheMiddleware {
 // ============================================================================
 // Helper Functions
 // ============================================================================
+
+/// Whether the request carries credentials (`Authorization` or `Cookie`).
+fn carries_credentials(request: &Request) -> bool {
+    request.headers.contains_key("authorization") || request.headers.contains_key("cookie")
+}
 
 /// Create a standard cache key from request.
 pub fn create_cache_key(request: &Request) -> String {

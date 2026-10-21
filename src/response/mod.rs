@@ -63,6 +63,11 @@ pub struct Response {
 
     /// Body type marker
     body_type: ResponseBody,
+
+    /// Headers that may legitimately repeat (`Set-Cookie`). `headers` is a map,
+    /// so a second `set_header("Set-Cookie", ..)` would overwrite the first;
+    /// `append_header` adds here instead and every entry is sent.
+    extra_headers: Vec<(String, String)>,
 }
 
 #[pymethods]
@@ -90,6 +95,7 @@ impl Response {
             } else {
                 ResponseBody::Empty
             },
+            extra_headers: Vec::new(),
         }
     }
 
@@ -111,6 +117,7 @@ impl Response {
             body,
             content_type: "application/json".to_string(),
             body_type: ResponseBody::Bytes(Vec::new()),
+            extra_headers: Vec::new(),
         })
     }
 
@@ -130,6 +137,7 @@ impl Response {
             body: content.as_bytes().to_vec(),
             content_type: "text/plain".to_string(),
             body_type: ResponseBody::Bytes(Vec::new()),
+            extra_headers: Vec::new(),
         }
     }
 
@@ -149,6 +157,7 @@ impl Response {
             body: content.as_bytes().to_vec(),
             content_type: "text/html".to_string(),
             body_type: ResponseBody::Bytes(Vec::new()),
+            extra_headers: Vec::new(),
         }
     }
 
@@ -168,6 +177,7 @@ impl Response {
             body: data,
             content_type: ct,
             body_type: ResponseBody::Bytes(Vec::new()),
+            extra_headers: Vec::new(),
         }
     }
 
@@ -205,6 +215,7 @@ impl Response {
             body: data,
             content_type: ct,
             body_type: ResponseBody::Bytes(Vec::new()),
+            extra_headers: Vec::new(),
         })
     }
 
@@ -233,6 +244,7 @@ impl Response {
             body: Vec::new(),
             content_type: ct,
             body_type: ResponseBody::File(path.to_string()),
+            extra_headers: Vec::new(),
         })
     }
 
@@ -278,6 +290,7 @@ impl Response {
             body: Vec::new(),
             content_type: ct,
             body_type: ResponseBody::File(path.to_string()),
+            extra_headers: Vec::new(),
         })
     }
 
@@ -295,6 +308,7 @@ impl Response {
             body: Vec::new(),
             content_type: "text/plain".to_string(),
             body_type: ResponseBody::Empty,
+            extra_headers: Vec::new(),
         }
     }
 
@@ -307,6 +321,7 @@ impl Response {
             body: Vec::new(),
             content_type: "text/plain".to_string(),
             body_type: ResponseBody::Empty,
+            extra_headers: Vec::new(),
         }
     }
 
@@ -352,6 +367,7 @@ impl Response {
             body: xml_content.into_bytes(),
             content_type: "application/xml".to_string(),
             body_type: ResponseBody::Bytes(Vec::new()),
+            extra_headers: Vec::new(),
         })
     }
 
@@ -365,6 +381,17 @@ impl Response {
             .filter(|c| *c != '\r' && *c != '\n' && *c != '\0')
             .collect();
         self.headers.insert(key.to_string(), sanitized);
+    }
+
+    /// Append a header without replacing an existing one of the same name
+    /// (needed for multiple `Set-Cookie` headers). Same CR/LF/NUL stripping as
+    /// `set_header`.
+    pub fn append_header(&mut self, key: &str, value: &str) {
+        let sanitized: String = value
+            .chars()
+            .filter(|c| *c != '\r' && *c != '\n' && *c != '\0')
+            .collect();
+        self.extra_headers.push((key.to_string(), sanitized));
     }
 
     /// Get the response body as bytes.
@@ -394,7 +421,46 @@ impl Response {
             body: Vec::new(),
             content_type: "text/plain".to_string(),
             body_type: ResponseBody::Empty,
+            extra_headers: Vec::new(),
         }
+    }
+
+    /// Mark the body as the contents of `path`, to be read asynchronously by
+    /// the server just before the response is finished (see
+    /// `server::load_deferred_body`). Keeps file I/O off the server thread.
+    pub fn defer_file_body(&mut self, path: String) {
+        self.body.clear();
+        self.body_type = ResponseBody::File(path);
+    }
+
+    /// Path of a deferred file body, if any.
+    pub fn deferred_file(&self) -> Option<&str> {
+        match &self.body_type {
+            ResponseBody::File(p) => Some(p.as_str()),
+            _ => None,
+        }
+    }
+
+    /// Appended (repeatable) headers, in insertion order.
+    #[inline]
+    pub fn extra_headers(&self) -> &[(String, String)] {
+        &self.extra_headers
+    }
+
+    /// Remove a header by name (case-insensitive), from both the map and the
+    /// appended list.
+    pub fn remove_header(&mut self, key: &str) {
+        self.headers.retain(|k, _| !k.eq_ignore_ascii_case(key));
+        self.extra_headers
+            .retain(|(k, _)| !k.eq_ignore_ascii_case(key));
+    }
+
+    /// Get a header value by name (case-insensitive).
+    pub fn header(&self, key: &str) -> Option<&str> {
+        self.headers
+            .iter()
+            .find(|(k, _)| k.eq_ignore_ascii_case(key))
+            .map(|(_, v)| v.as_str())
     }
 
     /// Get the body bytes (internal use).
@@ -451,7 +517,11 @@ impl Response {
     /// Create a response from JSON value (internal use).
     #[inline]
     pub fn from_json_value(value: serde_json::Value, status: u16) -> Self {
-        let body = serde_json::to_vec(&value).unwrap_or_default();
+        let body = match serde_json::to_vec(&value) {
+            Ok(b) => b,
+            // Never answer 200 with an empty body when serialization failed.
+            Err(_) => return Response::error(500, "Internal Server Error"),
+        };
         // PERF: Pre-allocate with known capacity (1 Content-Type header)
         let mut headers = HashMap::with_capacity(1);
         headers.insert("Content-Type".to_string(), "application/json".to_string());
@@ -462,6 +532,7 @@ impl Response {
             body,
             content_type: "application/json".to_string(),
             body_type: ResponseBody::Bytes(Vec::new()),
+            extra_headers: Vec::new(),
         }
     }
 
@@ -477,6 +548,7 @@ impl Response {
             body,
             content_type: "application/json".to_string(),
             body_type: ResponseBody::Bytes(Vec::new()),
+            extra_headers: Vec::new(),
         }
     }
 

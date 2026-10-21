@@ -5,6 +5,7 @@ icon: material/tag-multiple
 tags:
   - Release Notes
   - Changelog
+  - v1.4.1
   - v1.4.0
   - v1.3.0
   - Migration
@@ -14,7 +15,13 @@ tags:
 
 ---
 
-## :material-new-box: Latest Release — v1.4.0
+## :material-new-box: Latest Release — v1.4.1
+
+!!! warning "Cello v1.4.1 — Review Fixes (October 2026)"
+
+    Security and correctness fixes from the 1.4.0 review: auth on `/health`/`/metrics`/`/graphql`, trusted-proxy client IPs, a cache that never mixes users, working sessions and CSRF form tokens, safe error defaults, served WebSockets. Several defaults changed — see [the release notes](v1.4.1.md#deliberate-behavior-changes).
+
+## Previous Release — v1.4.0
 
 !!! success "Cello v1.4.0 — The Native Core (October 2026)"
 

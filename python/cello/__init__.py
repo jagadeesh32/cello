@@ -53,6 +53,8 @@ Example:
 
 """
 
+import json
+
 from .validation import wrap_handler_with_validation, wrap_handler_with_body
 
 
@@ -424,7 +426,7 @@ __all__ = [
     "validate_rate_limit_config",
     "validate_tls_config",
 ]
-__version__ = "1.4.0"
+__version__ = "1.4.1"
 
 
 class Blueprint:
@@ -684,24 +686,44 @@ class App:
             return wrapped
         return decorator
 
-    def websocket(self, path: str):
+    def websocket(self, path: str, allowed_origins: list = None):
         """
         Register a WebSocket route.
 
         Args:
             path: URL path for WebSocket endpoint
+            allowed_origins: Browser origins (``"https://app.example.com"``)
+                allowed to open this socket besides the server's own origin.
+                ``["*"]`` allows any origin. A browser handshake from any other
+                origin gets ``403`` (it could otherwise ride the user's cookies).
+                Clients that send no ``Origin`` (non-browser) are not affected.
 
         Example:
             @app.websocket("/ws")
             def websocket_handler(ws):
                 while True:
-                    msg = ws.recv()
+                    msg = ws.recv()          # None once the client closes
                     if msg is None:
                         break
-                    ws.send_text(f"Echo: {msg.text}")
+                    ws.send_text(f"Echo: {msg.content}")
+
+            @app.websocket("/ws/async")
+            async def async_handler(ws):
+                while (msg := await ws.arecv()) is not None:
+                    await ws.asend_text(f"Echo: {msg.content}")
+
+        A ``def`` handler runs on the blocking thread pool (``ws.recv()`` blocks
+        without holding the GIL) and occupies one pool thread while the socket
+        is open. An ``async def`` handler runs on the application's event loop,
+        holds no thread while it awaits, and must use the awaitable methods
+        (``arecv``, ``asend``, ``asend_text``, ``asend_binary``); the blocking
+        ones raise ``RuntimeError`` there. The sync middleware chain (auth, rate
+        limits) runs on the upgrade request; ``ws.request`` exposes it.
         """
+        origins = list(allowed_origins) if allowed_origins is not None else None
+
         def decorator(func):
-            self._app.websocket(path, func)
+            self._app.websocket(path, func, origins)
             return func
         return decorator
 
@@ -788,20 +810,36 @@ class App:
         """
         self._app.enable_rate_limit(config)
 
-    def enable_caching(self, ttl: int = 300, methods: list = None, exclude_paths: list = None, compress: bool = True):
+    def enable_caching(
+        self,
+        ttl: int = 300,
+        methods: list = None,
+        exclude_paths: list = None,
+        compress: bool = True,
+        cache_authenticated: bool = False,
+        max_entries: int = 10000,
+    ):
         """
-        Enable smart caching middleware.
+        Enable smart caching middleware (server-side response cache).
+
+        Only 200/203/204 responses without ``Set-Cookie`` and without
+        ``Cache-Control: private/no-store/no-cache`` are stored. The TTL is not
+        advertised to clients: ``Cache-Control`` is whatever the handler sent.
 
         Args:
             ttl: Default TTL in seconds (default: 300)
             methods: List of HTTP methods to cache (default: ["GET", "HEAD"])
             exclude_paths: List of paths to exclude from cache
             compress: Gzip a cache HIT inline for clients that send
-                ``Accept-Encoding: gzip`` (default: True). A HIT short-circuits
-                the compression middleware, so this keeps cached large responses
-                compressed. Sets ``Vary: Accept-Encoding``.
+                ``Accept-Encoding: gzip`` (default: True). Sets
+                ``Vary: Accept-Encoding``.
+            cache_authenticated: Also cache requests that carry
+                ``Authorization`` or ``Cookie`` (default: False). When enabled
+                those headers are part of the cache key, so users never share
+                an entry.
+            max_entries: Maximum number of stored responses (default: 10000).
         """
-        self._app.enable_caching(ttl, methods, exclude_paths, compress)
+        self._app.enable_caching(ttl, methods, exclude_paths, compress, cache_authenticated, max_entries)
 
     def enable_circuit_breaker(self, failure_threshold: int = 5, reset_timeout: int = 30, half_open_target: int = 3, failure_codes: list = None):
         """
@@ -816,12 +854,17 @@ class App:
         self._app.enable_circuit_breaker(failure_threshold, reset_timeout, half_open_target, failure_codes)
 
     def set_limits(self, config: "LimitsConfig"):
-        """Configure request size limits.
+        """Configure request and connection limits. Every field is enforced:
 
-        Currently enforces ``max_body_size`` (bytes): the server rejects requests
-        whose body exceeds this size with ``413 Payload Too Large``, before the body
-        is buffered into memory. Set ``max_body_size=0`` for no limit. The default
-        cap is 100 MB.
+        - ``max_body_size`` (bytes): larger bodies get ``413 Payload Too Large``
+          before they are buffered. Default cap without ``set_limits``: 100 MB.
+        - ``max_header_size`` (bytes, minimum 8 KiB): larger request heads get
+          ``431``.
+        - ``max_connections``: connections beyond this are closed on accept.
+        - ``max_requests_per_connection``: the connection is closed (``Connection:
+          close``) after this many responses.
+
+        ``0`` means unlimited for any field.
 
         Args:
             config: LimitsConfig instance.
@@ -832,14 +875,40 @@ class App:
     def set_timeouts(self, config: "TimeoutConfig"):
         """Configure server timeouts (all values in seconds; 0 disables a timeout).
 
-        Uses ``read_header_timeout`` (Slowloris guard for slow header delivery),
-        ``read_body_timeout`` (slow body delivery → ``408``), and ``handler_timeout``
-        (a handler exceeding the limit → ``504``). Timeouts are disabled by default.
+        Uses ``read_header_timeout`` (Slowloris guard for slow header delivery;
+        also bounds idle keep-alive waits), ``read_body_timeout`` (slow body
+        delivery → ``408``), ``handler_timeout`` (a handler exceeding the limit →
+        ``504``) and ``idle_timeout`` (keep-alive connections with no request in
+        flight are closed). ``write_timeout`` is accepted but not enforced.
+
+        Defaults without ``set_timeouts``: header read 30 s, all others off.
 
         Args:
             config: TimeoutConfig instance.
         """
         self._app.set_timeouts(config)
+        return self
+
+    def set_trusted_proxies(self, proxies: list, trust_x_real_ip: bool = False):
+        """Trust forwarding headers only from these reverse proxies.
+
+        ``X-Forwarded-For``, ``X-Real-IP``, ``X-Forwarded-Proto`` and
+        ``X-Forwarded-Host`` are client-controlled unless they were set by a
+        proxy you run. By default no proxy is trusted: ``request.client_ip()``
+        and the rate limiter use the TCP peer address. Pass the proxies'
+        addresses or networks to honour the headers they add::
+
+            app.set_trusted_proxies(["10.0.0.0/8", "127.0.0.1"])
+
+        The client is then the right-most ``X-Forwarded-For`` entry that is not
+        itself a trusted proxy. The list belongs to this app (other ``App``
+        instances in the process keep their own).
+
+        ``X-Real-IP`` is a single value with no hop chain, so it is ignored
+        unless ``trust_x_real_ip=True``. Set that only when every trusted proxy
+        overwrites the header (never passes the client's copy through).
+        """
+        self._app.set_trusted_proxies(list(proxies), trust_x_real_ip)
         return self
 
     def set_threadpool(self, config: "ThreadPoolConfig"):
@@ -895,7 +964,8 @@ class App:
         """Enable CSRF protection middleware (double-submit cookie pattern).
 
         Args:
-            cookie_name: Name of the CSRF cookie (default: ``"_csrf"``).
+            cookie_name: Name of the CSRF cookie (default: ``"__Host-csrf"``;
+                the prefix is dropped when the cookie cannot be ``Secure``).
             header_name: Request header carrying the token (default: ``"X-CSRF-Token"``).
             allowed_origins: Optional explicit allow-list of full origins
                 (e.g. ``["https://app.example.com"]``). When empty, requests are
@@ -1124,7 +1194,7 @@ class App:
         """
         self._app.invalidate_cache(tags)
 
-    def enable_openapi(self, title: str = "Cello API", version: str = "1.4.0"):
+    def enable_openapi(self, title: str = "Cello API", version: str = "1.4.1"):
         """
         Enable OpenAPI documentation endpoints.
 
@@ -1135,7 +1205,7 @@ class App:
 
         Args:
             title: API title (default: "Cello API")
-            version: API version (default: "1.4.0")
+            version: API version (default: "1.4.1")
         """
         # Store for closure
         api_title = title
@@ -1661,26 +1731,88 @@ class App:
         """
         self._app.enable_health_checks(config)
 
-    def enable_graphql(self, config: "GraphQLConfig" = None):
+    def enable_graphql(self, config: "GraphQLConfig" = None, schema=None):
         """
-        Enable GraphQL endpoint with optional Playground.
+        Enable a GraphQL endpoint.
+
+        Queries are parsed with a real GraphQL parser; ``max_depth``,
+        ``max_complexity`` and ``introspection`` from the config are enforced
+        before any resolver runs, and the operation type comes from the
+        document (a named or commented mutation is a mutation). Playground and
+        introspection are off unless the config enables them. The endpoint
+        runs behind the normal middleware chain, so JWT/Basic/API key auth and
+        rate limiting apply to it. Only ``POST`` executes operations.
 
         Args:
             config: GraphQLConfig instance
+            schema: The resolvers to serve: a :class:`cello.graphql.Schema` or
+                :class:`cello.graphql.GraphQL`. The config's limits apply.
+                Without it the endpoint resolves only resolvers registered from
+                Rust, which a Python app cannot add.
 
         Example:
             from cello import App, GraphQLConfig
+            from cello.graphql import Schema, Query
+
+            @Query
+            def users(info) -> list:
+                return [{"id": 1, "name": "Ada"}]
 
             app = App()
-            app.enable_graphql(GraphQLConfig(
-                path="/graphql",
-                playground=True,
-                introspection=True
-            ))
+            app.enable_graphql(GraphQLConfig(path="/graphql"), schema=Schema().query(users))
         """
         if config is None:
             config = GraphQLConfig()
-        self._app.enable_graphql(config)
+        if schema is None:
+            self._app.enable_graphql(config)
+            return
+
+        from cello.graphql import GraphQL as _GraphQL, Schema as _Schema
+
+        limits = {
+            "max_depth": config.max_depth,
+            "max_complexity": config.max_complexity,
+            "introspection": config.introspection,
+        }
+        if isinstance(schema, _Schema):
+            engine = schema.build(**limits)
+        elif isinstance(schema, _GraphQL):
+            engine = schema
+            for name, value in limits.items():
+                setattr(engine, name, value)
+        else:
+            raise TypeError("schema must be a cello.graphql.Schema or cello.graphql.GraphQL")
+
+        async def graphql_endpoint(request):
+            try:
+                body = request.json()
+            except Exception:
+                body = None
+            if not isinstance(body, dict) or not isinstance(body.get("query"), str):
+                return Response.json(
+                    {"errors": [{"message": 'Expected a JSON body with a "query" string'}]},
+                    status=400,
+                )
+            variables = body.get("variables")
+            if variables is not None and not isinstance(variables, dict):
+                return Response.json(
+                    {"errors": [{"message": '"variables" must be an object'}]}, status=400
+                )
+            result = await engine.execute(
+                body["query"], variables, body.get("operationName"), context=request
+            )
+            # The document was rejected before execution.
+            return Response.json(result, status=400 if result.get("data") is None else 200)
+
+        self.post(config.path)(graphql_endpoint)
+
+        if config.playground:
+            page = _GRAPHQL_PLAYGROUND.replace("__ENDPOINT__", json.dumps(config.path))
+
+            def graphql_playground(request):
+                return Response.html(page)
+
+            self.get(config.path)(graphql_playground)
 
     # ========================================================================
     # End Enterprise Features
@@ -1708,7 +1840,7 @@ class App:
     def run(self, host: str = "127.0.0.1", port: int = 8000,
             debug: bool = None, env: str = None,
             workers: int = None, reload: bool = False,
-            logs: bool = None):
+            logs: bool = None, allow_per_worker_state: bool = False):
         """
         Start the HTTP server.
 
@@ -1722,6 +1854,12 @@ class App:
             workers: Number of worker threads (default: CPU count)
             reload: Enable hot reload (default: False)
             logs: Enable logging (default: True in dev)
+            allow_per_worker_state: Run several workers even though sessions or
+                rate limiting keep their state in process memory (each worker
+                then has its own sessions and its own counters). Without it,
+                an explicit ``workers > 1`` with either enabled raises
+                ``RuntimeError``, and a defaulted worker count falls back to 1.
+                Also settable with ``CELLO_ALLOW_PER_WORKER_STATE=1``.
 
         Example:
             # Simple development server
@@ -1741,23 +1879,32 @@ class App:
         import subprocess
         import time
 
-        # Check if this is a worker subprocess (Windows multi-process mode)
-        # Workers re-execute the user's script with CELLO_WORKER=1 set,
-        # so all routes get properly registered, then run as single worker.
+        # Windows multi-process workers re-execute the user's script with
+        # CELLO_WORKER=1. The parent resolved host/port/debug/logs (CLI included)
+        # and passes them down, so a worker never falls back to defaults such as
+        # exposing error details.
         if os.environ.get("CELLO_WORKER") == "1":
             os.environ.pop("CELLO_WORKER", None)  # Prevent grandchild workers
+            host = os.environ.get("CELLO_HOST", host)
+            port = int(os.environ.get("CELLO_PORT", port))
+            self._app.set_expose_errors(os.environ.get("CELLO_EXPOSE_ERRORS") == "1")
+            if os.environ.get("CELLO_LOGS") == "1":
+                self.enable_logging()
             try:
                 self._app.run(host, port, None)
             except (KeyboardInterrupt, SystemExit):
                 pass
             return
 
+        env_explicit = env is not None
+        debug_flag = False
+
         # Parse CLI arguments (only if running as main script)
         if "unittest" not in sys.modules:
             parser = argparse.ArgumentParser(description="Cello Web Server", add_help=False)
             parser.add_argument("--host", default=host)
             parser.add_argument("--port", type=int, default=port)
-            parser.add_argument("--env", default=env or "development")
+            parser.add_argument("--env", default=None)
             parser.add_argument("--debug", action="store_true")
             parser.add_argument("--reload", action="store_true")
             parser.add_argument("--workers", type=int, default=workers,
@@ -1770,22 +1917,35 @@ class App:
             # Update configuration from CLI
             host = args.host
             port = args.port
-            if env is None: env = args.env
+            if env is None and args.env is not None:
+                env = args.env
+                env_explicit = True
             if workers is None: workers = args.workers
             if reload is False and args.reload: reload = True
-
-            # Debug logic: CLI flag enables it, or defaults to dev env
-            if debug is None:
-                debug = args.debug or (env == "development")
+            debug_flag = args.debug
 
             # Logs logic: CLI --no-logs disables it
-            if logs is None:
-                logs = not args.no_logs and debug
+            if logs is None and args.no_logs:
+                logs = False
 
-        # Set defaults if still None
-        if env is None: env = "development"
-        if debug is None: debug = (env == "development")
-        if logs is None: logs = debug
+        if env is None and os.environ.get("CELLO_ENV"):
+            env = os.environ["CELLO_ENV"]
+            env_explicit = True
+        if env is None:
+            env = "development"
+
+        # Debug (error details in 500 responses) is on for an explicitly chosen
+        # development environment, --debug, or an interactive terminal. A process
+        # without a TTY (container, service manager, CI) that never said
+        # "development" gets production-safe errors.
+        if debug is None:
+            try:
+                interactive = sys.stdout.isatty()
+            except (AttributeError, ValueError):
+                interactive = False
+            debug = debug_flag or (env == "development" and (env_explicit or interactive))
+        if logs is None:
+            logs = env == "development"
 
         # Reloading Logic (Development only)
         if reload and os.environ.get("CELLO_RUN_MAIN") != "true":
@@ -1820,12 +1980,21 @@ class App:
             self.enable_logging()
 
         # Determine worker count (default: all CPU cores)
+        workers_explicit = workers is not None
         if workers is None:
             # Single worker in test/debug mode, multi-worker in production
-            if "unittest" in sys.modules or "pytest" in sys.modules or debug:
+            if ("unittest" in sys.modules or "pytest" in sys.modules or debug
+                    or env == "development"):
                 workers = 1
             else:
                 workers = os.cpu_count() or 1
+
+        if workers > 1:
+            workers = self._check_per_worker_state(
+                workers, workers_explicit,
+                allow_per_worker_state
+                or os.environ.get("CELLO_ALLOW_PER_WORKER_STATE") == "1",
+            )
 
         # Print startup banner (skip in test environments)
         if "unittest" not in sys.modules and "pytest" not in sys.modules:
@@ -1833,12 +2002,42 @@ class App:
 
         # Run Server
         if workers > 1:
-            self._run_multiprocess(host, port, workers, env)
+            self._run_multiprocess(host, port, workers, env, bool(debug), bool(logs))
         else:
             try:
                 self._app.run(host, port, None)
             except KeyboardInterrupt:
                 pass  # Handled by Rust ctrl_c
+
+    def _check_per_worker_state(self, workers: int, explicit: bool, allowed: bool) -> int:
+        """Workers are separate processes: in-memory sessions and rate limits
+        are per worker, so a login made on one worker is unknown to the others
+        and a limit of N becomes about N x workers. Refuse that unless the app
+        opted in; a defaulted worker count falls back to one worker."""
+        import warnings
+
+        state = set(self._app.per_process_state())
+        if "cache" in state:
+            warnings.warn(
+                f"response cache is per worker ({workers} workers): each worker "
+                "caches separately and invalidation reaches only one of them",
+                RuntimeWarning, stacklevel=3,
+            )
+        blocking = sorted(state & {"session", "rate_limit"})
+        if not blocking or allowed:
+            return workers
+        what = " and ".join("sessions" if b == "session" else "rate limiting" for b in blocking)
+        message = (
+            f"{what} keep state in process memory, but workers={workers} runs "
+            f"{workers} separate processes: sessions created on one worker are "
+            "missing on the others and rate limits apply per worker. Run one "
+            "worker, or pass allow_per_worker_state=True (or set "
+            "CELLO_ALLOW_PER_WORKER_STATE=1) to accept per-worker state."
+        )
+        if explicit:
+            raise RuntimeError(message)
+        warnings.warn(message + " Falling back to 1 worker.", RuntimeWarning, stacklevel=3)
+        return 1
 
     @staticmethod
     def _print_banner(host: str, port: int, workers: int, env: str):
@@ -1863,25 +2062,25 @@ class App:
 """
         print(banner)
 
-    def _run_multiprocess(self, host: str, port: int, workers: int, env: str):
+    def _run_multiprocess(self, host: str, port: int, workers: int, env: str,
+                          debug: bool = False, logs: bool = False):
         """Run server with multiple worker processes for maximum throughput.
 
         Cross-platform multi-process spawning:
-          - Unix/macOS: Uses os.fork() for zero-copy COW performance.
-            SO_REUSEPORT allows the kernel to distribute connections.
-          - Windows: Uses multiprocessing.Process (spawn-based).
-            SO_REUSEADDR allows port reuse between processes.
+          - Unix/macOS: ``os.fork()``; SO_REUSEPORT lets the kernel distribute
+            connections. Each child resets the database pool / Redis connection
+            it inherited, so no TCP session is shared with the parent.
+          - Windows: subprocess re-execution of the script (``CELLO_WORKER=1``).
 
         Architecture:
-            Parent process: runs as worker + supervises children
+            Parent process: supervisor only (does not serve)
             N child processes: each runs as an independent worker
-            Total: N+1 processes on the port
+            Total: exactly N serving processes
         """
-        import signal
         import sys
 
         if sys.platform == "win32":
-            self._run_multiprocess_spawn(host, port, workers)
+            self._run_multiprocess_spawn(host, port, workers, debug, logs)
         else:
             self._run_multiprocess_fork(host, port, workers)
 
@@ -1889,6 +2088,7 @@ class App:
         """Unix/macOS: fork-based multi-process (best performance)."""
         import os
         import signal
+        import sys
 
         print(f"    \033[32m➜\033[0m  \033[1mMode:\033[0m      SO_REUSEPORT (kernel load balancing)")
 
@@ -1897,41 +2097,52 @@ class App:
         for i in range(workers):
             pid = os.fork()
             if pid == 0:
-                # Child process: run server and exit
+                # Child process: own pools, then serve until told to stop.
+                code = 0
                 try:
+                    signal.signal(signal.SIGINT, signal.SIG_DFL)
+                    signal.signal(signal.SIGTERM, signal.SIG_DFL)
+                    self._app._reset_after_fork()
                     self._app.run(host, port, None)
                 except (KeyboardInterrupt, SystemExit):
                     pass
-                except Exception:
-                    pass
+                except Exception as exc:
+                    print(f"[cello] worker {os.getpid()} failed: {exc}", file=sys.stderr)
+                    code = 1
                 finally:
-                    os._exit(0)
+                    os._exit(code)
             else:
                 child_pids.append(pid)
 
-        def _cleanup(signum=None, frame=None):
+        stopping = False
+
+        def _stop(signum=None, frame=None):
+            nonlocal stopping
+            stopping = True
             for pid in child_pids:
                 try:
                     os.kill(pid, signal.SIGTERM)
                 except ProcessLookupError:
                     pass
 
-        signal.signal(signal.SIGINT, lambda s, f: (_cleanup(), os._exit(0)))
-        signal.signal(signal.SIGTERM, lambda s, f: (_cleanup(), os._exit(0)))
+        signal.signal(signal.SIGINT, _stop)
+        signal.signal(signal.SIGTERM, _stop)
 
-        try:
-            self._app.run(host, port, None)
-        except KeyboardInterrupt:
-            pass
-        finally:
-            _cleanup()
-            for pid in child_pids:
-                try:
-                    os.waitpid(pid, os.WNOHANG)
-                except ChildProcessError:
-                    pass
+        # Supervise: wait for every worker to exit.
+        remaining = set(child_pids)
+        while remaining:
+            try:
+                pid, _status = os.wait()
+            except ChildProcessError:
+                break
+            except InterruptedError:
+                continue
+            remaining.discard(pid)
+            if not stopping and remaining:
+                print(f"[cello] worker {pid} exited", file=sys.stderr)
 
-    def _run_multiprocess_spawn(self, host: str, port: int, workers: int):
+    def _run_multiprocess_spawn(self, host: str, port: int, workers: int,
+                                debug: bool = False, logs: bool = False):
         """Windows/cross-platform: subprocess-based multi-process.
 
         On Windows, multiprocessing uses 'spawn' (not fork), which requires all
@@ -1940,17 +2151,25 @@ class App:
         Instead, we spawn subprocesses that re-execute the user's script with
         CELLO_WORKER=1 env var set. This forces each subprocess into single-worker
         mode, ensuring all routes are properly registered in each worker process.
-        This is the same pattern used by Gunicorn/Uvicorn for Windows support.
+        The resolved host, port, debug and logging settings are passed down.
         """
         import subprocess
         import signal
         import os
+        import sys
 
         print(f"    \033[32m➜\033[0m  \033[1mMode:\033[0m      Multi-process (subprocess re-execution)")
 
         children: list[subprocess.Popen] = []
 
-        worker_env = {**os.environ, "CELLO_WORKER": "1"}
+        worker_env = {
+            **os.environ,
+            "CELLO_WORKER": "1",
+            "CELLO_HOST": str(host),
+            "CELLO_PORT": str(port),
+            "CELLO_EXPOSE_ERRORS": "1" if debug else "0",
+            "CELLO_LOGS": "1" if logs else "0",
+        }
 
         for i in range(workers):
             p = subprocess.Popen(
@@ -1975,8 +2194,15 @@ class App:
         except (OSError, ValueError):
             pass  # SIGTERM not supported on this platform
 
+        # Supervise only: the parent does not serve.
         try:
-            self._app.run(host, port, None)
+            for p in children:
+                while True:
+                    try:
+                        p.wait(timeout=1)
+                        break
+                    except subprocess.TimeoutExpired:
+                        continue
         except KeyboardInterrupt:
             pass
         finally:
@@ -1996,14 +2222,12 @@ class App:
         def get_mtimes():
             changes = False
             for root, dirs, files in os.walk(os.getcwd()):
-                if "__pycache__" in dirs:
-                    dirs.remove("__pycache__")
-                if ".git" in dirs:
-                    dirs.remove(".git")
-                if "target" in dirs:
-                    dirs.remove("target")
-                if ".venv" in dirs:
-                    dirs.remove(".venv")
+                # Prune in place: hidden dirs (.git, .venv, .tox, …), caches and
+                # build/dependency trees can hold tens of thousands of files.
+                dirs[:] = [
+                    d for d in dirs
+                    if not d.startswith(".") and d not in _RELOAD_SKIP_DIRS
+                ]
 
                 for file in files:
                     if file.endswith(".py"):
@@ -2026,6 +2250,13 @@ class App:
             if get_mtimes():
                 return
             time.sleep(1)
+
+
+# Directories the hot-reload watcher never descends into.
+_RELOAD_SKIP_DIRS = frozenset({
+    "__pycache__", "target", "node_modules", "venv", "env", "build", "dist",
+    "site-packages", "htmlcov",
+})
 
 
 class Depends:
@@ -2091,3 +2322,26 @@ def cache(ttl: int = None, tags: list = None):
                 return _set_cache_headers(response)
             return wrapper
     return decorator
+
+
+_GRAPHQL_PLAYGROUND = """<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>GraphQL Playground</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/graphql-playground-react@1.7.28/build/static/css/index.css">
+<script src="https://cdn.jsdelivr.net/npm/graphql-playground-react@1.7.28/build/static/js/middleware.js"></script>
+</head>
+<body>
+<div id="root"></div>
+<script>
+window.addEventListener("load", function () {
+  GraphQLPlayground.init(document.getElementById("root"), {
+    endpoint: __ENDPOINT__,
+    settings: {"request.credentials": "same-origin"}
+  });
+});
+</script>
+</body>
+</html>
+"""

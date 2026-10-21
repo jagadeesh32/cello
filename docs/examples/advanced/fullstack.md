@@ -121,7 +121,7 @@ def chat_handler(ws):
         if msg is None or msg.is_close():
             break
 
-        data = json.loads(msg.text)
+        data = json.loads(msg.content)
         chat_msg = {
             "type": "message",
             "user": data.get("user", "Anonymous"),

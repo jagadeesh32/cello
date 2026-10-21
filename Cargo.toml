@@ -1,6 +1,6 @@
 [package]
 name = "cello-framework"
-version = "1.4.0"
+version = "1.4.1"
 edition = "2021"
 description = "Ultra-fast Rust-powered Python async web framework"
 license = "MIT"
@@ -90,7 +90,7 @@ rustls-pemfile = "2"
 webpki-roots = "0.26"
 
 # Cancellation and utilities
-tokio-util = { version = "0.7", features = ["rt"] }
+tokio-util = { version = "0.7", features = ["rt", "io"] }
 
 # Session and security
 uuid = { version = "1", features = ["v4"] }
@@ -149,7 +149,9 @@ redis = { version = "0.25", features = [
 
 # GraphQL Support
 async-graphql = { version = "7", optional = true }
-async-graphql-value = { version = "7", optional = true }
+async-graphql-value = "7"
+# Parser for the built-in GraphQL endpoint (depth/complexity/operation checks).
+async-graphql-parser = "7"
 
 # gRPC Support
 tonic = { version = "0.11", optional = true }
@@ -164,7 +166,7 @@ default = []
 # `postgres`/`tokio-postgres` are always compiled now; kept as an empty alias so
 # existing `--features postgres` / `full` invocations keep working.
 postgres = []
-graphql = ["async-graphql", "async-graphql-value"]
+graphql = ["async-graphql"]
 grpc = ["tonic", "prost"]
 full = ["postgres", "graphql", "grpc"]
 
@@ -181,8 +183,9 @@ codegen-units = 1
 opt-level = 3
 strip = true
 panic = "abort"
-# PERF: Disable overflow checks in release for maximum speed
-overflow-checks = false
+# Overflow checks stay on: the parsers do length and timestamp arithmetic, and a
+# wrapped value there is a security bug. The cost is noise next to Python.
+overflow-checks = true
 
 [profile.bench]
 lto = "fat"

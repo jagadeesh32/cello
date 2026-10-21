@@ -277,7 +277,7 @@ Everything below ships in the box and runs on the Rust hot path:
                     break
                 for client in clients:
                     if client != ws:
-                        client.send_text(f"User: {msg.text}")
+                        client.send_text(f"User: {msg.content}")
         finally:
             clients.discard(ws)
     ```

@@ -42,7 +42,6 @@
 use std::any::Any;
 use std::future::Future;
 use std::panic::AssertUnwindSafe;
-use std::sync::OnceLock;
 
 use futures_util::FutureExt;
 use pyo3::prelude::*;
@@ -56,28 +55,42 @@ type Convert = Box<dyn FnOnce(Python<'_>) -> PyResult<PyObject> + Send>;
 
 // ── I/O runtime ──────────────────────────────────────────────────────────────
 
-static IO: OnceLock<Handle> = OnceLock::new();
+/// The `cello-io` runtime handle, tagged with the pid that started it. A
+/// forked worker inherits the parent's handle but not its thread (fork copies
+/// only the calling thread), so a handle from another pid is replaced instead of
+/// being used to spawn work nothing would ever drive.
+static IO: parking_lot::RwLock<Option<(u32, Handle)>> = parking_lot::RwLock::new(None);
 
-/// Handle to the `cello-io` runtime, started on first use. The thread is never
-/// joined; it holds no Python state, so process exit simply ends it.
-fn io_handle() -> PyResult<&'static Handle> {
-    if let Some(h) = IO.get() {
-        return Ok(h);
+/// Handle to the `cello-io` runtime, started on first use (per process). The
+/// thread is never joined; it holds no Python state, so process exit ends it.
+fn io_handle() -> PyResult<Handle> {
+    let pid = std::process::id();
+    if let Some((owner, h)) = IO.read().as_ref() {
+        if *owner == pid {
+            return Ok(h.clone());
+        }
+    }
+    let mut slot = IO.write();
+    if let Some((owner, h)) = slot.as_ref() {
+        if *owner == pid {
+            return Ok(h.clone());
+        }
     }
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(format!("cello-io runtime: {e}")))?;
     let handle = rt.handle().clone();
-    // Lost a (rare) initialisation race: discard ours, use the winner's.
-    if IO.set(handle).is_err() {
-        return Ok(IO.get().expect("set by the winning thread"));
-    }
     std::thread::Builder::new()
         .name("cello-io".into())
         .spawn(move || rt.block_on(std::future::pending::<()>()))
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(format!("cello-io thread: {e}")))?;
-    Ok(IO.get().expect("just set"))
+    // A stale (pre-fork) handle is leaked rather than dropped: dropping it from
+    // a process that does not own its runtime would be meaningless at best.
+    if let Some(stale) = slot.replace((pid, handle.clone())) {
+        std::mem::forget(stale);
+    }
+    Ok(handle)
 }
 
 // ── Python helpers ───────────────────────────────────────────────────────────
@@ -230,7 +243,8 @@ mod port {
     /// Live loops (keyed by object address) → their port. An entry is removed
     /// by the loop's finalizer before the address can be reused.
     fn ports() -> std::sync::MutexGuard<'static, HashMap<usize, Arc<Port>>> {
-        static PORTS: OnceLock<Mutex<HashMap<usize, Arc<Port>>>> = OnceLock::new();
+        static PORTS: std::sync::OnceLock<Mutex<HashMap<usize, Arc<Port>>>> =
+            std::sync::OnceLock::new();
         PORTS
             .get_or_init(|| Mutex::new(HashMap::new()))
             .lock()

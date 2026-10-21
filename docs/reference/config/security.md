@@ -46,26 +46,27 @@ Configure cookie-based session management.
 from cello import SessionConfig
 
 config = SessionConfig(
-    secret="session-secret-key",
     cookie_name="session_id",
     max_age=86400,
-    httponly=True,
-    secure=True,
-    same_site="Lax",
+    cookie_http_only=True,
+    cookie_secure=True,
+    cookie_same_site="Lax",
 )
 app.enable_session(config)
 ```
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `secret` | `str` | Required | Secret key for signing session cookies |
 | `cookie_name` | `str` | `"session_id"` | Name of the session cookie |
-| `max_age` | `int` | `86400` | Cookie lifetime in seconds (24 hours) |
-| `httponly` | `bool` | `True` | Prevent JavaScript access to the cookie |
-| `secure` | `bool` | `False` | Require HTTPS for the cookie |
-| `same_site` | `str` | `"Lax"` | SameSite attribute (`"Strict"`, `"Lax"`, `"None"`) |
-| `path` | `str` | `"/"` | Cookie path |
-| `domain` | `str` | `None` | Cookie domain |
+| `max_age` | `int` | `86400` | Session/cookie lifetime in seconds (24 hours, sliding) |
+| `cookie_http_only` | `bool` | `True` | Prevent JavaScript access to the cookie |
+| `cookie_secure` | `bool` | `True` | Require HTTPS for the cookie |
+| `cookie_same_site` | `str` | `"Lax"` | SameSite attribute (`"Strict"`, `"Lax"`, `"None"`) |
+| `cookie_path` | `str` | `"/"` | Cookie path |
+| `cookie_domain` | `str` | `None` | Cookie domain |
+
+The cookie carries only a random session id; data is stored server-side and
+read/written through `request.session`.
 
 ---
 
@@ -223,10 +224,7 @@ app.enable_security_headers(SecurityHeadersConfig(
 app.enable_rate_limit(RateLimitConfig.token_bucket(requests=100, window=60))
 
 # Sessions (optional, for web apps)
-app.enable_session(SessionConfig(
-    secret=os.environ["SESSION_SECRET"],
-    secure=True,
-))
+app.enable_session(SessionConfig(cookie_secure=True))
 ```
 
 ---

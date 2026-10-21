@@ -221,7 +221,7 @@ app.enable_telemetry(OpenTelemetryConfig(
 
 ```python
 # OpenAPI/Swagger UI
-app.enable_openapi(title="My API", version="1.4.0")
+app.enable_openapi(title="My API", version="1.4.1")
 # Adds: /docs (Swagger UI), /redoc (ReDoc), /openapi.json
 ```
 
@@ -313,7 +313,7 @@ from cello import LimitsConfig
 
 limits = LimitsConfig(
     max_body_size=10 * 1024 * 1024,    # 10 MB
-    max_header_size=8192,               # 8 KB
+    max_header_size=16 * 1024,          # 16 KB
 )
 
 app.enable_limits(limits)

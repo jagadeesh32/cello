@@ -74,7 +74,7 @@ def echo(request) -> Response:
 
 
 # OpenAPI last so it can introspect the routes above.
-app.enable_openapi(title="Cello Plugins Demo", version="1.4.0")
+app.enable_openapi(title="Cello Plugins Demo", version="1.4.1")
 
 
 # ── Auth recipes (global — uncomment ONE to lock the app down) ───────────────

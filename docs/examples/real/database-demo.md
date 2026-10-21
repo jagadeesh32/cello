@@ -27,7 +27,7 @@ Cello's data-layer helpers give you production-ready database and cache connecti
 ```python
 #!/usr/bin/env python3
 """
-Database & Redis Integration Demo for Cello v1.4.0.
+Database & Redis Integration Demo for Cello v1.4.1.
 Run with: python examples/database_demo.py
 Test:
     curl http://127.0.0.1:8000/users
@@ -58,7 +58,7 @@ next_id = 4
 
 @app.get("/")
 def home(request):
-    return {"message": "Cello v1.4.0 - Data Layer Demo",
+    return {"message": "Cello v1.4.1 - Data Layer Demo",
             "features": {"database": "Connection pooling", "redis": "Async Redis client", "transactions": "@transactional decorator"}}
 
 @app.get("/users")

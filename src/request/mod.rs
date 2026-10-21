@@ -13,7 +13,7 @@ use pyo3::prelude::*;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::json::{json_to_python, parse_json, python_to_json};
+use crate::json::{json_to_python, parse_json_bytes, python_to_json};
 use crate::multipart::parse_urlencoded;
 
 pub use multipart_streaming::{MultipartPart, StreamingMultipart};
@@ -66,6 +66,21 @@ pub struct Request {
     /// Python-level Database pool injected when app.enable_database() is configured.
     /// Wrapped in Arc so Clone stays GIL-free (atomic refcount only).
     pub database_client: Option<Arc<PyObject>>,
+
+    /// IP address of the TCP peer that sent this request (the accepted socket).
+    /// Stored as an address (formatted only on demand: this is the hot path).
+    pub remote_addr: Option<std::net::IpAddr>,
+
+    /// Resolved client IP: the socket peer, or — only when the peer is a configured
+    /// trusted proxy — the nearest untrusted hop in `X-Forwarded-For`.
+    pub client_addr: Option<std::net::IpAddr>,
+
+    /// Live session (set by the session middleware), shared with the `after` hook.
+    pub session: Option<crate::middleware::session::SessionHandle>,
+
+    /// Whether the TCP peer is a configured trusted proxy. `X-Forwarded-*` headers
+    /// are honoured only when this is true; otherwise any client could forge them.
+    pub from_trusted_proxy: bool,
 }
 
 /// Internal cache for lazy parsing results.
@@ -106,6 +121,10 @@ impl Request {
             lazy_cache: LazyCache::default(),
             redis_client: None,
             database_client: None,
+            remote_addr: None,
+            client_addr: None,
+            from_trusted_proxy: false,
+            session: None,
         }
     }
 
@@ -124,7 +143,9 @@ impl Request {
                 .map_err(pyo3::exceptions::PyValueError::new_err);
         }
 
-        let result = String::from_utf8(self.body.clone()).map_err(|e| e.to_string());
+        let result = std::str::from_utf8(&self.body)
+            .map(str::to_owned)
+            .map_err(|e| e.to_string());
         let return_value = result.clone();
         *cache = Some(result);
 
@@ -145,15 +166,16 @@ impl Request {
                 .clone()
                 .map_err(pyo3::exceptions::PyValueError::new_err)?
         } else {
-            let text = String::from_utf8(self.body.clone())
-                .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
-
-            let result = parse_json(&text);
-            let value = result
-                .clone()
-                .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.clone()))?;
+            // One copy (simd-json parses in place and validates UTF-8 itself);
+            // previously the body was cloned into a String and copied again.
+            let mut buf = self.body.clone();
+            let result = parse_json_bytes(&mut buf);
+            let out = match &result {
+                Ok(value) => json_to_python(py, value),
+                Err(e) => Err(pyo3::exceptions::PyValueError::new_err(e.clone())),
+            };
             *cache = Some(result);
-            value
+            return out;
         };
 
         json_to_python(py, &value)
@@ -288,16 +310,31 @@ impl Request {
         }
     }
 
-    /// Get the client IP address (from X-Forwarded-For or X-Real-IP).
+    /// Get the client IP address.
+    ///
+    /// This is the TCP peer address. `X-Forwarded-For` / `X-Real-IP` are only
+    /// consulted when the peer is a trusted proxy (`App.set_trusted_proxies`);
+    /// otherwise a client could claim any address it likes.
     pub fn client_ip(&self) -> Option<String> {
-        // Check X-Forwarded-For first (get first IP in chain)
-        if let Some(xff) = self.get_header("x-forwarded-for", None) {
-            if let Some(ip) = xff.split(',').next() {
-                return Some(ip.trim().to_string());
-            }
+        if let Some(ip) = self.client_addr {
+            return Some(ip.to_string());
         }
-        // Fall back to X-Real-IP
-        self.get_header("x-real-ip", None)
+        // Requests built by hand (tests, `Request(...)`) have no socket peer.
+        if self.remote_addr.is_none() {
+            if let Some(xff) = self.get_header("x-forwarded-for", None) {
+                if let Some(ip) = xff.split(',').next() {
+                    return Some(ip.trim().to_string());
+                }
+            }
+            return self.get_header("x-real-ip", None);
+        }
+        self.remote_addr.map(|ip| ip.to_string())
+    }
+
+    /// IP address of the TCP peer (the proxy, when behind one).
+    #[getter(remote_addr)]
+    pub fn py_remote_addr(&self) -> Option<String> {
+        self.remote_addr.map(|ip| ip.to_string())
     }
 
     /// Get the User-Agent header.
@@ -321,6 +358,9 @@ impl Request {
 
     /// Check if the request is secure (HTTPS).
     pub fn is_secure(&self) -> bool {
+        if !self.forwarded_headers_trusted() {
+            return false;
+        }
         // Check X-Forwarded-Proto header
         if let Some(proto) = self.get_header("x-forwarded-proto", None) {
             return proto.to_lowercase() == "https";
@@ -333,8 +373,12 @@ impl Request {
 
     /// Get the request host.
     pub fn host(&self) -> Option<String> {
-        self.get_header("x-forwarded-host", None)
-            .or_else(|| self.get_header("host", None))
+        if self.forwarded_headers_trusted() {
+            if let Some(h) = self.get_header("x-forwarded-host", None) {
+                return Some(h);
+            }
+        }
+        self.get_header("host", None)
     }
 
     /// Get the request ID from context.
@@ -402,6 +446,20 @@ impl Request {
             })
     }
 
+    /// The request's session (`app.enable_session()`), a dict-like object.
+    /// Changes are saved at the end of the request.
+    #[getter]
+    pub fn session(&self) -> PyResult<crate::middleware::session::PySession> {
+        self.session
+            .as_ref()
+            .map(|h| crate::middleware::session::PySession { handle: h.clone() })
+            .ok_or_else(|| {
+                pyo3::exceptions::PyAttributeError::new_err(
+                    "Sessions not enabled. Call app.enable_session() before using request.session.",
+                )
+            })
+    }
+
     /// Alias for `database` (asyncpg users reach for `request.db`).
     #[getter]
     pub fn db(&self, py: Python<'_>) -> PyResult<PyObject> {
@@ -415,6 +473,13 @@ impl Request {
 }
 
 impl Request {
+    /// `X-Forwarded-*` headers are trusted only from a configured proxy, or on a
+    /// request that never came from a socket (constructed directly in tests).
+    #[inline]
+    fn forwarded_headers_trusted(&self) -> bool {
+        self.from_trusted_proxy || self.remote_addr.is_none()
+    }
+
     /// Create a new request (Rust API).
     pub fn new(method: &str, path: &str) -> Self {
         Request {
@@ -429,6 +494,10 @@ impl Request {
             lazy_cache: LazyCache::default(),
             redis_client: None,
             database_client: None,
+            remote_addr: None,
+            client_addr: None,
+            from_trusted_proxy: false,
+            session: None,
         }
     }
 
@@ -456,6 +525,10 @@ impl Request {
             lazy_cache: LazyCache::default(),
             redis_client: None,
             database_client: None,
+            remote_addr: None,
+            client_addr: None,
+            from_trusted_proxy: false,
+            session: None,
         }
     }
 
@@ -476,6 +549,10 @@ impl Request {
             lazy_cache: LazyCache::default(),
             redis_client: self.redis_client.clone(),
             database_client: self.database_client.clone(),
+            remote_addr: self.remote_addr,
+            client_addr: self.client_addr,
+            from_trusted_proxy: self.from_trusted_proxy,
+            session: self.session.clone(),
         }
     }
 

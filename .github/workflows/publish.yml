@@ -1,5 +1,6 @@
-# Publish to PyPI when a new release is created
-# Builds wheels for all platforms and uploads to PyPI
+# main    -> every push publishes a unique dev build (X.Y.Z.devN) to Test PyPI
+# release -> push / published GitHub Release publishes the final build to PyPI
+# Builds wheels for all platforms
 # Platforms: Linux (x86_64, aarch64), macOS (aarch64), Windows (x86_64)
 
 name: Publish to PyPI
@@ -7,7 +8,11 @@ name: Publish to PyPI
 on:
   push:
     branches:
+      - main
       - release
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
   release:
     types: [published]
   workflow_dispatch:
@@ -30,6 +35,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Stamp dev version (main builds only)
+        if: github.ref == 'refs/heads/main'
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import os, re
+          n = os.environ["GITHUB_RUN_NUMBER"]
+          t = open("pyproject.toml").read()
+          t = re.sub(r'(?m)^version = "(\d+\.\d+\.\d+)"', lambda m: f'version = "{m.group(1)}.dev{n}"', t, count=1)
+          open("pyproject.toml", "w").write(t)
+          PY
+          grep -n '^version' pyproject.toml
+
       - name: Build sdist
         uses: PyO3/maturin-action@v1
         with:
@@ -50,6 +68,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Stamp dev version (main builds only)
+        if: github.ref == 'refs/heads/main'
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import os, re
+          n = os.environ["GITHUB_RUN_NUMBER"]
+          t = open("pyproject.toml").read()
+          t = re.sub(r'(?m)^version = "(\d+\.\d+\.\d+)"', lambda m: f'version = "{m.group(1)}.dev{n}"', t, count=1)
+          open("pyproject.toml", "w").write(t)
+          PY
+          grep -n '^version' pyproject.toml
 
       - name: Build wheels (manylinux)
         uses: PyO3/maturin-action@v1
@@ -72,6 +103,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Stamp dev version (main builds only)
+        if: github.ref == 'refs/heads/main'
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import os, re
+          n = os.environ["GITHUB_RUN_NUMBER"]
+          t = open("pyproject.toml").read()
+          t = re.sub(r'(?m)^version = "(\d+\.\d+\.\d+)"', lambda m: f'version = "{m.group(1)}.dev{n}"', t, count=1)
+          open("pyproject.toml", "w").write(t)
+          PY
+          grep -n '^version' pyproject.toml
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -100,6 +144,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Stamp dev version (main builds only)
+        if: github.ref == 'refs/heads/main'
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import os, re
+          n = os.environ["GITHUB_RUN_NUMBER"]
+          t = open("pyproject.toml").read()
+          t = re.sub(r'(?m)^version = "(\d+\.\d+\.\d+)"', lambda m: f'version = "{m.group(1)}.dev{n}"', t, count=1)
+          open("pyproject.toml", "w").write(t)
+          PY
+          grep -n '^version' pyproject.toml
+
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
@@ -120,6 +177,19 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Stamp dev version (main builds only)
+        if: github.ref == 'refs/heads/main'
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import os, re
+          n = os.environ["GITHUB_RUN_NUMBER"]
+          t = open("pyproject.toml").read()
+          t = re.sub(r'(?m)^version = "(\d+\.\d+\.\d+)"', lambda m: f'version = "{m.group(1)}.dev{n}"', t, count=1)
+          open("pyproject.toml", "w").write(t)
+          PY
+          grep -n '^version' pyproject.toml
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -168,13 +238,16 @@ jobs:
           skip-existing: true
 
   # ============================================================================
-  # Publish to Test PyPI (manual trigger)
+  # Publish to Test PyPI (push to main, or manual trigger)
   # ============================================================================
   publish-test:
     name: Publish to Test PyPI
     needs: [build-sdist, build-linux-x86, build-linux-aarch64, build-macos, build-windows]
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.publish_to_test_pypi == 'true'
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/project/cello-framework/
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && github.event.inputs.publish_to_test_pypi == 'true')
     permissions:
       id-token: write
 
@@ -190,3 +263,4 @@ jobs:
         with:
           repository-url: https://test.pypi.org/legacy/
           packages-dir: dist/
+          skip-existing: true

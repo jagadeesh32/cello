@@ -9,11 +9,10 @@
 
 use std::collections::HashMap;
 use std::fs;
-use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use super::{Middleware, MiddlewareAction, MiddlewareResult};
+use super::{accepts_encoding, path_matches_skip, Middleware, MiddlewareAction, MiddlewareResult};
 use crate::request::Request;
 use crate::response::Response;
 
@@ -80,10 +79,10 @@ fn parse_duration_str(s: &str) -> Duration {
     let num: u64 = num_str.parse().unwrap_or(0);
 
     match unit {
-        "y" => Duration::from_secs(num * 365 * 24 * 60 * 60),
-        "d" => Duration::from_secs(num * 24 * 60 * 60),
-        "h" => Duration::from_secs(num * 60 * 60),
-        "m" => Duration::from_secs(num * 60),
+        "y" => Duration::from_secs(num.saturating_mul(365 * 24 * 60 * 60)),
+        "d" => Duration::from_secs(num.saturating_mul(24 * 60 * 60)),
+        "h" => Duration::from_secs(num.saturating_mul(60 * 60)),
+        "m" => Duration::from_secs(num.saturating_mul(60)),
         "s" => Duration::from_secs(num),
         _ => Duration::from_secs(s.parse().unwrap_or(0)),
     }
@@ -167,8 +166,12 @@ pub struct StaticFilesConfig {
     pub precompressed: bool,
     /// Custom headers
     pub custom_headers: HashMap<String, String>,
-    /// Hidden file patterns to block
+    /// Hidden path-segment prefixes: any segment of the requested path that
+    /// starts with one of these is refused (default `"."` = dotfiles such as
+    /// `.env`, `.git/`).
     pub hidden_patterns: Vec<String>,
+    /// Largest file served, in bytes; bigger files are not served.
+    pub max_file_size: u64,
 }
 
 impl StaticFilesConfig {
@@ -184,7 +187,8 @@ impl StaticFilesConfig {
             index_file: Some("index.html".to_string()),
             precompressed: true,
             custom_headers: HashMap::new(),
-            hidden_patterns: vec![".".to_string(), "..".to_string()],
+            hidden_patterns: vec![".".to_string()],
+            max_file_size: 256 * 1024 * 1024,
         }
     }
 
@@ -248,6 +252,12 @@ impl StaticFilesConfig {
         self.hidden_patterns.push(pattern.to_string());
         self
     }
+
+    /// Set the largest file size served (bytes).
+    pub fn max_file_size(mut self, bytes: u64) -> Self {
+        self.max_file_size = bytes;
+        self
+    }
 }
 
 /// Static files middleware.
@@ -268,10 +278,15 @@ impl StaticFilesMiddleware {
         Self { config }
     }
 
+    /// Whether the request path is under the mount, on a `/` boundary: a
+    /// mount at `/static` serves `/static/x` but not `/static-other/x`.
+    fn under_mount(&self, request_path: &str) -> bool {
+        self.config.url_path.is_empty() || path_matches_skip(request_path, &self.config.url_path)
+    }
+
     /// Resolve file path from request path.
     fn resolve_path(&self, request_path: &str) -> Option<PathBuf> {
-        // Check if request matches URL path prefix
-        if !request_path.starts_with(&self.config.url_path) {
+        if !self.under_mount(request_path) {
             return None;
         }
 
@@ -290,11 +305,16 @@ impl StaticFilesMiddleware {
         let decoded = urlencoding::decode(relative).ok()?;
         let decoded = decoded.as_ref();
 
-        // Check for hidden patterns (on decoded path)
-        for pattern in &self.config.hidden_patterns {
-            if decoded.contains(pattern.as_str()) || decoded.starts_with(pattern.as_str()) {
-                return None;
-            }
+        // Hidden segments (on the decoded path): `a/.env` and `.git/config`
+        // are refused, `app.js` is not.
+        let hidden = decoded.split('/').any(|segment| {
+            self.config
+                .hidden_patterns
+                .iter()
+                .any(|p| !p.is_empty() && segment.starts_with(p.as_str()))
+        });
+        if hidden {
+            return None;
         }
 
         // Prevent directory traversal: reject any path component that is ".."
@@ -317,35 +337,34 @@ impl StaticFilesMiddleware {
         // Canonicalize to prevent traversal via symlinks or other tricks.
         // The security invariant is: canonical(requested) must be within canonical(root).
         let canonical = path.canonicalize().ok()?;
-        let root_canonical = self.config.root_dir.canonicalize().ok()?;
-
-        // Verify path is within root.
-        // On Windows, canonicalize() may return UNC paths (\\?\C:\...) for one path
-        // but not the other, causing starts_with() to fail even for valid paths.
-        // We normalize both to their string forms, stripping the UNC prefix if present.
-        #[cfg(windows)]
-        {
-            let canonical_str = canonical.to_string_lossy();
-            let root_str = root_canonical.to_string_lossy();
-
-            // Strip the \\?\ UNC prefix for consistent comparison
-            let norm_canonical = canonical_str
-                .strip_prefix(r"\\?\")
-                .unwrap_or(&canonical_str);
-            let norm_root = root_str.strip_prefix(r"\\?\").unwrap_or(&root_str);
-
-            if !norm_canonical.starts_with(norm_root) {
-                return None;
-            }
-        }
-        #[cfg(not(windows))]
-        {
-            if !canonical.starts_with(&root_canonical) {
-                return None;
-            }
+        if !self.within_root(&canonical) {
+            return None;
         }
 
         Some(canonical)
+    }
+
+    /// Whether an already-canonical path lies inside the canonical root,
+    /// compared component by component.
+    fn within_root(&self, canonical: &Path) -> bool {
+        let Ok(root_canonical) = self.config.root_dir.canonicalize() else {
+            return false;
+        };
+        // On Windows, canonicalize() may return verbatim paths (\\?\C:\...) for
+        // one path but not the other; strip that prefix, then compare as paths
+        // (component-wise) so `C:\site\static-evil` is not inside `C:\site\static`.
+        #[cfg(windows)]
+        {
+            let strip = |p: &Path| -> PathBuf {
+                let s = p.to_string_lossy();
+                PathBuf::from(s.strip_prefix(r"\\?\").unwrap_or(&s).to_string())
+            };
+            strip(canonical).starts_with(strip(&root_canonical))
+        }
+        #[cfg(not(windows))]
+        {
+            canonical.starts_with(&root_canonical)
+        }
     }
 
     /// Get cache control for file.
@@ -370,7 +389,9 @@ impl StaticFilesMiddleware {
         format!("\"{modified:x}-{size:x}\"")
     }
 
-    /// Check if precompressed file exists.
+    /// Find a precompressed sibling (`x.js.br`, `x.js.gz`) the client accepts.
+    /// The sibling is canonicalized and re-checked against the root: a symlink
+    /// planted next to a real asset must not be served from outside it.
     fn find_precompressed(
         &self,
         path: &Path,
@@ -379,29 +400,19 @@ impl StaticFilesMiddleware {
         if !self.config.precompressed {
             return None;
         }
-
-        // Check for Brotli
-        if accept_encoding.contains("br") {
-            let br_path = path.with_extension(format!(
-                "{}.br",
-                path.extension().and_then(|e| e.to_str()).unwrap_or("")
-            ));
-            if br_path.exists() {
-                return Some((br_path, "br"));
+        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+        for (coding, suffix) in [("br", "br"), ("gzip", "gz")] {
+            if !accepts_encoding(accept_encoding, coding) {
+                continue;
+            }
+            let candidate = path.with_extension(format!("{ext}.{suffix}"));
+            let Ok(canonical) = candidate.canonicalize() else {
+                continue;
+            };
+            if self.within_root(&canonical) && canonical.is_file() {
+                return Some((canonical, coding));
             }
         }
-
-        // Check for Gzip
-        if accept_encoding.contains("gzip") {
-            let gz_path = path.with_extension(format!(
-                "{}.gz",
-                path.extension().and_then(|e| e.to_str()).unwrap_or("")
-            ));
-            if gz_path.exists() {
-                return Some((gz_path, "gzip"));
-            }
-        }
-
         None
     }
 
@@ -412,9 +423,13 @@ impl StaticFilesMiddleware {
         if metadata.is_dir() {
             // Try index file
             if let Some(ref index) = self.config.index_file {
+                // The index name is configuration, but it is joined onto a
+                // request path: re-check the result like any other path.
                 let index_path = path.join(index);
-                if index_path.exists() {
-                    return self.serve_file(&index_path, request);
+                if let Ok(canonical) = index_path.canonicalize() {
+                    if self.within_root(&canonical) && canonical.is_file() {
+                        return self.serve_file(&canonical, request);
+                    }
                 }
             }
 
@@ -462,10 +477,13 @@ impl StaticFilesMiddleware {
             }
         }
 
-        // Read file
-        let mut file = fs::File::open(&file_path).ok()?;
-        let mut body = Vec::new();
-        file.read_to_end(&mut body).ok()?;
+        // The file is not read here: this hook runs on the server thread, and a
+        // large or cold file would stall every connection. The response carries
+        // the path and the server reads it with `tokio::fs` (blocking pool).
+        let served_len = fs::metadata(&file_path).ok()?.len();
+        if served_len > self.config.max_file_size {
+            return None;
+        }
 
         // Get MIME type
         let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
@@ -474,7 +492,14 @@ impl StaticFilesMiddleware {
         // Build response
         let mut response = Response::new(200);
         response.set_header("Content-Type", content_type);
-        response.set_header("Content-Length", &body.len().to_string());
+        if ext.eq_ignore_ascii_case("svg") {
+            // An SVG opened directly is a document that can run script; served
+            // as a static asset it never needs to.
+            response.set_header(
+                "Content-Security-Policy",
+                "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+            );
+        }
         response.set_header(
             "Cache-Control",
             &self.get_cache_control(path).to_header_value(),
@@ -493,7 +518,9 @@ impl StaticFilesMiddleware {
         // Add Content-Encoding if precompressed
         if let Some(enc) = encoding {
             response.set_header("Content-Encoding", enc);
-            response.set_header("Vary", "Accept-Encoding");
+        }
+        if self.config.precompressed {
+            super::add_vary(&mut response, "Accept-Encoding");
         }
 
         // Add custom headers
@@ -501,7 +528,11 @@ impl StaticFilesMiddleware {
             response.set_header(name, value);
         }
 
-        response.set_body(body);
+        if request.method == "HEAD" {
+            response.set_header("Content-Length", &served_len.to_string());
+        } else {
+            response.defer_file_body(file_path.to_string_lossy().into_owned());
+        }
         Some(response)
     }
 
@@ -528,9 +559,13 @@ impl StaticFilesMiddleware {
             let is_dir = entry.file_type().map(|t| t.is_dir()).unwrap_or(false);
             let class = if is_dir { "dir" } else { "file" };
             let suffix = if is_dir { "/" } else { "" };
+            // File names are attacker-influenced (uploads): escape for both the
+            // URL and the HTML text.
+            let href = urlencoding::encode(&name);
+            let text = html_escape(&name);
 
             html.push_str(&format!(
-                "<li><a href=\"{name}{suffix}\" class=\"{class}\">{name}{suffix}</a></li>"
+                "<li><a href=\"{href}{suffix}\" class=\"{class}\">{text}{suffix}</a></li>"
             ));
         }
 
@@ -551,7 +586,7 @@ impl Middleware for StaticFilesMiddleware {
         }
 
         // Check if path matches
-        if !request.path.starts_with(&self.config.url_path) {
+        if !self.under_mount(&request.path) {
             return Ok(MiddlewareAction::Continue);
         }
 
@@ -574,13 +609,27 @@ impl Middleware for StaticFilesMiddleware {
     }
 }
 
-/// Format SystemTime as HTTP date.
+/// Format SystemTime as an HTTP date (RFC 9110 IMF-fixdate).
 fn format_http_date(time: SystemTime) -> String {
-    let duration = time.duration_since(UNIX_EPOCH).unwrap_or_default();
-    let secs = duration.as_secs();
-    // Simple RFC 7231 date format
-    // In production, use proper HTTP date formatting
-    format!("{secs}")
+    chrono::DateTime::<chrono::Utc>::from(time)
+        .format("%a, %d %b %Y %H:%M:%S GMT")
+        .to_string()
+}
+
+/// Minimal HTML text escaping.
+fn html_escape(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for c in s.chars() {
+        match c {
+            '&' => out.push_str("&amp;"),
+            '<' => out.push_str("&lt;"),
+            '>' => out.push_str("&gt;"),
+            '"' => out.push_str("&quot;"),
+            '\'' => out.push_str("&#39;"),
+            c => out.push(c),
+        }
+    }
+    out
 }
 
 #[cfg(test)]
@@ -617,6 +666,61 @@ mod tests {
         assert_eq!(
             mime_type_for_extension("unknown"),
             "application/octet-stream"
+        );
+    }
+
+    #[test]
+    fn test_resolve_path_rules() {
+        let dir = std::env::temp_dir().join(format!("cello-static-{}", std::process::id()));
+        let _ = fs::create_dir_all(dir.join("css"));
+        fs::write(dir.join("app.js"), "x").unwrap();
+        fs::write(dir.join("css/site.css"), "x").unwrap();
+        fs::write(dir.join(".env"), "SECRET=1").unwrap();
+        let mw = StaticFilesMiddleware::new("/static", dir.to_str().unwrap());
+
+        // Dotted names are ordinary files.
+        assert!(mw.resolve_path("/static/app.js").is_some());
+        assert!(mw.resolve_path("/static/css/site.css").is_some());
+        // Dotfiles and traversal are refused.
+        assert!(mw.resolve_path("/static/.env").is_none());
+        assert!(mw.resolve_path("/static/%2eenv").is_none());
+        assert!(mw.resolve_path("/static/../etc/passwd").is_none());
+        // The mount needs a `/` boundary.
+        assert!(mw.resolve_path("/static-other/app.js").is_none());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn index_name_cannot_leave_the_root() {
+        let base = std::env::temp_dir().join(format!("cello-static-idx-{}", std::process::id()));
+        let root = base.join("public");
+        let _ = fs::create_dir_all(root.join("docs"));
+        fs::write(base.join("secret.txt"), "SECRET").unwrap();
+        fs::write(root.join("docs/index.html"), "ok").unwrap();
+        let request = Request::default();
+
+        let escape = StaticFilesMiddleware::with_config(
+            StaticFilesConfig::new("/static", root.to_str().unwrap()).index("../../secret.txt"),
+        );
+        assert!(escape.serve_file(&root.join("docs"), &request).is_none());
+
+        let normal = StaticFilesMiddleware::with_config(
+            StaticFilesConfig::new("/static", root.to_str().unwrap()).index("index.html"),
+        );
+        let response = normal.serve_file(&root.join("docs"), &request).unwrap();
+        assert_eq!(response.status, 200);
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn test_html_escape_and_http_date() {
+        assert_eq!(
+            html_escape("<a href=\"x\">&'"),
+            "&lt;a href=&quot;x&quot;&gt;&amp;&#39;"
+        );
+        assert_eq!(
+            format_http_date(UNIX_EPOCH),
+            "Thu, 01 Jan 1970 00:00:00 GMT"
         );
     }
 

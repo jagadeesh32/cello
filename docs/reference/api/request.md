@@ -117,7 +117,9 @@ def handler(request):
 
 ### `request.session`
 
-Session data (if sessions enabled).
+Live session (`app.enable_session()`), a dict-like object saved at the end of
+the request: `get`, `set`, `[]`, `del`, `pop`, `keys`, `clear`, `regenerate()`,
+`destroy()`, `is_new`. See [Sessions](../../features/security/sessions.md).
 
 ```python
 @app.get("/profile")
@@ -130,18 +132,20 @@ def handler(request):
 
 ---
 
-### `request.client_ip`
+### `request.client_ip()`
 
-Client IP address.
+Client IP address: the TCP peer, or — only when the peer is listed in
+`app.set_trusted_proxies(...)` — the right-most `X-Forwarded-For` hop that is not
+itself a trusted proxy. Forwarding headers from other peers are ignored.
+`request.remote_addr` is always the socket peer.
 
 ```python
 @app.get("/")
 def handler(request):
-    ip = request.client_ip
-    return {"ip": ip}
+    return {"ip": request.client_ip(), "peer": request.remote_addr}
 ```
 
-**Type:** `str`
+**Type:** `str | None`
 
 ---
 

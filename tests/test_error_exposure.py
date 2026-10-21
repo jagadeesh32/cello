@@ -40,7 +40,10 @@ _APP = textwrap.dedent(
 
     if mode == "production":
         app.run(host="127.0.0.1", port=port, env="production", workers=1)
+    elif mode == "development":
+        app.run(host="127.0.0.1", port=port, env="development", workers=1)
     else:
+        # Nothing chosen and stdout is a pipe (no TTY): must fail safe.
         app.run(host="127.0.0.1", port=port, workers=1)
     """
 )
@@ -121,3 +124,18 @@ def test_development_500_describes_the_error(tmp_path, path):
 
     assert r.status_code == 500
     assert "secret-detail" in r.text
+
+
+@pytest.mark.parametrize("path", ["/boom", "/aboom"])
+def test_implicit_default_without_tty_hides_details(tmp_path, path):
+    """No env/debug given and no terminal (container, systemd, CI): the 500 must
+    not carry the exception text."""
+    proc, base = _serve(tmp_path, "implicit")
+    try:
+        r = requests.get(base + path, timeout=10)
+    finally:
+        log = _stop(proc)
+
+    assert r.status_code == 500
+    assert "secret-detail" not in r.text
+    assert "secret-detail" in log

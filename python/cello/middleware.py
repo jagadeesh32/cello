@@ -97,9 +97,19 @@ class CsrfConfig:
 
     Pass to ``app.use()`` (or ``app.enable_csrf()``) to enable CSRF middleware.
 
-    The double-submit cookie pattern is used: the server sets a ``_csrf`` cookie
-    (readable by JavaScript) and the client must echo the value in the
-    ``X-CSRF-Token`` request header on state-changing requests.
+    The server sets a ``__Host-csrf`` cookie (readable by JavaScript).
+    State-changing requests must echo the token in the ``X-CSRF-Token`` header
+    or in a ``_csrf`` form field (urlencoded or multipart body; the query string
+    is not accepted).
+
+    The ``__Host-`` prefix makes the browser accept the cookie only from this
+    exact host over HTTPS (``Secure``, ``Path=/``, no ``Domain``), so a sibling
+    subdomain cannot plant a token. With ``cookie_secure=False`` or a path other
+    than ``/`` the prefix is dropped (the cookie is then ``csrf``).
+
+    When sessions are enabled, the token is stored in the session as soon as a
+    session exists (including the request that creates it, e.g. login), and
+    from then on the submitted token must match the session's copy.
 
     Example::
 
@@ -110,14 +120,14 @@ class CsrfConfig:
 
     def __init__(
         self,
-        cookie_name: str = "_csrf",
+        cookie_name: str = "__Host-csrf",
         header_name: str = "X-CSRF-Token",
         safe_methods: Optional[List[str]] = None,
         allowed_origins: Optional[List[str]] = None,
     ) -> None:
         self.cookie_name = cookie_name
         self.header_name = header_name
-        self.safe_methods = safe_methods or ["GET", "HEAD", "OPTIONS", "TRACE"]
+        self.safe_methods = safe_methods or ["GET", "HEAD", "OPTIONS"]
         # Explicit full-origin allow-list for cross-origin CSRF validation. When
         # empty, requests are validated as same-origin against the Host header.
         self.allowed_origins = allowed_origins or []

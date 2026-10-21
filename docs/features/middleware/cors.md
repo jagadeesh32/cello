@@ -61,7 +61,7 @@ Default behavior:
 | Methods | `GET, POST, PUT, DELETE, PATCH, OPTIONS, HEAD` |
 | Headers | `Content-Type, Authorization, Accept, Origin, X-Requested-With` |
 | Credentials | `false` |
-| Max Age | `86400` seconds (24 hours) |
+| Max Age | `600` seconds (10 minutes) |
 
 ### Restricted Origins
 
@@ -75,7 +75,7 @@ app.enable_cors(origins=[
 ```
 
 !!! warning "Wildcard and Credentials"
-    When `origins` is set to `["*"]`, browsers will not send cookies or authorization headers. If your API requires credentials, you must list specific origins.
+    When `origins` is set to `["*"]`, browsers will not send cookies or authorization headers. If your API requires credentials, you must list specific origins. Since 1.4.1 Cello never grants credentials to a wildcard: with "any origin" it answers `Access-Control-Allow-Origin: *` and omits `Access-Control-Allow-Credentials`, instead of reflecting the caller's `Origin` (which would let any site make authenticated calls). A reflected origin always carries `Vary: Origin`, merged with any existing `Vary` value.
 
 ---
 
@@ -98,7 +98,7 @@ HTTP/1.1 200 OK
 Access-Control-Allow-Origin: https://example.com
 Access-Control-Allow-Methods: GET, POST, PUT, DELETE, PATCH, OPTIONS, HEAD
 Access-Control-Allow-Headers: Content-Type, Authorization
-Access-Control-Max-Age: 86400
+Access-Control-Max-Age: 600
 ```
 
 ---

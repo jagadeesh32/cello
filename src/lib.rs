@@ -100,8 +100,19 @@ pub struct Cello {
     read_header_timeout_secs: u64,
     /// Timeout (seconds, 0 = disabled) for a single handler to produce a response.
     handler_timeout_secs: u64,
+    /// Close keep-alive connections idle this long (seconds, 0 = disabled).
+    idle_timeout_secs: u64,
+    /// Maximum request head size in bytes (0 = hyper default).
+    max_header_size: usize,
+    /// Maximum concurrent connections (0 = unlimited).
+    max_connections: usize,
+    /// Requests per connection before it is closed (0 = unlimited).
+    max_requests_per_connection: usize,
     /// Maximum number of blocking threads available for offloaded sync handlers.
     blocking_threads: usize,
+    /// Proxies whose forwarding headers this app trusts (shared with the
+    /// running server, which reads it per connection).
+    trusted_proxies: Arc<parking_lot::RwLock<Arc<server::proxy::TrustedProxies>>>,
     /// Native Postgres pool built by `enable_database()`, exposed as `app.database`
     /// and injected into each request as `request.database`.
     database_client: Option<Py<db::PyDatabase>>,
@@ -109,6 +120,11 @@ pub struct Cello {
     /// and injected into each request as `request.redis`.
     redis_client: Option<Py<db::PyRedis>>,
 }
+
+/// Default request body cap (10 MiB), shared with `LimitsConfig()`.
+const DEFAULT_MAX_BODY_SIZE: usize = 10 * 1024 * 1024;
+/// Default request head cap (16 KiB), shared with `LimitsConfig()`.
+const DEFAULT_MAX_HEADER_SIZE: usize = 16 * 1024;
 
 #[pymethods]
 impl Cello {
@@ -126,17 +142,29 @@ impl Cello {
             cache_store: Arc::new(parking_lot::RwLock::new(None)),
             startup_handlers: Vec::new(),
             shutdown_handlers: Vec::new(),
-            // Generous 100 MB default cap: prevents OOM DoS out of the box while
-            // accommodating typical uploads. Override via `set_limits()`.
-            max_body_size: 100 * 1024 * 1024,
-            // Timeouts opt-in by default so long-lived/streaming handlers are not
-            // broken silently. Enable via `set_timeouts()`.
-            read_body_timeout_secs: 0,
-            read_header_timeout_secs: 0,
-            handler_timeout_secs: 0,
+            // The defaults are `LimitsConfig()` and the body/handler values
+            // of `TimeoutConfig()`, so an app that never calls
+            // `set_limits()` / `set_timeouts()` is already bounded. Raise or
+            // disable (0) any of them explicitly.
+            max_body_size: DEFAULT_MAX_BODY_SIZE,
+            read_body_timeout_secs: 30,
+            // Slowloris guard; also bounds how long an idle keep-alive
+            // connection waits for its next request.
+            read_header_timeout_secs: 30,
+            handler_timeout_secs: 30,
+            // Off: the header-read timeout above already closes a keep-alive
+            // connection that sends no next request within 30 s, and the
+            // watchdog costs a little on every request.
+            idle_timeout_secs: 0,
+            max_header_size: DEFAULT_MAX_HEADER_SIZE,
+            max_connections: 10_000,
+            max_requests_per_connection: 1000,
             // 64 concurrent blocking handlers is enough to absorb typical blocking
             // I/O without the memory and GIL contention of a very large pool.
             blocking_threads: 64,
+            trusted_proxies: Arc::new(parking_lot::RwLock::new(Arc::new(
+                server::proxy::TrustedProxies::default(),
+            ))),
             database_client: None,
             redis_client: None,
         }
@@ -177,9 +205,28 @@ impl Cello {
         self.add_route("HEAD", path, handler)
     }
 
-    /// Register a WebSocket route.
-    pub fn websocket(&mut self, path: &str, handler: PyObject) -> PyResult<()> {
-        self.websocket_handlers.register(path, handler);
+    /// Middleware that keep their state in this process's memory (sessions,
+    /// rate limits, response cache): with `workers > 1` each worker has its
+    /// own copy.
+    pub fn per_process_state(&self) -> Vec<String> {
+        self.middleware
+            .middleware_names()
+            .into_iter()
+            .filter(|n| matches!(n.as_str(), "session" | "rate_limit" | "cache"))
+            .collect()
+    }
+
+    /// Register a WebSocket route. Browser handshakes are accepted from the
+    /// same origin and from `allowed_origins` (`["*"]` allows any).
+    #[pyo3(signature = (path, handler, allowed_origins=None))]
+    pub fn websocket(
+        &mut self,
+        path: &str,
+        handler: PyObject,
+        allowed_origins: Option<Vec<String>>,
+    ) -> PyResult<()> {
+        self.websocket_handlers
+            .register(path, handler, allowed_origins.unwrap_or_default());
         Ok(())
     }
 
@@ -192,21 +239,47 @@ impl Cello {
         Ok(())
     }
 
-    /// Configure request size limits (currently: maximum body size in bytes).
+    /// Configure request and connection limits.
     ///
-    /// Pass a `LimitsConfig`. `max_body_size = 0` disables the cap (unlimited).
+    /// Pass a `LimitsConfig`. Every field is enforced: `max_body_size` (413),
+    /// `max_header_size` (431, minimum 8 KiB), `max_connections` (excess
+    /// connections are closed on accept) and `max_requests_per_connection`
+    /// (the connection is closed after that many responses). 0 = unlimited.
     pub fn set_limits(&mut self, config: &PyLimitsConfig) {
         self.max_body_size = config.max_body_size;
+        self.max_header_size = config.max_header_size;
+        self.max_connections = config.max_connections;
+        self.max_requests_per_connection = config.max_requests_per_connection;
     }
 
     /// Configure server timeouts (all values in seconds; 0 disables that timeout).
     ///
     /// Pass a `TimeoutConfig`. Uses `read_header_timeout` (Slowloris guard),
-    /// `read_body_timeout`, and `handler_timeout`.
+    /// `read_body_timeout`, `handler_timeout` and `idle_timeout` (keep-alive
+    /// connections with no request in flight). `write_timeout` is not enforced.
     pub fn set_timeouts(&mut self, config: &PyTimeoutConfig) {
         self.read_header_timeout_secs = config.read_header_timeout;
         self.read_body_timeout_secs = config.read_body_timeout;
         self.handler_timeout_secs = config.handler_timeout;
+        self.idle_timeout_secs = config.idle_timeout;
+    }
+
+    /// Trust `X-Forwarded-For` / `X-Forwarded-Proto` / `X-Forwarded-Host` /
+    /// (and, with `trust_x_real_ip=True`, `X-Real-IP`) only from these peers (IP
+    /// addresses or CIDR networks, e.g. `["10.0.0.0/8", "127.0.0.1"]`). The
+    /// list belongs to this app. By default no proxy is trusted and the client
+    /// address is the TCP peer; an empty list restores that. Enable
+    /// `trust_x_real_ip` only when every trusted proxy overwrites that header.
+    #[pyo3(signature = (proxies, trust_x_real_ip=false))]
+    pub fn set_trusted_proxies(&self, proxies: Vec<String>, trust_x_real_ip: bool) -> PyResult<()> {
+        let parsed = proxies
+            .iter()
+            .map(|p| server::proxy::Cidr::parse(p))
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(pyo3::exceptions::PyValueError::new_err)?;
+        *self.trusted_proxies.write() =
+            Arc::new(server::proxy::TrustedProxies::new(parsed, trust_x_real_ip));
+        Ok(())
     }
 
     /// Configure the blocking threadpool used for blocking sync handlers.
@@ -295,7 +368,25 @@ impl Cello {
             }
         };
 
-        self.middleware.add(mw);
+        use middleware::rate_limit::KeyExtractors;
+        let key = config.key_by.as_str();
+        let extractor = match key {
+            "ip" => KeyExtractors::client_ip(),
+            // `request.context["user"]["id"]` / `["sub"]` (JWT claims), falling
+            // back to the client IP for anonymous callers.
+            "user" => KeyExtractors::user_or_ip(),
+            "api_key" => KeyExtractors::header_or_ip("x-api-key"),
+            _ if key.starts_with("header:") && key.len() > "header:".len() => {
+                KeyExtractors::header_or_ip(&key["header:".len()..])
+            }
+            _ => {
+                return Err(pyo3::exceptions::PyValueError::new_err(format!(
+                    "Unknown rate limit key_by {key:?}: use \"ip\", \"user\", \"api_key\" or \"header:<name>\""
+                )))
+            }
+        };
+
+        self.middleware.add(mw.key_extractor(extractor));
         Ok(())
     }
 
@@ -334,17 +425,26 @@ impl Cello {
     /// `compress` (default `True`) gzips a cache HIT inline for clients that send
     /// `Accept-Encoding: gzip`, so cached large responses stay compressed even
     /// though a HIT short-circuits the compression middleware.
-    #[pyo3(signature = (ttl=300, methods=None, exclude_paths=None, compress=true))]
+    ///
+    /// Requests carrying `Authorization` or `Cookie` are not cached unless
+    /// `cache_authenticated=True`, in which case those headers join the key.
+    #[pyo3(signature = (ttl=300, methods=None, exclude_paths=None, compress=true, cache_authenticated=false, max_entries=10000))]
     pub fn enable_caching(
         &mut self,
         ttl: u64,
         methods: Option<Vec<String>>,
         exclude_paths: Option<Vec<String>>,
         compress: bool,
+        cache_authenticated: bool,
+        max_entries: usize,
     ) {
         let mut config = middleware::cache::CacheConfig::default();
         config.default_ttl = ttl;
         config.compress = compress;
+        config.cache_authenticated = cache_authenticated;
+        config.store = Arc::new(
+            middleware::cache::InMemoryCacheStore::new().with_max_size(max_entries.max(1)),
+        );
         if let Some(m) = methods {
             config.methods = m;
         }
@@ -403,8 +503,8 @@ impl Cello {
         let jwt_config = middleware::auth::JwtConfig {
             secret: config.secret.into_bytes(),
             algorithm: alg,
-            issuer: None,
-            audience: None,
+            issuer: config.issuer.clone(),
+            audience: config.audience.clone(),
             leeway: config.leeway,
         };
         let mut jwt_auth = middleware::auth::JwtAuth::new(jwt_config);
@@ -424,10 +524,33 @@ impl Cello {
     /// Enable session middleware.
     #[pyo3(signature = (config=None))]
     pub fn enable_session(&mut self, config: Option<PySessionConfig>) {
+        use middleware::session::{CookieConfig, SameSite};
         let mut mw = middleware::session::SessionMiddleware::new();
         if let Some(cfg) = config {
-            mw = mw.cookie_name(&cfg.cookie_name);
-            mw = mw.ttl(std::time::Duration::from_secs(cfg.max_age));
+            let store =
+                middleware::session::InMemorySessionStore::new().max_sessions(cfg.max_sessions);
+            mw = middleware::session::SessionMiddleware::with_store(store)
+                .max_session_size(cfg.max_session_size);
+            if let Some(keys) = &cfg.auth_keys {
+                mw = mw.auth_keys(keys.clone());
+            }
+            let same_site = match cfg.cookie_same_site.to_ascii_lowercase().as_str() {
+                "strict" => SameSite::Strict,
+                "none" => SameSite::None,
+                _ => SameSite::Lax,
+            };
+            let mut cookie = CookieConfig::new(&cfg.cookie_name)
+                .path(&cfg.cookie_path)
+                .secure(cfg.cookie_secure)
+                .http_only(cfg.cookie_http_only)
+                .same_site(same_site)
+                .max_age(cfg.max_age);
+            if let Some(domain) = &cfg.cookie_domain {
+                cookie = cookie.domain(domain);
+            }
+            mw = mw
+                .cookie(cookie)
+                .ttl(std::time::Duration::from_secs(cfg.max_age));
         }
         self.middleware.add(mw);
     }
@@ -494,7 +617,7 @@ impl Cello {
         let realm_str = realm.unwrap_or_else(|| "Restricted".to_string());
         let creds = std::sync::Arc::new(credentials);
         let mw = middleware::auth::BasicAuth::with_validator(move |u, p| {
-            creds.get(u).map(|stored| stored == p).unwrap_or(false)
+            middleware::auth::credentials_match(&creds, u, p)
         })
         .realm(&realm_str);
         self.middleware.add(mw);
@@ -604,7 +727,7 @@ impl Cello {
     #[pyo3(signature = (config=None))]
     pub fn enable_graphql(&mut self, config: Option<PyGraphQLConfig>) {
         let config = config.unwrap_or_else(|| {
-            PyGraphQLConfig::new("/graphql", true, true, Some(10), Some(1000), false, false)
+            PyGraphQLConfig::new("/graphql", false, false, Some(10), Some(1000), false, false)
         });
 
         let gql_config = middleware::graphql::GraphQLConfig {
@@ -659,6 +782,18 @@ impl Cello {
         println!("🔴 Redis connection enabled (native redis crate):");
         if config.cluster_mode {
             println!("   Cluster mode: requested (native client uses standard mode)");
+        }
+        Ok(())
+    }
+
+    /// Give a freshly forked worker its own database pool and Redis connection.
+    /// Called by `App.run()` in each child right after `fork()`.
+    pub fn _reset_after_fork(&mut self, py: Python<'_>) -> PyResult<()> {
+        if let Some(db) = &self.database_client {
+            db.borrow_mut(py).reset_after_fork()?;
+        }
+        if let Some(r) = &self.redis_client {
+            r.borrow_mut(py).reset_after_fork();
         }
         Ok(())
     }
@@ -836,96 +971,71 @@ impl Cello {
         version: Option<String>,
     ) -> PyResult<()> {
         let title = title.unwrap_or_else(|| "Cello API".to_string());
-        let version = version.unwrap_or_else(|| "1.4.0".to_string());
+        let version = version.unwrap_or_else(|| "1.4.1".to_string());
 
-        // Store title and version for later use
-        let title_clone = title.clone();
-        let version_clone = version.clone();
+        // The handler code is a constant; title and version are passed in as
+        // values (never spliced into source), and HTML-escaped where rendered.
+        // Interpolating them into code to `eval` broke on a quote and turned
+        // an attacker-influenced title into code execution.
+        const OPENAPI_HANDLERS: &str = r##"
+import html as _html
 
-        // Create a Python handler for /docs (Swagger UI)
-        let docs_code = format!(
-            r#"
-def docs_handler(request):
+def make_handlers(title, version):
     from cello import Response
-    html = '''<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{title_clone} - Swagger UI</title>
-    <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5.9.0/swagger-ui.css" />
-    <style>
-        body {{ margin: 0; padding: 0; }}
-        .swagger-ui .topbar {{ display: none; }}
-    </style>
-</head>
-<body>
-    <div id="swagger-ui"></div>
-    <script src="https://unpkg.com/swagger-ui-dist@5.9.0/swagger-ui-bundle.js"></script>
-    <script>
-        window.onload = () => {{
-            window.ui = SwaggerUIBundle({{
-                url: "/openapi.json",
-                dom_id: '#swagger-ui',
-                deepLinking: true,
-                presets: [SwaggerUIBundle.presets.apis, SwaggerUIBundle.SwaggerUIStandalonePreset],
-                layout: "StandaloneLayout"
-            }});
-        }};
-    </script>
-</body>
-</html>'''
-    return Response.html(html)
-"#
-        );
+    t = _html.escape(title, quote=True)
 
-        // Create /redoc handler
-        let redoc_code = format!(
-            r#"
-def redoc_handler(request):
-    from cello import Response
-    html = '''<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{title_clone} - ReDoc</title>
-    <link href="https://fonts.googleapis.com/css?family=Montserrat:300,400,700|Roboto:300,400,700" rel="stylesheet">
-    <style>body {{ margin: 0; padding: 0; }}</style>
-</head>
-<body>
-    <redoc spec-url="/openapi.json"></redoc>
-    <script src="https://cdn.redoc.ly/redoc/latest/bundles/redoc.standalone.js"></script>
-</body>
-</html>'''
-    return Response.html(html)
-"#
-        );
+    def docs_handler(request):
+        return Response.html(
+            '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">'
+            '<meta name="viewport" content="width=device-width, initial-scale=1.0">'
+            '<title>' + t + ' - Swagger UI</title>'
+            '<link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5.9.0/swagger-ui.css" />'
+            '<style>body { margin: 0; padding: 0; } .swagger-ui .topbar { display: none; }</style>'
+            '</head><body><div id="swagger-ui"></div>'
+            '<script src="https://unpkg.com/swagger-ui-dist@5.9.0/swagger-ui-bundle.js"></script>'
+            '<script>window.onload = () => { window.ui = SwaggerUIBundle({ url: "/openapi.json", '
+            'dom_id: "#swagger-ui", deepLinking: true, presets: [SwaggerUIBundle.presets.apis, '
+            'SwaggerUIBundle.SwaggerUIStandalonePreset], layout: "StandaloneLayout" }); };</script>'
+            '</body></html>'
+        )
 
-        // Create /openapi.json handler
-        let openapi_code = format!(
-            r#"
-def openapi_handler(request):
-    return {{
-        "openapi": "3.0.3",
-        "info": {{
-            "title": "{title_clone}",
-            "version": "{version_clone}",
-            "description": "{title_clone} - Powered by Cello Framework"
-        }},
-        "paths": {{}}
-    }}
-"#
-        );
+    def redoc_handler(request):
+        return Response.html(
+            '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">'
+            '<meta name="viewport" content="width=device-width, initial-scale=1.0">'
+            '<title>' + t + ' - ReDoc</title><style>body { margin: 0; padding: 0; }</style>'
+            '</head><body><redoc spec-url="/openapi.json"></redoc>'
+            '<script src="https://cdn.redoc.ly/redoc/latest/bundles/redoc.standalone.js"></script>'
+            '</body></html>'
+        )
 
-        // Execute Python code and register handlers
-        let docs_handler = py.eval(&format!("{docs_code}\ndocs_handler"), None, None)?;
-        let redoc_handler = py.eval(&format!("{redoc_code}\nredoc_handler"), None, None)?;
-        let openapi_handler = py.eval(&format!("{openapi_code}\nopenapi_handler"), None, None)?;
+    def openapi_handler(request):
+        return {
+            "openapi": "3.0.3",
+            "info": {
+                "title": title,
+                "version": version,
+                "description": title + " - Powered by Cello Framework",
+            },
+            "paths": {},
+        }
 
-        self.add_route("GET", "/docs", docs_handler.into())?;
-        self.add_route("GET", "/redoc", redoc_handler.into())?;
-        self.add_route("GET", "/openapi.json", openapi_handler.into())?;
+    return docs_handler, redoc_handler, openapi_handler
+"##;
+        let module = pyo3::types::PyModule::from_code(
+            py,
+            OPENAPI_HANDLERS,
+            "cello_openapi_handlers.py",
+            "cello_openapi_handlers",
+        )?;
+        let (docs_handler, redoc_handler, openapi_handler): (PyObject, PyObject, PyObject) = module
+            .getattr("make_handlers")?
+            .call1((title, version))?
+            .extract()?;
+
+        self.add_route("GET", "/docs", docs_handler)?;
+        self.add_route("GET", "/redoc", redoc_handler)?;
+        self.add_route("GET", "/openapi.json", openapi_handler)?;
 
         println!("📚 OpenAPI docs enabled:");
         println!("   Swagger UI: /docs");
@@ -967,10 +1077,15 @@ def openapi_handler(request):
 
         // Limits/timeouts are plain Copy values captured for the server config.
         let max_body_size = self.max_body_size;
+        let trusted_proxies = self.trusted_proxies.clone();
         let blocking_threads = self.blocking_threads;
         let read_body_timeout_secs = self.read_body_timeout_secs;
         let read_header_timeout_secs = self.read_header_timeout_secs;
         let handler_timeout_secs = self.handler_timeout_secs;
+        let idle_timeout_secs = self.idle_timeout_secs;
+        let max_header_size = self.max_header_size;
+        let max_connections = self.max_connections;
+        let max_requests_per_connection = self.max_requests_per_connection;
 
         // Start the persistent asyncio loop now, while single-threaded and holding the
         // GIL, so the first async request neither pays init cost nor races on it.
@@ -1006,6 +1121,11 @@ def openapi_handler(request):
                     config.read_body_timeout = secs_to_opt(read_body_timeout_secs);
                     config.read_header_timeout = secs_to_opt(read_header_timeout_secs);
                     config.handler_timeout = secs_to_opt(handler_timeout_secs);
+                    config.idle_timeout = secs_to_opt(idle_timeout_secs);
+                    config.max_header_size = (max_header_size > 0).then_some(max_header_size);
+                    config.max_connections = max_connections;
+                    config.max_requests_per_connection = max_requests_per_connection;
+                    config.trusted_proxies = trusted_proxies;
 
                     let server = Server::new(
                         config,
@@ -1116,7 +1236,7 @@ pub struct PyLimitsConfig {
 #[pymethods]
 impl PyLimitsConfig {
     #[new]
-    #[pyo3(signature = (max_header_size=8192, max_body_size=10485760, max_connections=10000, max_requests_per_connection=1000))]
+    #[pyo3(signature = (max_header_size=DEFAULT_MAX_HEADER_SIZE, max_body_size=DEFAULT_MAX_BODY_SIZE, max_connections=10000, max_requests_per_connection=1000))]
     pub fn new(
         max_header_size: usize,
         max_body_size: usize,
@@ -1213,6 +1333,10 @@ impl PyClusterConfig {
 }
 
 /// Python-exposed TLS configuration.
+///
+/// NOTE: configuration record only. The server does not terminate TLS in this
+/// release; put a TLS-terminating proxy in front and use
+/// `App.set_trusted_proxies()` so `X-Forwarded-Proto` is honoured.
 #[pyclass(name = "TlsConfig")]
 #[derive(Clone)]
 pub struct PyTlsConfig {
@@ -1254,6 +1378,9 @@ impl PyTlsConfig {
 }
 
 /// Python-exposed HTTP/2 configuration.
+///
+/// NOTE: configuration record only. The server speaks HTTP/1.1 in this
+/// release; this config is not read by the accept loop.
 #[pyclass(name = "Http2Config")]
 #[derive(Clone)]
 pub struct PyHttp2Config {
@@ -1287,6 +1414,9 @@ impl PyHttp2Config {
 }
 
 /// Python-exposed HTTP/3 configuration.
+///
+/// NOTE: configuration record only. The server speaks HTTP/1.1 in this
+/// release; this config is not read by the accept loop.
 #[pyclass(name = "Http3Config")]
 #[derive(Clone)]
 pub struct PyHttp3Config {
@@ -1333,18 +1463,26 @@ pub struct PyJwtConfig {
     pub cookie_name: Option<String>,
     #[pyo3(get, set)]
     pub leeway: u64,
+    /// Required `iss` claim (rejects tokens from other issuers when set).
+    #[pyo3(get, set)]
+    pub issuer: Option<String>,
+    /// Required `aud` claim (rejects tokens meant for other services when set).
+    #[pyo3(get, set)]
+    pub audience: Option<String>,
 }
 
 #[pymethods]
 impl PyJwtConfig {
     #[new]
-    #[pyo3(signature = (secret, algorithm="HS256", header_name="Authorization", cookie_name=None, leeway=0))]
+    #[pyo3(signature = (secret, algorithm="HS256", header_name="Authorization", cookie_name=None, leeway=0, issuer=None, audience=None))]
     pub fn new(
         secret: String,
         algorithm: &str,
         header_name: &str,
         cookie_name: Option<String>,
         leeway: u64,
+        issuer: Option<String>,
+        audience: Option<String>,
     ) -> Self {
         Self {
             secret,
@@ -1352,6 +1490,8 @@ impl PyJwtConfig {
             header_name: header_name.to_string(),
             cookie_name,
             leeway,
+            issuer,
+            audience,
         }
     }
 }
@@ -1458,12 +1598,25 @@ pub struct PySessionConfig {
     pub cookie_same_site: String,
     #[pyo3(get, set)]
     pub max_age: u64,
+    /// Sessions held in memory per process before the least recently used are
+    /// evicted (0 = unlimited).
+    #[pyo3(get, set)]
+    pub max_sessions: usize,
+    /// Largest serialized session in bytes (0 = unlimited); a write past it
+    /// raises `ValueError`.
+    #[pyo3(get, set)]
+    pub max_session_size: usize,
+    /// Keys whose change issues a new session id (login / privilege change).
+    /// `None` keeps the built-in list.
+    #[pyo3(get, set)]
+    pub auth_keys: Option<Vec<String>>,
 }
 
 #[pymethods]
 impl PySessionConfig {
     #[new]
-    #[pyo3(signature = (cookie_name="session_id", cookie_path="/", cookie_domain=None, cookie_secure=true, cookie_http_only=true, cookie_same_site="Lax", max_age=86400))]
+    #[pyo3(signature = (cookie_name="session_id", cookie_path="/", cookie_domain=None, cookie_secure=true, cookie_http_only=true, cookie_same_site="Lax", max_age=86400, max_sessions=middleware::session::DEFAULT_MAX_SESSIONS, max_session_size=middleware::session::DEFAULT_MAX_SESSION_SIZE, auth_keys=None))]
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         cookie_name: &str,
         cookie_path: &str,
@@ -1472,6 +1625,9 @@ impl PySessionConfig {
         cookie_http_only: bool,
         cookie_same_site: &str,
         max_age: u64,
+        max_sessions: usize,
+        max_session_size: usize,
+        auth_keys: Option<Vec<String>>,
     ) -> Self {
         Self {
             cookie_name: cookie_name.to_string(),
@@ -1481,7 +1637,19 @@ impl PySessionConfig {
             cookie_http_only,
             cookie_same_site: cookie_same_site.to_string(),
             max_age,
+            max_sessions,
+            max_session_size,
+            auth_keys,
         }
+    }
+
+    /// The keys that trigger automatic session-id regeneration by default.
+    #[staticmethod]
+    pub fn default_auth_keys() -> Vec<String> {
+        middleware::session::DEFAULT_AUTH_KEYS
+            .iter()
+            .map(|k| k.to_string())
+            .collect()
     }
 }
 
@@ -2088,7 +2256,9 @@ pub struct PyGraphQLConfig {
 #[pymethods]
 impl PyGraphQLConfig {
     #[new]
-    #[pyo3(signature = (path="/graphql", playground=true, introspection=true, max_depth=None, max_complexity=None, batching=false, tracing=false))]
+    /// Playground and introspection are off by default: both expose the schema
+    /// to anyone who can reach the endpoint. Turn them on for development.
+    #[pyo3(signature = (path="/graphql", playground=false, introspection=false, max_depth=Some(10), max_complexity=Some(1000), batching=false, tracing=false))]
     pub fn new(
         path: &str,
         playground: bool,
@@ -2501,12 +2671,58 @@ async fn run_lifecycle_handler_async(handler: PyObject) -> Result<(), String> {
 }
 
 /// Python module definition.
+/// Parse and check a GraphQL query for the Python engine (`cello.graphql`).
+///
+/// Returns `{"operation", "fields", "introspection", "complexity"}`, where each
+/// field is `{"name", "alias", "arguments", "selection"}` with variables already
+/// substituted. Raises `ValueError` for a syntax error, an unknown operation, a
+/// missing variable, a fragment cycle, or a query over `max_depth` /
+/// `max_complexity`, or one that uses introspection while it is disabled.
+#[pyfunction]
+#[pyo3(signature = (query, operation_name=None, variables=None, max_depth=None, max_complexity=None, introspection=false))]
+fn graphql_plan(
+    py: Python<'_>,
+    query: &str,
+    operation_name: Option<&str>,
+    variables: Option<&PyAny>,
+    max_depth: Option<usize>,
+    max_complexity: Option<usize>,
+    introspection: bool,
+) -> PyResult<PyObject> {
+    let variables = match variables {
+        None => serde_json::Map::new(),
+        Some(v) if v.is_none() => serde_json::Map::new(),
+        Some(v) => {
+            match json::python_to_json(py, v).map_err(pyo3::exceptions::PyValueError::new_err)? {
+                serde_json::Value::Object(map) => map,
+                _ => {
+                    return Err(pyo3::exceptions::PyTypeError::new_err(
+                        "variables must be a dict",
+                    ))
+                }
+            }
+        }
+    };
+    let limits = middleware::graphql_plan::Limits {
+        max_depth,
+        max_complexity,
+        introspection,
+    };
+    let plan = py
+        .allow_threads(|| middleware::graphql_plan::plan(query, operation_name, &variables, limits))
+        .map_err(pyo3::exceptions::PyValueError::new_err)?;
+    let value = serde_json::to_value(&plan)
+        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+    json::json_to_python(py, &value)
+}
+
 #[pymodule]
 fn _cello(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     // Core classes
     m.add_class::<Cello>()?;
     m.add_class::<request::Request>()?;
     m.add_class::<response::Response>()?;
+    m.add_class::<middleware::session::PySession>()?;
 
     // Blueprint
     m.add_class::<Blueprint>()?;
@@ -2561,6 +2777,7 @@ fn _cello(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     // v1.4.0 - ORM schema registry
     m.add_class::<schema::PyModelSpec>()?;
     m.add_class::<schema::PyFieldSpec>()?;
+    m.add_function(wrap_pyfunction!(graphql_plan, m)?)?;
     m.add_function(wrap_pyfunction!(schema::python::schema_register, m)?)?;
     m.add_function(wrap_pyfunction!(schema::python::schema_compile_field, m)?)?;
     m.add_function(wrap_pyfunction!(schema::python::schema_get, m)?)?;

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Advanced ORM tour for Cello v1.4.0.
+Advanced ORM tour for Cello v1.4.1.
 
 A focused walk through the 1.4.0 ORM on a real PostgreSQL database:
 

@@ -221,12 +221,21 @@ def websocket_handler(ws):
         message = ws.recv()
         if message is None:
             break
-        ws.send_text(f"Echo: {message.text}")
+        ws.send_text(f"Echo: {message.content}")
+
+@app.websocket("/ws/async", allowed_origins=["https://app.example.com"])
+async def async_handler(ws):
+    while (message := await ws.arecv()) is not None:
+        await ws.asend_text(f"Echo: {message.content}")
 ```
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `path` | `str` | URL path for WebSocket endpoint |
+| `allowed_origins` | `list[str] \| None` | Browser origins allowed besides the server's own (`["*"]` = any). Other browser handshakes get `403` |
+
+A `def` handler runs on the blocking pool; an `async def` handler runs on the
+event loop and uses `arecv` / `asend*`. See [WebSocket](../../features/realtime/websocket.md).
 
 ---
 
@@ -386,14 +395,14 @@ Adds the following endpoints:
 ```python
 app.enable_openapi(
     title="My API",
-    version="1.4.0"
+    version="1.4.1"
 )
 ```
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `title` | `str` | `"Cello API"` | API title |
-| `version` | `str` | `"1.4.0"` | API version |
+| `version` | `str` | `"1.4.1"` | API version |
 
 ---
 
@@ -508,9 +517,10 @@ app.enable_health_checks(HealthCheckConfig(
 
 ## API Protocols
 
-### `app.enable_graphql(config)`
+### `app.enable_graphql(config, schema=None)`
 
-Enable GraphQL endpoint with optional Playground.
+Enable a GraphQL endpoint. Documents are parsed and checked against
+`max_depth`, `max_complexity` and `introspection` before any resolver runs.
 
 > *Since v0.7.0*
 
@@ -528,8 +538,10 @@ app.enable_graphql(GraphQLConfig(
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `config` | `GraphQLConfig` | `GraphQLConfig()` | GraphQL configuration instance |
+| `schema` | `cello.graphql.Schema \| GraphQL \| None` | `None` | Python resolvers to serve. Without it only Rust-registered resolvers exist |
 
-When `config` is `None`, defaults from `GraphQLConfig()` are used.
+When `config` is `None`, defaults from `GraphQLConfig()` are used. See
+[GraphQL](../../enterprise/integration/graphql.md).
 
 ### `app.enable_grpc(config)`
 
@@ -911,6 +923,7 @@ app.run(
 | `workers` | `int` | `None` | Number of worker processes (defaults to CPU count in production, 1 in debug) |
 | `reload` | `bool` | `False` | Enable hot reload (watches `.py` files for changes) |
 | `logs` | `bool` | `None` | Enable request logging (defaults to `True` in debug mode) |
+| `allow_per_worker_state` | `bool` | `False` | Allow `workers > 1` with sessions or rate limiting, accepting that each worker keeps its own copy. Without it an explicit `workers > 1` raises `RuntimeError` and a defaulted count falls back to 1 |
 
 CLI arguments `--host`, `--port`, `--env`, `--debug`, `--reload`, `--workers`, and `--no-logs` override the values passed to `app.run()`.
 

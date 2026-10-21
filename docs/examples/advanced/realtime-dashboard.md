@@ -201,7 +201,7 @@ def control_handler(ws):
             break
 
         try:
-            data = json.loads(msg.text)
+            data = json.loads(msg.content)
             command = data.get("command")
 
             if command == "reset_counters":

@@ -7,7 +7,7 @@
 //! - Custom key extraction
 
 use dashmap::DashMap;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
@@ -116,7 +116,16 @@ pub trait RateLimitStore: Send + Sync {
 
     /// Cleanup expired entries.
     fn cleanup(&self);
+
+    /// Number of keys held (0 when the store cannot tell).
+    fn key_count(&self) -> usize {
+        0
+    }
 }
+
+/// Keys a store may hold before new keys fall back to the client IP (see
+/// `RateLimitMiddleware::before`).
+pub const MAX_KEYS: usize = 100_000;
 
 // ============================================================================
 // Token Bucket Algorithm
@@ -202,6 +211,9 @@ struct TokenBucketState {
 pub struct TokenBucketStore {
     buckets: DashMap<String, TokenBucketState>,
     health: Arc<HealthMonitor>,
+    /// Seconds an idle bucket needs to refill completely (from the last config
+    /// seen). A bucket idle that long is indistinguishable from a new one.
+    full_refill_secs: AtomicU64,
 }
 
 impl TokenBucketStore {
@@ -209,6 +221,7 @@ impl TokenBucketStore {
         Self {
             buckets: DashMap::new(),
             health: Arc::new(HealthMonitor::new(10)), // 10s window for health
+            full_refill_secs: AtomicU64::new(3600),
         }
     }
 }
@@ -220,6 +233,10 @@ impl Default for TokenBucketStore {
 }
 
 impl RateLimitStore for TokenBucketStore {
+    fn key_count(&self) -> usize {
+        self.buckets.len()
+    }
+
     fn check(&self, key: &str, config: &RateLimitConfig) -> RateLimitState {
         let (bucket_config, is_adaptive) = match config {
             RateLimitConfig::TokenBucket(c) => (c, false),
@@ -251,6 +268,11 @@ impl RateLimitStore for TokenBucketStore {
             .unwrap_or_default()
             .as_secs()
             + 60; // Reset in ~1 minute
+
+        if bucket_config.refill_rate > 0.0 {
+            let secs = (capacity as f64 / bucket_config.refill_rate).ceil() as u64;
+            self.full_refill_secs.store(secs.max(1), Ordering::Relaxed);
+        }
 
         let mut entry = self
             .buckets
@@ -327,7 +349,11 @@ impl RateLimitStore for TokenBucketStore {
     }
 
     fn cleanup(&self) {
-        // Token bucket doesn't need cleanup as it auto-refills
+        // A bucket idle long enough to be full again carries no state.
+        let idle = Duration::from_secs(self.full_refill_secs.load(Ordering::Relaxed));
+        let now = Instant::now();
+        self.buckets
+            .retain(|_, state| now.duration_since(state.last_refill) < idle);
     }
 }
 
@@ -395,12 +421,15 @@ struct SlidingWindowState {
 /// In-memory sliding window store.
 pub struct SlidingWindowStore {
     windows: DashMap<String, SlidingWindowState>,
+    /// Window length (seconds) from the last config seen, for cleanup.
+    window_secs: AtomicU64,
 }
 
 impl SlidingWindowStore {
     pub fn new() -> Self {
         Self {
             windows: DashMap::new(),
+            window_secs: AtomicU64::new(3600),
         }
     }
 }
@@ -412,6 +441,10 @@ impl Default for SlidingWindowStore {
 }
 
 impl RateLimitStore for SlidingWindowStore {
+    fn key_count(&self) -> usize {
+        self.windows.len()
+    }
+
     fn check(&self, key: &str, config: &RateLimitConfig) -> RateLimitState {
         let window_config = match config {
             RateLimitConfig::SlidingWindow(c) => c,
@@ -423,8 +456,10 @@ impl RateLimitStore for SlidingWindowStore {
             .unwrap_or_default()
             .as_secs();
 
-        let window_start = now - window_config.window.as_secs();
+        let window_start = now.saturating_sub(window_config.window.as_secs());
         let reset_time = now + window_config.window.as_secs();
+        self.window_secs
+            .store(window_config.window.as_secs().max(1), Ordering::Relaxed);
 
         let mut entry = self
             .windows
@@ -476,7 +511,7 @@ impl RateLimitStore for SlidingWindowStore {
             .unwrap_or_default()
             .as_secs();
 
-        let window_start = now - window_config.window.as_secs();
+        let window_start = now.saturating_sub(window_config.window.as_secs());
         let reset_time = now + window_config.window.as_secs();
 
         if let Some(entry) = self.windows.get(key) {
@@ -512,10 +547,10 @@ impl RateLimitStore for SlidingWindowStore {
             .unwrap_or_default()
             .as_secs();
 
-        // Remove entries with no recent activity
-        self.windows.retain(|_, state| {
-            !state.timestamps.is_empty() && state.timestamps.iter().any(|&ts| ts >= now - 3600)
-        });
+        // Remove entries with nothing left inside the window.
+        let horizon = now.saturating_sub(self.window_secs.load(Ordering::Relaxed));
+        self.windows
+            .retain(|_, state| state.timestamps.iter().any(|&ts| ts >= horizon));
     }
 }
 
@@ -553,6 +588,10 @@ impl FixedWindowStore {
 }
 
 impl RateLimitStore for FixedWindowStore {
+    fn key_count(&self) -> usize {
+        self.windows.len()
+    }
+
     fn check(&self, key: &str, config: &RateLimitConfig) -> RateLimitState {
         let limit = match config {
             RateLimitConfig::TokenBucket(c) => c.capacity,
@@ -634,7 +673,7 @@ impl RateLimitStore for FixedWindowStore {
     fn cleanup(&self) {
         let current_window = self.current_window();
         self.windows
-            .retain(|_, state| state.window_start >= current_window - 1);
+            .retain(|_, state| state.window_start + 1 >= current_window);
     }
 }
 
@@ -660,6 +699,12 @@ impl Default for RateLimitConfig {
 // Key Extraction
 // ============================================================================
 
+/// First 128 bits of SHA-256, hex.
+fn short_digest(value: &str) -> String {
+    use sha2::{Digest, Sha256};
+    hex::encode(&Sha256::digest(value.as_bytes())[..16])
+}
+
 /// Key extractor function type.
 pub type KeyExtractor = Arc<dyn Fn(&Request) -> String + Send + Sync>;
 
@@ -667,27 +712,54 @@ pub type KeyExtractor = Arc<dyn Fn(&Request) -> String + Send + Sync>;
 pub struct KeyExtractors;
 
 impl KeyExtractors {
-    /// Extract client IP address.
+    /// Extract the client IP address.
+    ///
+    /// This is the address the server resolved for the request: the TCP peer,
+    /// or — only when the peer is a trusted proxy (`App.set_trusted_proxies`) —
+    /// the client named in `X-Forwarded-For`. Forwarding headers sent by an
+    /// untrusted client are ignored, so a client cannot pick a fresh bucket per
+    /// request or push everyone else into a shared one.
     pub fn client_ip() -> KeyExtractor {
         Arc::new(|request: &Request| {
-            // Check X-Forwarded-For first
-            if let Some(xff) = request.headers.get("x-forwarded-for") {
-                if let Some(ip) = xff.split(',').next() {
-                    return ip.trim().to_string();
-                }
-            }
-            // Check X-Real-IP
-            if let Some(ip) = request.headers.get("x-real-ip") {
-                return ip.clone();
-            }
-            // Fallback to remote address (would need to be set by server)
             request
-                .context
-                .get("remote_addr")
-                .and_then(|v| v.as_str())
-                .unwrap_or("unknown")
-                .to_string()
+                .client_addr
+                .or(request.remote_addr)
+                .map(|ip| ip.to_string())
+                .unwrap_or_else(|| "unknown".to_string())
         })
+    }
+
+    /// Key by authenticated user (`context["user"]["id"]`, or the JWT `sub`
+    /// claim in `context["jwt_claims"]`), else by client IP.
+    pub fn user_or_ip() -> KeyExtractor {
+        let ip = Self::client_ip();
+        Arc::new(move |request: &Request| {
+            let user = request
+                .context
+                .get("user")
+                .and_then(|u| u.get("id").or_else(|| u.get("sub")))
+                .or_else(|| request.context.get("jwt_claims").and_then(|c| c.get("sub")));
+            match user {
+                Some(serde_json::Value::String(s)) => format!("user:{s}"),
+                Some(v) if !v.is_null() => format!("user:{v}"),
+                _ => format!("ip:{}", ip(request)),
+            }
+        })
+    }
+
+    /// Key by a request header (e.g. an API key), else by client IP.
+    pub fn header_or_ip(header_name: &str) -> KeyExtractor {
+        let header = header_name.to_lowercase();
+        let ip = Self::client_ip();
+        Arc::new(
+            move |request: &Request| match request.headers.get(&header) {
+                // Hashed: a key costs a fixed 32 bytes however long the
+                // header is, and the raw value (often a credential) is not
+                // kept in memory.
+                Some(v) if !v.is_empty() => format!("h:{}", short_digest(v)),
+                _ => format!("ip:{}", ip(request)),
+            },
+        )
     }
 
     /// Extract user ID from context.
@@ -733,6 +805,10 @@ impl KeyExtractors {
 
 /// Rate limiting middleware.
 pub struct RateLimitMiddleware {
+    /// Requests since the last store cleanup.
+    checks: AtomicU64,
+    /// The store is over `MAX_KEYS`: new requests use the overflow key.
+    overflow: AtomicBool,
     store: Arc<dyn RateLimitStore>,
     config: RateLimitConfig,
     key_extractor: KeyExtractor,
@@ -746,6 +822,8 @@ impl RateLimitMiddleware {
     /// Create new rate limit middleware with token bucket.
     pub fn token_bucket(config: TokenBucketConfig) -> Self {
         Self {
+            checks: AtomicU64::new(0),
+            overflow: AtomicBool::new(false),
             store: Arc::new(TokenBucketStore::new()),
             config: RateLimitConfig::TokenBucket(config),
             key_extractor: KeyExtractors::client_ip(),
@@ -759,6 +837,8 @@ impl RateLimitMiddleware {
     /// Create new rate limit middleware with sliding window.
     pub fn sliding_window(config: SlidingWindowConfig) -> Self {
         Self {
+            checks: AtomicU64::new(0),
+            overflow: AtomicBool::new(false),
             store: Arc::new(SlidingWindowStore::new()),
             config: RateLimitConfig::SlidingWindow(config),
             key_extractor: KeyExtractors::client_ip(),
@@ -775,6 +855,8 @@ impl RateLimitMiddleware {
         let health = store.health.clone();
 
         Self {
+            checks: AtomicU64::new(0),
+            overflow: AtomicBool::new(false),
             store: Arc::new(store),
             config: RateLimitConfig::Adaptive(config),
             key_extractor: KeyExtractors::client_ip(),
@@ -788,6 +870,8 @@ impl RateLimitMiddleware {
     /// Create rate limiter with custom store.
     pub fn with_store<S: RateLimitStore + 'static>(store: S, config: RateLimitConfig) -> Self {
         Self {
+            checks: AtomicU64::new(0),
+            overflow: AtomicBool::new(false),
             store: Arc::new(store),
             config,
             key_extractor: KeyExtractors::client_ip(),
@@ -853,8 +937,36 @@ impl Middleware for RateLimitMiddleware {
             }
         }
 
+        // Keys are per client, so the store grows with distinct clients; sweep
+        // entries that no longer carry state every few thousand requests.
+        let n = self.checks.fetch_add(1, Ordering::Relaxed);
+        if n % 4096 == 4095 {
+            self.store.cleanup();
+        }
+        // A client that sends a fresh key on every request (a new header
+        // value) would grow the store for the whole window. The size is
+        // sampled every 256 checks; past `MAX_KEYS` (after a sweep), keys
+        // share their client's IP bucket instead of adding one.
+        if n % 256 == 255 {
+            let mut over = self.store.key_count() >= MAX_KEYS;
+            if over {
+                self.store.cleanup();
+                over = self.store.key_count() >= MAX_KEYS;
+            }
+            self.overflow.store(over, Ordering::Relaxed);
+        }
+
         // Extract key
-        let key = (self.key_extractor)(request);
+        let key = if self.overflow.load(Ordering::Relaxed) {
+            let ip = request
+                .client_addr
+                .or(request.remote_addr)
+                .map(|ip| ip.to_string())
+                .unwrap_or_else(|| "unknown".to_string());
+            format!("overflow:{ip}")
+        } else {
+            (self.key_extractor)(request)
+        };
 
         // Check rate limit
         let state = self.store.check(&key, &self.config);
@@ -965,6 +1077,27 @@ mod tests {
         // Next request should be rate limited
         let state = store.check("test_key", &config);
         assert!(state.exceeded);
+    }
+
+    #[test]
+    fn test_client_ip_ignores_untrusted_forwarded_for() {
+        let extract = KeyExtractors::client_ip();
+        let mut req = Request::new("GET", "/");
+        req.remote_addr = Some("203.0.113.9".parse().unwrap());
+        req.client_addr = Some("203.0.113.9".parse().unwrap());
+        req.headers
+            .insert("x-forwarded-for".into(), "1.2.3.4".into());
+        assert_eq!(extract(&req), "203.0.113.9");
+    }
+
+    #[test]
+    fn test_token_bucket_cleanup_drops_refilled() {
+        let store = TokenBucketStore::new();
+        let config = RateLimitConfig::TokenBucket(TokenBucketConfig::new(10, 1000.0));
+        store.check("a", &config);
+        std::thread::sleep(Duration::from_millis(1100));
+        store.cleanup();
+        assert_eq!(store.buckets.len(), 0);
     }
 
     #[test]

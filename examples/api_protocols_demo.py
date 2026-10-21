@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-API Protocols Demo for Cello v1.4.0.
+API Protocols Demo for Cello v1.4.1.
 
 This example demonstrates the API Protocol features:
   - GraphQL support with Query, Mutation, and Subscription decorators
@@ -24,13 +24,14 @@ Then test with:
 Author: Jagadeesh Katla
 """
 
-from cello import App, Response
+from cello import App, GraphQLConfig, Response
 
 # GraphQL imports
 from cello.graphql import Query, Mutation, Subscription, Schema, DataLoader
 
 # gRPC imports
-from cello.grpc import GrpcService, grpc_method, GrpcServer, GrpcRequest, GrpcResponse, GrpcConfig
+from cello import GrpcConfig
+from cello.grpc import GrpcService, grpc_method, GrpcServer, GrpcRequest, GrpcResponse
 
 # Messaging imports
 from cello.messaging import (
@@ -177,14 +178,18 @@ async def order_updates(info, user_id: int):
 
 
 # Build the GraphQL schema
-schema = Schema(
-    queries=[users, user, orders],
-    mutations=[create_user, create_order],
-    subscriptions=[order_updates],
+schema = (
+    Schema()
+    .query(users)
+    .query(user)
+    .query(orders)
+    .mutation(create_user)
+    .mutation(create_order)
+    .subscription(order_updates)
 )
 
-# Mount GraphQL endpoint
-app.mount("/graphql", schema)
+# Serve it at POST /graphql (parsed, depth/complexity-limited, behind middleware)
+app.enable_graphql(GraphQLConfig(path="/graphql", max_depth=6), schema=schema)
 
 
 # =============================================================================
@@ -317,7 +322,7 @@ user_producer = Producer(topic="user-events", config=kafka_config)
 def home(request):
     """Root endpoint with feature overview."""
     return {
-        "message": "Cello v1.4.0 - API Protocols Demo",
+        "message": "Cello v1.4.1 - API Protocols Demo",
         "features": {
             "graphql": "Schema-first GraphQL with Query, Mutation, Subscription",
             "grpc": "gRPC services with reflection and gRPC-Web support",
@@ -335,7 +340,6 @@ def home(request):
             ],
             "graphql": [
                 "POST /graphql            - GraphQL queries and mutations",
-                "WS   /graphql            - GraphQL subscriptions (WebSocket)",
                 "GET  /graphql/status     - GraphQL schema status",
             ],
             "grpc": [
@@ -476,7 +480,7 @@ def graphql_status(request):
             "features": {
                 "data_loader": "Enabled - batches user lookups to prevent N+1",
                 "subscriptions": "WebSocket-based real-time updates",
-                "introspection": "Enabled",
+                "introspection": "Disabled (GraphQLConfig(introspection=True) to enable)",
             },
             "example_query": 'query { users { id name email } }',
             "example_mutation": 'mutation { createUser(name: "Dave", email: "dave@example.com") { id name } }',
@@ -574,7 +578,7 @@ def show_config(request):
 
 
 if __name__ == "__main__":
-    print("Cello v1.4.0 - API Protocols Demo")
+    print("Cello v1.4.1 - API Protocols Demo")
     print()
     print("  REST endpoints:")
     print("  - GET  /                   - Feature overview")
@@ -592,7 +596,6 @@ if __name__ == "__main__":
     print()
     print("  GraphQL:")
     print("  - POST /graphql            - GraphQL endpoint")
-    print("  - WS   /graphql            - Subscriptions (WebSocket)")
     print()
     print("  gRPC:")
     print("  - gRPC :50051              - UserService, OrderService")

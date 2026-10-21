@@ -469,7 +469,14 @@ class GraphQL:
         # {"data": {"hello": "Hello, world!"}}
     """
 
-    def __init__(self, schema: Optional[Dict[str, Any]] = None):
+    def __init__(
+        self,
+        schema: Optional[Dict[str, Any]] = None,
+        *,
+        max_depth: Optional[int] = 10,
+        max_complexity: Optional[int] = 1000,
+        introspection: bool = False,
+    ):
         """
         Initialize the GraphQL engine.
 
@@ -477,11 +484,18 @@ class GraphQL:
             schema: Optional pre-built schema dictionary. If not provided,
                     resolvers can be registered individually via add_query,
                     add_mutation, and add_subscription.
+            max_depth: Deepest field nesting accepted (``None`` = unlimited).
+            max_complexity: Most fields per operation, fragments expanded
+                (``None`` = unlimited).
+            introspection: Allow ``__schema`` / ``__type`` queries.
         """
         self._schema = schema or {}
         self._queries: Dict[str, Callable] = {}
         self._mutations: Dict[str, Callable] = {}
         self._subscriptions: Dict[str, Callable] = {}
+        self.max_depth = max_depth
+        self.max_complexity = max_complexity
+        self.introspection = introspection
 
     def add_query(self, func: Callable) -> None:
         """
@@ -554,15 +568,28 @@ class GraphQL:
         query: str,
         variables: Optional[Dict[str, Any]] = None,
         operation_name: Optional[str] = None,
+        context: Any = None,
     ) -> Dict[str, Any]:
         """
         Execute a GraphQL query string against the registered resolvers.
+
+        The document is parsed by Cello's GraphQL parser: the operation type
+        (query or mutation), the operation name, variables, aliases, fragments
+        and ``@skip``/``@include`` come from the document, and ``max_depth``,
+        ``max_complexity`` and ``introspection`` are enforced before any
+        resolver runs. Only the root fields the operation selects are
+        resolved; each resolver receives ``info`` plus the field's arguments as
+        keyword arguments, and its result is trimmed to the sub-selection.
+        A root field ``createItem`` resolves to a resolver named
+        ``createItem`` or ``create_item``.
 
         Args:
             query: The GraphQL query string.
             variables: Optional dictionary of variable values.
             operation_name: Optional operation name when the query contains
                            multiple operations.
+            context: Optional value passed to resolvers as ``info["context"]``
+                (the HTTP endpoint passes the request).
 
         Returns:
             A dictionary with "data" and optionally "errors" keys following
@@ -575,48 +602,71 @@ class GraphQL:
                 operation_name="GetUser"
             )
         """
-        # Placeholder execution - real implementation delegates to Rust engine
-        result: Dict[str, Any] = {"data": {}}
+        from cello._cello import graphql_plan
+
+        try:
+            plan = graphql_plan(
+                query,
+                operation_name,
+                variables or {},
+                self.max_depth,
+                self.max_complexity,
+                self.introspection,
+            )
+        except (ValueError, TypeError) as exc:
+            return {"data": None, "errors": [{"message": str(exc)}]}
+
+        operation = plan["operation"]
+        if operation == "subscription":
+            return {
+                "data": None,
+                "errors": [{"message": "Subscriptions are not supported by execute()"}],
+            }
+        resolvers = self._mutations if operation == "mutation" else self._queries
+        type_name = "Mutation" if operation == "mutation" else "Query"
+
+        data: Dict[str, Any] = {}
         errors: List[Dict[str, Any]] = []
-
-        # Build context info for resolvers
-        info = {
-            "query": query,
-            "variables": variables or {},
-            "operation_name": operation_name,
-        }
-
-        # Attempt to resolve known query fields
-        for name, resolver in self._queries.items():
-            try:
-                if inspect.iscoroutinefunction(resolver):
-                    value = await resolver(info)
-                else:
-                    value = resolver(info)
-                result["data"][name] = value
-            except Exception as exc:
+        for field in plan["fields"]:
+            name, key = field["name"], field["alias"]
+            if name == "__typename":
+                data[key] = type_name
+                continue
+            if name == "__schema":
+                data[key] = _project(self.get_schema(), field["selection"])
+                continue
+            if name == "__type":
+                data[key] = None
+                continue
+            resolver = resolvers.get(name) or resolvers.get(_snake_case(name))
+            if resolver is None:
+                data[key] = None
                 errors.append({
-                    "message": str(exc),
-                    "path": [name],
+                    "message": f'Cannot query field "{name}" on type "{type_name}"',
+                    "path": [key],
                 })
-
-        # Attempt to resolve known mutation fields
-        for name, resolver in self._mutations.items():
+                continue
+            info = {
+                "field_name": name,
+                "operation": operation,
+                "operation_name": operation_name,
+                "variables": variables or {},
+                "selection": field["selection"],
+                "context": context,
+                "query": query,
+            }
             try:
-                if inspect.iscoroutinefunction(resolver):
-                    value = await resolver(info, **(variables or {}))
-                else:
-                    value = resolver(info, **(variables or {}))
-                result["data"][name] = value
+                value = resolver(info, **field["arguments"])
+                if inspect.isawaitable(value):
+                    value = await value
+                data[key] = _project(value, field["selection"])
             except Exception as exc:
-                errors.append({
-                    "message": str(exc),
-                    "path": [name],
-                })
+                data[key] = None
+                errors.append({"message": str(exc), "path": [key]})
 
+        result: Dict[str, Any] = {"data": data}
         if errors:
             result["errors"] = errors
-
         return result
 
     def get_schema(self) -> Dict[str, Any]:
@@ -758,9 +808,12 @@ class Schema:
         self._subscriptions.append(type_class)
         return self
 
-    def build(self) -> GraphQL:
+    def build(self, **limits: Any) -> GraphQL:
         """
         Build and return a configured GraphQL execution engine.
+
+        Keyword arguments (``max_depth``, ``max_complexity``,
+        ``introspection``) are passed to :class:`GraphQL`.
 
         Processes all registered query, mutation, and subscription types,
         extracts their resolvers, and registers them on a new GraphQL
@@ -772,7 +825,7 @@ class Schema:
         Example:
             gql = schema.build()
         """
-        gql = GraphQL()
+        gql = GraphQL(**limits)
 
         for item in self._queries:
             if isinstance(item, Query):
@@ -827,6 +880,42 @@ class Schema:
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
+
+
+def _snake_case(name: str) -> str:
+    """``createItem`` -> ``create_item``."""
+    out = []
+    for i, ch in enumerate(name):
+        if ch.isupper() and i and not name[i - 1].isupper():
+            out.append("_")
+        out.append(ch.lower())
+    return "".join(out)
+
+
+def _project(value: Any, selection: List[Dict[str, Any]]) -> Any:
+    """Trim a resolver's result to the fields the query selected.
+
+    Dicts are read by key, other objects by attribute; lists are projected
+    element by element. A leaf field (no sub-selection) is returned as is.
+    """
+    if not selection or value is None:
+        return value
+    if isinstance(value, (list, tuple)):
+        return [_project(item, selection) for item in value]
+    out: Dict[str, Any] = {}
+    for field in selection:
+        name = field["name"]
+        if name == "__typename":
+            out[field["alias"]] = type(value).__name__ if not isinstance(value, dict) else None
+            continue
+        if isinstance(value, dict):
+            child = value.get(name)
+        else:
+            child = getattr(value, name, None)
+            if callable(child):
+                child = child()
+        out[field["alias"]] = _project(child, field["selection"])
+    return out
 
 def _extract_return_type(func: Callable) -> Optional[str]:
     """

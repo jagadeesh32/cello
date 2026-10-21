@@ -1,6 +1,6 @@
 # Migrations (experimental)
 
-!!! warning "Experimental in 1.4.0"
+!!! warning "Experimental in 1.4.1"
     `cello migrate` generates DDL from your models and runs it against your
     database. Every command refuses to run without `--experimental`. Read each
     generated file before you apply it, and take a backup before you apply in

@@ -73,7 +73,7 @@ _TX_CONTROL = re.compile(
 )
 
 _EXPERIMENTAL_MSG = (
-    "cello migrate is EXPERIMENTAL in 1.4.0: it generates and runs DDL against your "
+    "cello migrate is EXPERIMENTAL in 1.4.1: it generates and runs DDL against your "
     "database and can lose data if a migration is applied without review.\n"
     "Re-run with --experimental to acknowledge, e.g.\n"
     "    python -m cello migrate --experimental status --app main:app"

@@ -117,7 +117,8 @@ def test_limits_config():
     # Create with defaults
     config = LimitsConfig()
     assert config is not None
-    assert config.max_header_size == 8192
+    # 1.4.1: raised from 8 KiB; also the server default when set_limits() is never called.
+    assert config.max_header_size == 16384
     assert config.max_body_size == 10485760
 
     # Create with custom values
@@ -1042,7 +1043,7 @@ def test_version():
     """Test that version is 1.2.0."""
     import cello
 
-    assert cello.__version__ == "1.4.0"
+    assert cello.__version__ == "1.4.1"
 
 
 def test_all_exports():
@@ -1844,7 +1845,7 @@ def test_version_v090():
     """Test that version is 1.2.0 (updated from 0.9.0)."""
     import cello
 
-    assert cello.__version__ == "1.4.0"
+    assert cello.__version__ == "1.4.1"
 
 
 def test_v090_exports_in_all():
@@ -2668,9 +2669,15 @@ async def test_graphql_engine_add_mutation():
 
     gql.add_mutation(create_item)
 
-    result = await gql.execute("mutation { createItem }", variables={"name": "Widget"})
-    assert "data" in result
-    assert result["data"]["create_item"]["name"] == "Widget"
+    # 1.4.1 deliberate break: execute() used to run every registered mutation
+    # with the variables as kwargs, whatever the document said. Fields now
+    # come from the parsed operation, arguments from the field.
+    result = await gql.execute(
+        "mutation Create($name: String!) { createItem(name: $name) { name } }",
+        variables={"name": "Widget"},
+    )
+    assert "errors" not in result, result
+    assert result["data"]["createItem"] == {"name": "Widget"}
 
 
 @pytest.mark.asyncio
@@ -3631,7 +3638,7 @@ def test_version_v0100():
     """Test that version is 1.2.0."""
     import cello
 
-    assert cello.__version__ == "1.4.0"
+    assert cello.__version__ == "1.4.1"
 
 
 def test_v0100_exports_in_all():

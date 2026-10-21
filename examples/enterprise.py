@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Enterprise Configuration Example for Cello v1.4.0.
+Enterprise Configuration Example for Cello v1.4.1.
 
 This example demonstrates the enterprise-grade configuration classes
 available in Cello for production deployments.
@@ -190,7 +190,7 @@ def home(request):
     """Display available enterprise configurations."""
     return {
         "message": "Cello Enterprise Configuration Demo",
-        "version": "1.4.0",
+        "version": "1.4.1",
         "configurations": [
             "TimeoutConfig - Request/response timeouts",
             "LimitsConfig - Connection and body limits",

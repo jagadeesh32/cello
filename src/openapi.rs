@@ -606,7 +606,7 @@ mod tests {
 
     #[test]
     fn test_openapi_generator() {
-        let generator = OpenAPIGenerator::new("Test API", "1.4.0")
+        let generator = OpenAPIGenerator::new("Test API", "1.4.1")
             .description("A test API")
             .add_jwt_auth();
 

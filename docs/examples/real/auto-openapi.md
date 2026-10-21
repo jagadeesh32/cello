@@ -36,7 +36,7 @@ app.enable_logging()
 @app.get("/", tags=["General"], summary="API Home")
 def home(request):
     """Returns welcome message and API info."""
-    return {"message": "Welcome to Cello API!", "version": "1.4.0", "docs": "/docs"}
+    return {"message": "Welcome to Cello API!", "version": "1.4.1", "docs": "/docs"}
 
 @app.get("/health", tags=["General"], summary="Health Check")
 def health_check(request):
@@ -85,7 +85,7 @@ def create_item(request):
     data = request.json()
     return {"message": "Item created", "item": data}
 
-app.enable_openapi(title="My Auto-Generated API", version="1.4.0")
+app.enable_openapi(title="My Auto-Generated API", version="1.4.1")
 
 if __name__ == "__main__":
     app.run(host="127.0.0.1", port=8080)

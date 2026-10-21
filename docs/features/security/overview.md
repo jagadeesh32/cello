@@ -330,15 +330,14 @@ Secure cookie-based sessions:
 from cello.middleware import SessionConfig
 
 config = SessionConfig(
-    secret=b"session-secret-minimum-32-bytes-long",
     cookie_name="session_id",
-    max_age=86400,  # 24 hours
-    http_only=True,
-    secure=True,     # HTTPS only
-    same_site="Lax"
+    max_age=86400,           # 24 hours
+    cookie_http_only=True,
+    cookie_secure=True,      # HTTPS only
+    cookie_same_site="Lax",
 )
 
-app.enable_sessions(config)
+app.enable_session(config)
 
 @app.get("/login")
 def login(request):
@@ -398,7 +397,7 @@ config = RateLimitConfig(
     requests=100,
     window=60,
     algorithm="token_bucket",  # or "sliding_window"
-    key_func=lambda req: req.get_header("X-API-Key") or req.client_ip,
+    key_by="api_key",  # "ip" (default), "user", "api_key", "header:<Name>"
     exempt_paths=["/health", "/metrics"]
 )
 

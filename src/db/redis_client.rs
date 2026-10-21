@@ -94,6 +94,15 @@ impl PyRedis {
     }
 }
 
+impl PyRedis {
+    /// Forget any connection opened by the parent process (see
+    /// `PyDatabase::reset_after_fork`); the worker connects lazily on first use.
+    pub fn reset_after_fork(&mut self) {
+        let fresh = Arc::new(Mutex::new(None));
+        std::mem::forget(std::mem::replace(&mut self.manager, fresh));
+    }
+}
+
 /// Acquire (lazily initialising) a cloned connection manager.
 async fn get_conn(
     client: redis::Client,

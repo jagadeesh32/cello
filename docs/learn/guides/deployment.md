@@ -26,9 +26,16 @@ python app.py \
 |------|---------|-------------|
 | `--host` | `127.0.0.1` | Bind address. Use `0.0.0.0` in containers. |
 | `--port` | `8000` | Listening port |
-| `--env` | `development` | Set to `production` to disable debug mode |
-| `--workers` | CPU count | Number of worker threads |
-| `--debug` | Off in prod | Enable verbose error pages |
+| `--env` | `development` | Set to `production` to disable debug mode (also `CELLO_ENV`) |
+| `--workers` | 1 in development, CPU count in production | Number of worker processes |
+| `--debug` | Off | Return exception details in 500 responses |
+
+!!! warning "Error details"
+    500 responses include the exception text only with `--debug`, an explicit
+    `env="development"` / `--env development` / `CELLO_ENV=development`, or an
+    interactive terminal. A process without a TTY (container, service manager)
+    that did not choose development gets a generic `Internal Server Error`; the
+    details go to the server log.
 | `--no-logs` | Off | Disable request logging |
 
 ### Programmatic Configuration
@@ -47,7 +54,7 @@ app.run(
 
 ## Workers Configuration
 
-Cello uses Tokio worker threads inside Rust. The `--workers` flag controls how many OS threads handle requests concurrently.
+Each worker is a separate process with its own Tokio runtime; on Linux/macOS they are forked and share the port via `SO_REUSEPORT`. With `--workers N` exactly N processes serve requests and the parent only supervises them (it forwards `SIGINT`/`SIGTERM`). Each forked worker opens its own database pool and Redis connection; in-memory sessions, caches and rate limits are per worker.
 
 **Rule of thumb:** Set workers to the number of CPU cores.
 
@@ -200,6 +207,16 @@ server {
 
 !!! note
     The `/ws/` location block is required for WebSocket connections. Without the `Upgrade` headers, WebSocket handshakes fail.
+
+### Trust the proxy's forwarding headers
+
+Cello ignores `X-Forwarded-For`, `X-Real-IP`, `X-Forwarded-Proto` and
+`X-Forwarded-Host` unless the connection comes from a proxy you list, so a
+client cannot spoof its address for rate limiting or `request.client_ip()`:
+
+```python
+app.set_trusted_proxies(["127.0.0.1"])   # nginx on the same host
+```
 
 ---
 

@@ -38,6 +38,9 @@ pub enum HandlerResult {
     JsonBytes(Vec<u8>),
     /// serde_json::Value (Response objects that need special handling)
     JsonValue(serde_json::Value),
+    /// A `Response` the handler returned, passed through as is (binary
+    /// bodies, deferred file bodies and repeated headers survive).
+    Response(Box<crate::response::Response>),
 }
 
 /// Cached metadata for a handler to avoid per-request introspection.
@@ -385,6 +388,12 @@ enum Serialized {
 ///
 /// PERF: Try direct-to-bytes first (skips the intermediate serde_json::Value).
 fn serialize(py: Python<'_>, obj: &PyAny) -> Result<Serialized, String> {
+    if let Ok(cell) = obj.downcast::<PyCell<crate::response::Response>>() {
+        let response = cell.try_borrow().map_err(|e| e.to_string())?.clone();
+        return Ok(Serialized::Done(HandlerResult::Response(Box::new(
+            response,
+        ))));
+    }
     match python_to_json_bytes_direct(py, obj)? {
         Some((bytes, holes)) if holes.is_empty() => {
             Ok(Serialized::Done(HandlerResult::JsonBytes(bytes)))

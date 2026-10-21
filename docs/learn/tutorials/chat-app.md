@@ -66,9 +66,9 @@ def chat_handler(ws):
 
             # Parse the incoming message
             try:
-                data = json.loads(msg.text)
+                data = json.loads(msg.content)
             except (json.JSONDecodeError, AttributeError):
-                data = {"message": msg.text}
+                data = {"message": msg.content}
 
             # Handle special commands
             if data.get("type") == "set_name":

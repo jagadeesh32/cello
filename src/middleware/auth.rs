@@ -30,6 +30,33 @@ fn secure_compare(a: &str, b: &str) -> bool {
     a.as_bytes().ct_eq(b.as_bytes()).into()
 }
 
+/// Constant-time equality that also hides the lengths: both sides are hashed
+/// to fixed-size SHA-256 digests first, then compared with `subtle`.
+#[inline]
+fn digest_eq(a: &str, b: &str) -> bool {
+    use sha2::{Digest, Sha256};
+    let da = Sha256::digest(a.as_bytes());
+    let db = Sha256::digest(b.as_bytes());
+    da.as_slice().ct_eq(db.as_slice()).into()
+}
+
+/// Check `(username, password)` against every entry of `credentials` without
+/// short-circuiting: the time taken does not reveal whether the username exists
+/// or how much of either value matched.
+pub fn credentials_match(
+    credentials: &HashMap<String, String>,
+    username: &str,
+    password: &str,
+) -> bool {
+    let mut found = subtle::Choice::from(0u8);
+    for (u, p) in credentials {
+        let user_ok = subtle::Choice::from(digest_eq(u, username) as u8);
+        let pass_ok = subtle::Choice::from(digest_eq(p, password) as u8);
+        found |= user_ok & pass_ok;
+    }
+    found.into()
+}
+
 // ============================================================================
 // JWT Authentication
 // ============================================================================
@@ -313,10 +340,11 @@ impl Middleware for JwtAuth {
             .ok_or_else(|| MiddlewareError::unauthorized("Missing authentication token"))?;
 
         // Validate token
-        let claims = self
-            .config
-            .decode(&token)
-            .map_err(|e| MiddlewareError::unauthorized(&e.to_string()))?;
+        // The library's error text (expired, bad signature, wrong audience, …)
+        // helps an attacker probe the configuration; the client gets one message.
+        let claims = self.config.decode(&token).map_err(|_| {
+            MiddlewareError::unauthorized("Invalid or expired authentication token")
+        })?;
 
         // Store claims in request context
         request.context.insert(
@@ -557,12 +585,23 @@ impl ApiKeyAuth {
         }
     }
 
-    /// Create API key auth from HashMap of keys.
+    /// Create API key auth from HashMap of keys (key → client id).
+    ///
+    /// Every stored key is compared in constant time (no hash-map lookup,
+    /// which would leak through timing which prefix matched).
     pub fn from_keys(keys: HashMap<String, String>) -> Self {
-        let keys = Arc::new(keys);
+        let keys: Arc<Vec<(String, String)>> = Arc::new(keys.into_iter().collect());
         Self {
             location: ApiKeyLocation::default(),
-            validator: Arc::new(move |key| keys.get(key).cloned()),
+            validator: Arc::new(move |key| {
+                let mut matched: Option<&String> = None;
+                for (k, client) in keys.iter() {
+                    if digest_eq(k, key) && matched.is_none() {
+                        matched = Some(client);
+                    }
+                }
+                matched.cloned()
+            }),
             skip_paths: Vec::new(),
             client_key: "api_key_client".to_string(),
         }

@@ -62,12 +62,12 @@ routes appropriately for health/metrics/docs.
 
 | Plugin | Signature | Effect |
 | --- | --- | --- |
-| `enable_cors` | `enable_cors(origins=None)` | Reflects allowed origins, adds `Vary: Origin` |
+| `enable_cors` | `enable_cors(origins=None)` | Reflects listed origins (adds `Vary: Origin`); `None` = `*`, never with credentials |
 | `enable_security_headers` | `enable_security_headers(config=None)` | Adds HSTS, `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, … |
 | `enable_jwt` | `enable_jwt(JwtConfig(...), skip_paths=None)` | Validates `Bearer` tokens (header/cookie), stores claims in context |
 | `enable_basic_auth` | `enable_basic_auth(credentials, realm=None)` | HTTP Basic; issues a `WWW-Authenticate` challenge on 401 |
 | `enable_api_key` | `enable_api_key(keys, header=None)` | API-key auth via header (default `X-API-Key`) |
-| `enable_session` | `enable_session(SessionConfig()=None)` | Signed cookie sessions |
+| `enable_session` | `enable_session(SessionConfig()=None)` | Server-side sessions behind a random cookie id; `request.session` |
 | `enable_csrf` | `enable_csrf(cookie_name=None, header_name=None, allowed_origins=None)` | Double-submit-cookie CSRF protection |
 
 `enable_security_headers` accepts three forms:
@@ -117,13 +117,17 @@ app.enable_api_key({"key-123": "client-a"}, header="X-API-Key")
 ## Built-in endpoints
 
 These plugins serve their own paths — you don't register a route for them. Cello
-serves them even though they aren't in the router.
+serves them even though they aren't in the router. Since 1.4.1 these endpoints
+(and `/metrics`) run behind the full middleware chain: with JWT, Basic or
+API-key auth enabled they require credentials, and rate limits apply. List
+probe paths in `skip_paths` to keep them public, e.g.
+`app.enable_jwt(cfg, skip_paths=["/health/live", "/health/ready"])`.
 
 | Plugin | Signature | Serves |
 | --- | --- | --- |
 | `enable_health_checks` | `enable_health_checks(HealthCheckConfig()=None)` | `/health`, `/health/live`, `/health/ready`, `/health/startup` |
 | `enable_openapi` | `enable_openapi(title=None, version=None)` | `/docs` (Swagger UI), `/redoc`, `/openapi.json` |
-| `enable_graphql` | `enable_graphql(GraphQLConfig()=None)` | `/graphql` (POST queries + GET playground) |
+| `enable_graphql` | `enable_graphql(GraphQLConfig()=None)` | `/graphql` (POST queries; GET playground only with `playground=True`, off by default) |
 
 ```python
 from cello import HealthCheckConfig, GraphQLConfig

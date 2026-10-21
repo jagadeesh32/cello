@@ -318,7 +318,7 @@ app.enable_rabbitmq(RabbitMQConfig(url="amqp://localhost:5672"))
 
 @app.get("/")
 def home(request):
-    return {"status": "ok", "version": "1.4.0", "protocols": ["graphql", "grpc", "kafka", "rabbitmq"]}
+    return {"status": "ok", "version": "1.4.1", "protocols": ["graphql", "grpc", "kafka", "rabbitmq"]}
 
 app.run()
 ```
@@ -356,7 +356,7 @@ app.enable_prometheus(endpoint="/metrics")
 
 @app.get("/")
 def home(request):
-    return {"status": "ok", "version": "1.4.0"}
+    return {"status": "ok", "version": "1.4.1"}
 
 app.run()
 ```

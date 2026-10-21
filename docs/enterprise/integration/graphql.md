@@ -10,7 +10,7 @@ Cello provides first-class GraphQL support with decorator-based schema definitio
 ## Quick Start
 
 ```python
-from cello import App
+from cello import App, GraphQLConfig
 from cello.graphql import Query, Mutation, Schema, DataLoader, GraphQL
 
 app = App()
@@ -27,8 +27,15 @@ def user(info, id: int) -> dict:
 def create_user(info, name: str, email: str) -> dict:
     return {"id": 3, "name": name, "email": email}
 
-schema = Schema().query(users).query(user).mutation(create_user).build()
-result = await schema.execute("{ users }")
+schema = Schema().query(users).query(user).mutation(create_user)
+
+# Serve it at POST /graphql
+app.enable_graphql(GraphQLConfig(path="/graphql"), schema=schema)
+
+# Or execute directly
+engine = schema.build()
+result = await engine.execute('{ user(id: 1) { name } }')
+# {"data": {"user": {"name": "Alice"}}}
 ```
 
 ## Decorators
@@ -137,40 +144,70 @@ Execute queries directly using the GraphQL engine.
 ```python
 from cello.graphql import GraphQL
 
-engine = GraphQL()
+engine = GraphQL(max_depth=10, max_complexity=1000, introspection=False)
 engine.add_query(users)
 engine.add_mutation(create_user)
 
-result = await engine.execute("{ users }")
-# {"data": {"users": [...]}, "errors": None}
+result = await engine.execute("{ users { id name } }")
+# {"data": {"users": [{"id": 1, "name": "Alice"}, ...]}}
 
-# With variables
+# Variables and operation names
 result = await engine.execute(
-    "mutation($name: String!) { createUser(name: $name) }",
-    variables={"name": "Alice"}
+    "mutation Create($name: String!) { createUser(name: $name, email: \"a@x.io\") { id } }",
+    variables={"name": "Alice"},
+    operation_name="Create",
 )
 ```
 
+How a document is executed:
+
+- It is parsed by Cello's GraphQL parser. The operation type, `operationName`,
+  variables (defaults and required checks), aliases, fragments and
+  `@skip`/`@include` all come from the document.
+- Only the root fields the operation selects run. A query never runs a
+  mutation resolver.
+- Each resolver is called as `resolver(info, **arguments)`. The arguments are
+  the field's own, with variables substituted. `info` is a dict with
+  `field_name`, `operation`, `variables`, `selection` and `context` (the HTTP
+  request when served by `enable_graphql`).
+- The result is trimmed to the sub-selection. Dicts are read by key, objects by
+  attribute, and lists element by element.
+- A root field `createUser` resolves to a resolver named `createUser` or
+  `create_user`.
+- `max_depth`, `max_complexity` (fields counted with fragments expanded) and
+  `introspection` are checked before any resolver runs. A rejected document
+  returns `{"data": None, "errors": [...]}`, which is HTTP 400 at the endpoint.
+
 ## Configuration
 
-Enable GraphQL on your Cello app:
+Serve a schema on your Cello app:
 
 ```python
 from cello import App, GraphQLConfig
 
 app = App()
-app.enable_graphql(GraphQLConfig(
-    path="/graphql",
-    playground=True,
-    introspection=True
-))
+app.enable_graphql(
+    GraphQLConfig(path="/graphql", max_depth=10, max_complexity=1000),
+    schema=schema,
+)
 ```
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `path` | `/graphql` | GraphQL endpoint path |
-| `playground` | `True` | Enable GraphiQL playground |
-| `introspection` | `True` | Enable schema introspection |
+| `path` | `/graphql` | GraphQL endpoint path (`POST` executes) |
+| `playground` | `False` | Serve the GraphQL Playground page on `GET` |
+| `introspection` | `False` | Allow `__schema` / `__type` |
+| `max_depth` | `10` | Deepest field nesting |
+| `max_complexity` | `1000` | Most fields per operation |
+
+Since 1.4.1 playground and introspection are off by default (both reveal the
+schema to any caller); enable them for development. The endpoint runs behind
+the normal middleware chain, so JWT/Basic/API-key auth and rate limiting apply
+to it. Add the path to `skip_paths` only if it is meant to be public.
+Subscriptions are not served over HTTP.
+
+Without `schema=`, `enable_graphql` serves the Rust endpoint. It applies the
+same parser and limits, but resolves only resolvers registered from Rust.
 
 ## API Reference
 

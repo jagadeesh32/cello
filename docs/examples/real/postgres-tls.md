@@ -20,7 +20,7 @@ Since 1.4.0 the Postgres pool (and `cello migrate`) can speak TLS through rustls
 ```python
 #!/usr/bin/env python3
 """
-Postgres TLS demo for Cello v1.4.0.
+Postgres TLS demo for Cello v1.4.1.
 
 Connects to the database once per libpq `sslmode` and asks the server how the
 connection really looks (`pg_stat_ssl`), so you can see what each mode does:

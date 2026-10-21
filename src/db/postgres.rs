@@ -73,7 +73,9 @@ where
 }
 
 fn int_to_py(py: Python<'_>, n: u64) -> PyResult<PyObject> {
-    Ok((n as i64).into_py(py))
+    // `u64` straight into a Python int: an `as i64` cast wrapped counts above
+    // `i64::MAX` to negative numbers.
+    Ok(n.into_py(py))
 }
 
 fn rows_to_py(py: Python<'_>, rows: Vec<Row>) -> PyResult<PyObject> {
@@ -275,6 +277,10 @@ pub struct PyDatabase {
     #[pyo3(get)]
     dsn: String,
     ssl_mode: SslMode,
+    /// What the pool was built from, so a forked worker can build its own.
+    pg_config: tokio_postgres::Config,
+    connector: tls::RustlsConnect,
+    pool_size: usize,
 }
 
 impl PyDatabase {
@@ -295,19 +301,40 @@ impl PyDatabase {
             connector,
             mode,
         } = tls::configure(dsn, tls_opts).map_err(pyo3::exceptions::PyValueError::new_err)?;
-        let mgr_config = ManagerConfig {
-            recycling_method: RecyclingMethod::Fast,
-        };
-        let mgr = Manager::from_config(pg_config, connector, mgr_config);
-        let pool = Pool::builder(mgr)
-            .max_size(pool_size.max(1))
-            .build()
-            .map_err(|e| rt_err(format!("failed to build pool: {e}")))?;
+        let pool = Self::build_pool(&pg_config, &connector, pool_size)?;
         Ok(Self {
             pool,
             dsn: dsn.to_string(),
             ssl_mode: mode,
+            pg_config,
+            connector,
+            pool_size,
         })
+    }
+
+    fn build_pool(
+        pg_config: &tokio_postgres::Config,
+        connector: &tls::RustlsConnect,
+        pool_size: usize,
+    ) -> PyResult<Pool> {
+        let mgr_config = ManagerConfig {
+            recycling_method: RecyclingMethod::Fast,
+        };
+        let mgr = Manager::from_config(pg_config.clone(), connector.clone(), mgr_config);
+        Pool::builder(mgr)
+            .max_size(pool_size.max(1))
+            .build()
+            .map_err(|e| rt_err(format!("failed to build pool: {e}")))
+    }
+
+    /// Replace the pool with a fresh, empty one. Called in a forked worker:
+    /// connections opened by the parent share their TCP sessions with it and
+    /// must never be used from the child. The old pool is leaked, not dropped,
+    /// so nothing in the child touches the parent's sockets or runtime.
+    pub fn reset_after_fork(&mut self) -> PyResult<()> {
+        let fresh = Self::build_pool(&self.pg_config, &self.connector, self.pool_size)?;
+        std::mem::forget(std::mem::replace(&mut self.pool, fresh));
+        Ok(())
     }
 }
 

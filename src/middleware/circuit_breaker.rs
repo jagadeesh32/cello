@@ -138,6 +138,11 @@ impl Middleware for CircuitBreakerMiddleware {
     }
 
     fn after(&self, request: &Request, response: &mut Response) -> MiddlewareResult {
+        // Only handler outcomes count: a 401/429/cache HIT produced by the
+        // pipeline says nothing about the backend's health.
+        if request.context.contains_key(super::EARLY_RESPONSE_KEY) {
+            return Ok(MiddlewareAction::Continue);
+        }
         let key = self.get_key(request);
         let is_failure = self.config.failure_codes.contains(&response.status);
 

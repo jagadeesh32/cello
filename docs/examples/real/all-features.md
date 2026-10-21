@@ -88,7 +88,7 @@ app.register_singleton("cache", {
 
 app.register_singleton("config", {
     "debug": True,
-    "version": "1.4.0",
+    "version": "1.4.1",
     "env": "development"
 })
 
@@ -128,7 +128,7 @@ def home(request):
     """API Home - Lists all available endpoints."""
     return {
         "message": "Welcome to Cello Framework - ALL Features Demo!",
-        "version": "1.4.0",
+        "version": "1.4.1",
         "features": {
             "core": ["/routing", "/async", "/blueprints", "/sse", "/multipart"],
             "advanced": ["/auth", "/csrf", "/sessions", "/security"],
@@ -146,7 +146,7 @@ def home(request):
 @app.get("/health", tags=["Core"], summary="Health Check")
 def health_check(request):
     """Health check endpoint."""
-    return {"status": "healthy", "framework": "cello", "version": "1.4.0"}
+    return {"status": "healthy", "framework": "cello", "version": "1.4.1"}
 
 
 # =============================================================================
@@ -451,7 +451,7 @@ def render_template(request):
         {
             "name": name,
             "framework": "Cello",
-            "version": "1.4.0",
+            "version": "1.4.1",
             "features": ["Dependency Injection", "Guards", "Templates", "Background Tasks"]
         }
     )
@@ -589,7 +589,7 @@ def server_error_demo(request):
 # Enable OpenAPI (Auto-generated from all routes above!)
 # =============================================================================
 
-app.enable_openapi(title="Cello ALL Features API", version="1.4.0")
+app.enable_openapi(title="Cello ALL Features API", version="1.4.1")
 
 
 # =============================================================================

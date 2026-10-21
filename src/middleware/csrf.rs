@@ -49,6 +49,9 @@ fn origin_authority(value: &str) -> &str {
 
 type HmacSha256 = Hmac<Sha256>;
 
+/// Default CSRF cookie name (see `CsrfConfig::new`).
+pub const DEFAULT_COOKIE_NAME: &str = "__Host-csrf";
+
 /// CSRF token with timestamp for expiration.
 #[derive(Clone)]
 pub struct CsrfToken {
@@ -123,7 +126,9 @@ impl CsrfToken {
             .unwrap_or_default()
             .as_secs();
 
-        now - timestamp <= max_age.as_secs()
+        // A timestamp in the future is not "fresh"; `now - timestamp` would
+        // wrap (release) or panic (debug) instead.
+        timestamp <= now && now - timestamp <= max_age.as_secs()
     }
 
     /// Check if token is expired.
@@ -132,7 +137,7 @@ impl CsrfToken {
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs();
-        now - self.timestamp > max_age.as_secs()
+        now.saturating_sub(self.timestamp) > max_age.as_secs()
     }
 }
 
@@ -184,18 +189,19 @@ impl CsrfConfig {
     pub fn new() -> Self {
         Self {
             method: CsrfMethod::default(),
-            cookie_name: "_csrf".to_string(),
+            // `__Host-`: the browser accepts this cookie only from this exact
+            // host, over HTTPS, with `Path=/` and no `Domain` — a sibling
+            // subdomain cannot plant a token the double-submit check would
+            // then accept.
+            cookie_name: DEFAULT_COOKIE_NAME.to_string(),
             header_name: "X-CSRF-Token".to_string(),
             form_field: "_csrf".to_string(),
             cookie_path: "/".to_string(),
             cookie_secure: true,
             cookie_same_site: "Lax".to_string(),
-            safe_methods: vec![
-                "GET".to_string(),
-                "HEAD".to_string(),
-                "OPTIONS".to_string(),
-                "TRACE".to_string(),
-            ],
+            // TRACE is deliberately not "safe" here: it is never needed by
+            // an application and must not bypass validation.
+            safe_methods: vec!["GET".to_string(), "HEAD".to_string(), "OPTIONS".to_string()],
             skip_paths: Vec::new(),
             allowed_origins: Vec::new(),
             context_key: "csrf_token".to_string(),
@@ -308,8 +314,38 @@ impl CsrfMiddleware {
     }
 
     /// Create with config.
-    pub fn with_config(config: CsrfConfig) -> Self {
+    ///
+    /// A `__Host-` / `__Secure-` cookie name whose requirements the config does
+    /// not meet (browsers drop such a cookie) loses its prefix, so the cookie
+    /// still works, e.g. over plain HTTP in development.
+    pub fn with_config(mut config: CsrfConfig) -> Self {
+        let name = &config.cookie_name;
+        let host_ok = config.cookie_secure && config.cookie_path == "/";
+        if let Some(rest) = name.strip_prefix("__Host-").filter(|_| !host_ok) {
+            config.cookie_name = rest.to_string();
+        } else if let Some(rest) = name
+            .strip_prefix("__Secure-")
+            .filter(|_| !config.cookie_secure)
+        {
+            config.cookie_name = rest.to_string();
+        }
         Self { config }
+    }
+
+    /// Store `token` in a session this response persists that has none yet,
+    /// so the next unsafe request is checked against the session (synchronizer
+    /// token) rather than the cookie. Covers the request that creates the
+    /// session (login), without creating sessions for anonymous visitors.
+    fn bind_to_session(&self, request: &Request, token: &str) {
+        let Some(handle) = request.session.as_ref() else {
+            return;
+        };
+        let mut st = handle.lock();
+        let persisted = !st.destroyed && (st.modified || !st.is_new);
+        if persisted && !st.data.contains(SESSION_KEY) {
+            st.data.set(SESSION_KEY, token);
+            st.modified = true;
+        }
     }
 
     /// Create with double-submit cookie pattern.
@@ -352,20 +388,82 @@ impl CsrfMiddleware {
         None
     }
 
-    /// Extract token from request (header or form).
+    /// Extract the submitted token: the header, else the form field in a
+    /// `application/x-www-form-urlencoded` or `multipart/form-data` body (what
+    /// `csrf_hidden_field` renders). The query string is not accepted: a token
+    /// there leaks into access logs, `Referer` and browser history.
     fn get_request_token(&self, request: &Request) -> Option<String> {
-        // Try header first
         if let Some(token) = request.headers.get(&self.config.header_name.to_lowercase()) {
             return Some(token.clone());
         }
 
-        // Try form field (from query params for now)
-        if let Some(token) = request.query_params.get(&self.config.form_field) {
-            return Some(token.clone());
+        let content_type = request.headers.get("content-type")?.to_ascii_lowercase();
+        if content_type.starts_with("application/x-www-form-urlencoded") {
+            return crate::multipart::parse_urlencoded(request.body_bytes())
+                .ok()
+                .and_then(|mut form| form.remove(&self.config.form_field));
         }
-
-        // Could also parse body for form submissions
+        if content_type.starts_with("multipart/form-data") {
+            // Take the boundary from the original (case-preserving) header,
+            // right after `boundary=`.
+            let original = request.headers.get("content-type")?;
+            let at = content_type.find("boundary=")? + "boundary=".len();
+            let boundary = original
+                .get(at..)?
+                .split(';')
+                .next()?
+                .trim()
+                .trim_matches('"');
+            return multipart_field(request.body_bytes(), boundary, &self.config.form_field);
+        }
         None
+    }
+
+    /// The token this request should carry for later unsafe requests: the
+    /// session's token when a session exists, else the existing cookie, else new.
+    fn issue_token(&self, request: &Request) -> String {
+        if let Some(handle) = request.session.as_ref() {
+            let mut st = handle.lock();
+            if !st.is_new {
+                if let Some(t) = st.data.get_string(SESSION_KEY) {
+                    // A signed token expires; replace it instead of returning a
+                    // token that every later submission would fail on.
+                    let still_valid = match &self.config.method {
+                        CsrfMethod::SignedToken { secret, max_age } => {
+                            CsrfToken::verify_signed(&t, secret, *max_age)
+                        }
+                        _ => true,
+                    };
+                    if still_valid {
+                        return t;
+                    }
+                }
+                let t = self.new_token();
+                st.data.set(SESSION_KEY, &t);
+                st.modified = true;
+                return t;
+            }
+        }
+        if let Some(existing) = self.get_cookie_token(request) {
+            let reusable = match &self.config.method {
+                CsrfMethod::SignedToken { secret, max_age } => {
+                    CsrfToken::verify_signed(&existing, secret, *max_age)
+                }
+                _ => existing.len() == 64 && existing.bytes().all(|b| b.is_ascii_hexdigit()),
+            };
+            // Reusing the cookie keeps forms in other open tabs valid.
+            if reusable {
+                return existing;
+            }
+        }
+        self.new_token()
+    }
+
+    fn new_token(&self) -> String {
+        match &self.config.method {
+            CsrfMethod::SignedToken { secret, .. } => CsrfToken::generate_signed(secret).token,
+            _ => CsrfToken::generate().token,
+        }
     }
 
     /// Validate origin/referer headers.
@@ -435,11 +533,14 @@ impl Middleware for CsrfMiddleware {
     fn before(&self, request: &mut Request) -> MiddlewareResult {
         // Skip for safe methods
         if self.is_safe_method(&request.method) {
-            // Generate token for safe methods (for use in forms)
-            let token = match &self.config.method {
-                CsrfMethod::SignedToken { secret, .. } => CsrfToken::generate_signed(secret).token,
-                _ => CsrfToken::generate().token,
-            };
+            // Token for forms/AJAX rendered by this response.
+            let token = self.issue_token(request);
+            if self.get_cookie_token(request).as_deref() != Some(token.as_str()) {
+                // New to this visitor: the response is visitor-specific.
+                request
+                    .context
+                    .insert(FRESH_TOKEN_KEY.to_string(), serde_json::Value::Bool(true));
+            }
             request.context.insert(
                 self.config.context_key.clone(),
                 serde_json::Value::String(token),
@@ -452,25 +553,50 @@ impl Middleware for CsrfMiddleware {
             return Ok(MiddlewareAction::Continue);
         }
 
+        // With an established session that holds a token, the submitted token
+        // must equal it (synchronizer token): a cookie an attacker managed to
+        // plant (e.g. from a sibling subdomain) is then useless.
+        let session_token = request.session.as_ref().and_then(|h| {
+            let st = h.lock();
+            if st.is_new {
+                None
+            } else {
+                st.data.get_string(SESSION_KEY)
+            }
+        });
+
         // Validate based on method
         let valid = match &self.config.method {
-            CsrfMethod::DoubleSubmit => {
-                let cookie_token = self.get_cookie_token(request);
-                let request_token = self.get_request_token(request);
-                match (cookie_token, request_token) {
-                    // Use constant-time comparison to prevent timing attacks
-                    (Some(c), Some(r)) => secure_compare(&c, &r),
-                    _ => false,
-                }
-            }
-            CsrfMethod::SignedToken { secret, max_age } => {
-                if let Some(token) = self.get_request_token(request) {
-                    CsrfToken::verify_signed(&token, secret, *max_age)
-                } else {
-                    false
-                }
-            }
             CsrfMethod::OriginCheck => self.validate_origin(request),
+            method => {
+                let request_token = self.get_request_token(request);
+                let cookie_token = self.get_cookie_token(request);
+                match (request_token, session_token) {
+                    (Some(r), Some(s)) => {
+                        secure_compare(&r, &s)
+                            && match method {
+                                CsrfMethod::SignedToken { secret, max_age } => {
+                                    CsrfToken::verify_signed(&r, secret, *max_age)
+                                }
+                                _ => true,
+                            }
+                    }
+                    // No session token: double-submit. The submitted token must
+                    // match the cookie (constant-time), and in signed mode also
+                    // carry a valid, unexpired signature — a signed token alone is
+                    // no longer a bearer credential.
+                    (Some(r), None) => {
+                        cookie_token.is_some_and(|c| secure_compare(&c, &r))
+                            && match method {
+                                CsrfMethod::SignedToken { secret, max_age } => {
+                                    CsrfToken::verify_signed(&r, secret, *max_age)
+                                }
+                                _ => true,
+                            }
+                    }
+                    (None, _) => false,
+                }
+            }
         };
 
         if !valid {
@@ -485,8 +611,18 @@ impl Middleware for CsrfMiddleware {
         if self.is_safe_method(&request.method) {
             if let Some(token) = request.context.get(&self.config.context_key) {
                 if let Some(token_str) = token.as_str() {
-                    response.set_header("Set-Cookie", &self.build_cookie(token_str));
+                    // Only (re)send the cookie when it changes.
+                    if self.get_cookie_token(request).as_deref() != Some(token_str) {
+                        response.append_header("Set-Cookie", &self.build_cookie(token_str));
+                    }
+                    self.bind_to_session(request, token_str);
                 }
+            }
+        } else if !matches!(self.config.method, CsrfMethod::OriginCheck) && response.status < 400 {
+            // An unsafe request that passed the double-submit check (its token
+            // equals the cookie): bind that token to the session it may create.
+            if let Some(cookie) = self.get_cookie_token(request) {
+                self.bind_to_session(request, &cookie);
             }
         }
         Ok(MiddlewareAction::Continue)
@@ -505,6 +641,33 @@ impl Middleware for CsrfMiddleware {
 // Helper Functions
 // ============================================================================
 
+/// Request-context flag: this request issued a token the client does not hold
+/// yet (the response cache must not share such a response).
+pub const FRESH_TOKEN_KEY: &str = "__csrf_fresh_token";
+
+/// Session key holding the synchronizer token.
+const SESSION_KEY: &str = "_csrf_token";
+
+/// Extract a simple text field from a `multipart/form-data` body.
+fn multipart_field(body: &[u8], boundary: &str, field: &str) -> Option<String> {
+    let delimiter = format!("--{boundary}");
+    let text = String::from_utf8_lossy(body);
+    let wanted = format!("name=\"{field}\"");
+    for part in text.split(delimiter.as_str()) {
+        let Some((head, value)) = part.split_once("\r\n\r\n") else {
+            continue;
+        };
+        let disposition_matches = head.lines().any(|line| {
+            let lower = line.to_ascii_lowercase();
+            lower.starts_with("content-disposition:") && line.split(';').any(|p| p.trim() == wanted)
+        });
+        if disposition_matches {
+            return Some(value.trim_end_matches("\r\n").to_string());
+        }
+    }
+    None
+}
+
 /// Get CSRF token from request context.
 pub fn get_csrf_token(request: &Request) -> Option<String> {
     request
@@ -517,6 +680,7 @@ pub fn get_csrf_token(request: &Request) -> Option<String> {
 /// Generate hidden form field HTML for CSRF token.
 pub fn csrf_hidden_field(request: &Request) -> String {
     if let Some(token) = get_csrf_token(request) {
+        // Tokens are hex (or `ts.hex.hex`), so they need no HTML escaping.
         format!(r#"<input type="hidden" name="_csrf" value="{token}">"#)
     } else {
         String::new()
@@ -535,6 +699,51 @@ pub fn csrf_meta_tag(request: &Request) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_signed_token_future_timestamp_rejected() {
+        let secret = b"k";
+        let message = format!("{}.{}", u64::MAX - 5, "00");
+        let mut mac = HmacSha256::new_from_slice(secret).unwrap();
+        mac.update(message.as_bytes());
+        let token = format!("{}.{}", message, hex::encode(mac.finalize().into_bytes()));
+        assert!(!CsrfToken::verify_signed(
+            &token,
+            secret,
+            Duration::from_secs(60)
+        ));
+    }
+
+    #[test]
+    fn test_token_read_from_form_bodies() {
+        let mw = CsrfMiddleware::new();
+        let mut req = Request::new("POST", "/f");
+        req.headers.insert(
+            "content-type".into(),
+            "application/x-www-form-urlencoded".into(),
+        );
+        req.body = b"a=1&_csrf=abc".to_vec();
+        assert_eq!(mw.get_request_token(&req).as_deref(), Some("abc"));
+
+        let mut req = Request::new("POST", "/f");
+        req.headers.insert(
+            "content-type".into(),
+            "multipart/form-data; boundary=XyZ".into(),
+        );
+        req.body = b"--XyZ\r\nContent-Disposition: form-data; name=\"x\"\r\n\r\n1\r\n--XyZ\r\nContent-Disposition: form-data; name=\"_csrf\"\r\n\r\ntok\r\n--XyZ--\r\n".to_vec();
+        assert_eq!(mw.get_request_token(&req).as_deref(), Some("tok"));
+
+        // Query string is not accepted.
+        let mut req = Request::new("POST", "/f");
+        req.query_params.insert("_csrf".into(), "abc".into());
+        assert!(mw.get_request_token(&req).is_none());
+    }
+
+    #[test]
+    fn test_trace_is_not_safe() {
+        let mw = CsrfMiddleware::new();
+        assert!(!mw.is_safe_method("TRACE"));
+    }
 
     #[test]
     fn test_csrf_token_generation() {

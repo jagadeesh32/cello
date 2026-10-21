@@ -120,40 +120,36 @@ Retry-After: 23
 
 ## Per-IP Rate Limiting
 
-By default, rate limiting is tracked per client IP address. Cello extracts the client IP from:
+By default, rate limiting is tracked per client IP address: the address of the
+TCP peer. `X-Forwarded-For` and `X-Real-IP` are **ignored** unless the peer is a
+proxy you configured — otherwise any client could pick a fresh bucket per
+request, or push everyone into one shared bucket:
 
-1. `X-Forwarded-For` header (if behind a reverse proxy)
-2. `X-Real-IP` header
-3. Direct connection IP
+```python
+# Behind a load balancer / reverse proxy on 10.0.0.0/8
+app.set_trusted_proxies(["10.0.0.0/8"])
+```
+
+With trusted proxies, the client is the right-most `X-Forwarded-For` entry that
+is not itself a trusted proxy. The same resolution backs `request.client_ip()`.
 
 ---
 
-## Custom Key Extraction
-
-Rate limit by API key, user ID, or any request attribute:
+## Key Selection (`key_by`)
 
 ```python
-config = RateLimitConfig.token_bucket(
-    requests=100,
-    window=60,
-    key_func=lambda req: req.get_header("X-API-Key") or req.client_ip
-)
-
-app.enable_rate_limit(config)
+app.enable_rate_limit(RateLimitConfig(capacity=100, refill_rate=10, key_by="api_key"))
 ```
 
-### Common Key Strategies
+| `key_by` | Bucket per |
+|----------|-----------|
+| `"ip"` (default) | Client IP (see above) |
+| `"user"` | `request.context["user"]["id"]` or the JWT `sub` claim; client IP for anonymous requests |
+| `"api_key"` | `X-API-Key` header value; client IP when absent |
+| `"header:<Name>"` | Value of any header; client IP when absent |
 
-```python
-# Rate limit by API key
-key_func=lambda req: req.get_header("X-API-Key", "anonymous")
-
-# Rate limit by authenticated user
-key_func=lambda req: req.context.get("jwt_claims", {}).get("sub", req.client_ip)
-
-# Rate limit by endpoint + IP (different limits per route)
-key_func=lambda req: f"{req.path}:{req.client_ip}"
-```
+Any other value raises `ValueError`. Buckets that carry no state are swept
+periodically, so the store does not grow with every client ever seen.
 
 ---
 

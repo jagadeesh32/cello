@@ -12,7 +12,7 @@ flowchart TD
     C(["Browser / Client"]) -->|"1. HTTP GET\nUpgrade: websocket"| S["Cello Server\ntokio-tungstenite 🦀"]
     S -->|"2. 101 Switching Protocols"| C
     S --> H["@app.websocket handler\n🐍 Python"]
-    H -->|"ws.send_text / send_json"| C
+    H -->|"ws.send_text / send_binary"| C
     C -->|"ws.recv()"| H
     H -->|"msg is None\nor is_close()"| CLOSE(["Connection closed\ncleanup runs"])
     C -->|"Close frame"| CLOSE
@@ -39,7 +39,7 @@ def echo(ws):
         msg = ws.recv()
         if msg is None or msg.is_close():
             break
-        ws.send_text(f"Echo: {msg.text}")
+        ws.send_text(f"Echo: {msg.content}")
 
 if __name__ == "__main__":
     app.run()
@@ -68,7 +68,21 @@ def chat_handler(ws):
     pass
 ```
 
-The handler function receives a single `ws` argument -- the active WebSocket connection. The handler runs for the duration of the connection; when the function returns, the connection is closed.
+The handler function receives a single `ws` argument -- the active WebSocket connection. The handler runs for the duration of the connection; when the function returns, queued messages are flushed and the connection is closed.
+
+- A `def` handler runs on the blocking thread pool; `ws.recv()` blocks that thread without holding the GIL. Each open connection occupies one pool thread, so size the pool with `app.set_threadpool(...)`.
+- An `async def` handler runs on the application's event loop and holds no thread while it waits. It must use the awaitable methods (`await ws.arecv()`, `await ws.asend_text(...)`, see below). The blocking `recv`/`send*` raise `RuntimeError` there instead of stalling every coroutine on the loop.
+- The sync middleware chain (JWT/Basic/API-key auth, rate limits, CORS) and `app.add_guard` guards run on the upgrade request; a rejection is returned as a normal HTTP response instead of `101`.
+- **Origin check.** Browsers send `Origin` on every handshake and attach the site's cookies, so a page on another site could otherwise open a socket as the logged-in user. A handshake with an `Origin` must be same-origin (its authority equals `Host`) or listed in `allowed_origins`; anything else gets `403`. Clients that send no `Origin` (scripts, services) are unaffected.
+
+  ```python
+  @app.websocket("/ws", allowed_origins=["https://app.example.com"])
+  def handler(ws): ...
+  ```
+
+  `allowed_origins=["*"]` accepts any origin. Use it only when the socket does not rely on cookies.
+- WebSocket paths are matched exactly (no path parameters).
+- Messages larger than 16 MiB are rejected. Messages waiting for the handler are capped at 4 MiB per socket: when the handler falls behind, the server stops reading the socket and TCP pushes back on the client. Outgoing sends wait when 64 frames are queued for a slow client.
 
 ---
 
@@ -82,6 +96,8 @@ The handler function receives a single `ws` argument -- the active WebSocket con
 | `ws.send_binary(data)` | Send binary data as `bytes` |
 | `ws.send(message)` | Send a `WebSocketMessage` object |
 | `ws.close()` | Close the connection gracefully |
+
+Sending on a closed connection raises `ConnectionError`.
 
 ```python
 @app.websocket("/ws")
@@ -102,7 +118,7 @@ def handler(ws):
 
 ### Receiving Messages
 
-Call `ws.recv()` to wait for the next message from the client. It returns a `WebSocketMessage` or `None` if the connection is closed:
+Call `ws.recv(timeout=None)` to wait for the next message from the client. It returns a `WebSocketMessage`, or `None` once the client has closed the connection (or when `timeout` seconds pass). Pings are answered automatically:
 
 ```python
 @app.websocket("/ws")
@@ -114,16 +130,39 @@ def handler(ws):
         if msg.is_close():
             break  # Client sent close frame
         if msg.is_text():
-            print(f"Text: {msg.text}")
+            print(f"Text: {msg.content}")
         elif msg.is_binary():
             print(f"Binary: {len(msg.data)} bytes")
 ```
+
+### Async handlers
+
+An `async def` handler uses the awaitable counterparts:
+
+| Method | Description |
+|--------|-------------|
+| `await ws.arecv(timeout=None)` | Next message, or `None` once the client closes (or on timeout) |
+| `await ws.asend_text(text)` | Send a text message |
+| `await ws.asend_binary(data)` | Send binary data |
+| `await ws.asend(message)` | Send a `WebSocketMessage` |
+| `ws.close()` | Close (never blocks) |
+
+```python
+@app.websocket("/ws")
+async def echo(ws):
+    while (msg := await ws.arecv()) is not None:
+        await ws.asend_text(f"Echo: {msg.content}")
+```
+
+The handler runs on the same loop as `async def` HTTP handlers. Loop-bound objects
+created at startup (database pools, `asyncio.Lock`) are therefore usable from it.
 
 ### Connection State
 
 | Property | Type | Description |
 |----------|------|-------------|
 | `ws.connected` | `bool` | Whether the connection is active |
+| `ws.request` | `Request \| None` | The upgrade request: headers, `query_params`, and context set by middleware (e.g. JWT claims) |
 
 ---
 
@@ -136,8 +175,12 @@ Messages are represented by `WebSocketMessage` objects with the following interf
 | Property | Type | Description |
 |----------|------|-------------|
 | `msg_type` | `str` | Message type: `"text"`, `"binary"`, `"ping"`, `"pong"`, or `"close"` |
-| `text` | `str | None` | Text content (for text messages) |
-| `data` | `bytes | None` | Binary content (for binary messages) |
+| `content` | `str \| bytes \| None` | Payload: `str` for text, `bytes` for binary |
+| `data` | `bytes \| None` | Binary content (for binary messages) |
+
+!!! note
+    `WebSocketMessage.text` is the factory method below, so read a text payload
+    with `msg.content`, not `msg.text`.
 
 ### Factory Methods
 
@@ -163,7 +206,7 @@ msg = WebSocketMessage.close()
 msg = ws.recv()
 
 if msg.is_text():
-    print(f"Text: {msg.text}")
+    print(f"Text: {msg.content}")
 elif msg.is_binary():
     print(f"Binary: {len(msg.data)} bytes")
 elif msg.is_close():
@@ -196,7 +239,7 @@ def lifecycle_demo(ws):
         msg = ws.recv()
         if msg is None or msg.is_close():
             break
-        ws.send_text(f"Got: {msg.text}")
+        ws.send_text(f"Got: {msg.content}")
 
     # Phase: Cleanup (connection will close when handler returns)
     print("Client disconnected")
@@ -221,7 +264,7 @@ def data_stream(ws):
             break
 
         try:
-            data = json.loads(msg.text)
+            data = json.loads(msg.content)
             response = process_command(data)
             ws.send_text(json.dumps(response))
         except json.JSONDecodeError:
@@ -269,7 +312,7 @@ def chat(ws):
         # Broadcast the message to all clients
         broadcast(json.dumps({
             "type": "message",
-            "text": msg.text,
+            "text": msg.content,
         }))
 
     # Cleanup on disconnect
@@ -295,22 +338,19 @@ if __name__ == "__main__":
 
 ---
 
-## WebSocket with Path Parameters
+## Per-Connection Parameters
 
-WebSocket endpoints support path parameters just like HTTP routes:
+WebSocket paths are matched exactly, so pass per-connection values in the query
+string and read them from the upgrade request:
 
 ```python
-@app.websocket("/ws/rooms/{room_id}")
-def room_handler(ws, request):
-    room_id = request.params["room_id"]
+@app.websocket("/ws/rooms")
+def room_handler(ws):
+    room_id = ws.request.query_params.get("room", "lobby")
     ws.send_text(f"Joined room: {room_id}")
 
-    while True:
-        msg = ws.recv()
-        if msg is None or msg.is_close():
-            break
-        # Broadcast to room members
-        ws.send_text(f"[{room_id}] {msg.text}")
+    while (msg := ws.recv()) is not None:
+        ws.send_text(f"[{room_id}] {msg.content}")
 ```
 
 ---
@@ -360,20 +400,15 @@ asyncio.run(client())
 
 ## Performance
 
-WebSocket operations run in Rust via `tokio-tungstenite`:
-
-| Operation | Overhead |
-|-----------|----------|
-| Connection upgrade | ~100us |
-| Send text message | ~1us |
-| Send binary message | ~1us |
-| Receive message | ~1us |
-| Per-connection memory | ~4 KB |
+Frames are parsed and written in Rust (`tokio-tungstenite`) on the server's I/O
+thread; only `recv()`/`send_*()` cross into Python. A `def` handler holds one
+blocking-pool thread for the life of its connection. An `async def` handler holds
+none, so prefer `async def` for many long-lived sockets.
 
 ---
 
 ## Next Steps
 
 - [Server-Sent Events](sse.md) - One-way server push for simpler use cases
-- [Routing](../core/routing.md) - Learn about path parameters for WebSocket routes
+- [Routing](../core/routing.md) - Path parameters for HTTP routes
 - [Real-time Dashboard Example](../../examples/advanced/realtime-dashboard.md) - Full example with live data

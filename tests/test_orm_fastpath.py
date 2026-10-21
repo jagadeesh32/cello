@@ -663,7 +663,11 @@ def server(mtables):
 
     _PORT[0] += 1
     port = _PORT[0]
-    threading.Thread(target=lambda: app.run(host="127.0.0.1", port=port), daemon=True).start()
+    # debug=True: the error-text assertions below need details in the 500 body
+    # (without a TTY the default is now production-safe generic errors).
+    threading.Thread(
+        target=lambda: app.run(host="127.0.0.1", port=port, debug=True), daemon=True
+    ).start()
     base = f"http://127.0.0.1:{port}"
     deadline = time.time() + 10
     while time.time() < deadline:

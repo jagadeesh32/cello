@@ -1,26 +1,27 @@
 //! GraphQL Support for Cello Framework.
 //!
-//! Provides:
-//! - Schema-first and code-first GraphQL
-//! - Subscriptions via WebSocket
-//! - DataLoader for N+1 prevention
-//! - GraphQL Playground UI
+//! The built-in endpoint (`App.enable_graphql`). Queries are parsed with a
+//! real GraphQL parser (`graphql_plan`): the operation type, operation name,
+//! variables, fragments and `@skip`/`@include` come from the document, and
+//! `max_depth`, `max_complexity` and `introspection` are enforced before any
+//! resolver runs. Top-level fields are resolved by resolvers registered from
+//! Rust; Python apps pass a `cello.graphql` schema to `App.enable_graphql`
+//! instead.
 //!
 //! # Example
 //! ```python
-//! from cello import App
-//! from cello.graphql import GraphQL, Query, Mutation
+//! from cello import App, GraphQLConfig
+//! from cello.graphql import Schema, Query, Mutation
 //!
 //! @Query
-//! def users(info) -> list[User]:
+//! def users(info) -> list:
 //!     return db.get_users()
 //!
 //! @Mutation
-//! def create_user(info, name: str, email: str) -> User:
+//! def create_user(info, name: str, email: str) -> dict:
 //!     return db.create_user(name, email)
 //!
-//! graphql = GraphQL(schema)
-//! app.mount("/graphql", graphql)
+//! app.enable_graphql(GraphQLConfig(), schema=Schema().query(users).mutation(create_user))
 //! ```
 
 use super::{AsyncMiddleware, MiddlewareAction, MiddlewareResult};
@@ -39,7 +40,7 @@ use std::sync::Arc;
 #[derive(Debug, Clone, Deserialize)]
 pub struct GraphQLRequest {
     pub query: String,
-    #[serde(default)]
+    #[serde(default, alias = "operationName")]
     pub operation_name: Option<String>,
     #[serde(default)]
     pub variables: Option<HashMap<String, JsonValue>>,
@@ -145,9 +146,10 @@ impl Default for GraphQLConfig {
     fn default() -> Self {
         Self {
             path: "/graphql".to_string(),
-            playground: true,
+            // Off by default: both reveal the schema to any caller.
+            playground: false,
             playground_path: None,
-            introspection: true,
+            introspection: false,
             max_depth: Some(10),
             max_complexity: Some(1000),
             batching: false,
@@ -353,73 +355,112 @@ impl GraphQLMiddleware {
         resolvers.insert(key, Arc::new(resolver));
     }
 
-    /// Execute a GraphQL query.
-    pub fn execute(&self, request: &GraphQLRequest, http_request: Arc<Request>) -> GraphQLResponse {
-        let ctx = ResolverContext::new(http_request)
-            .with_variables(request.variables.clone().unwrap_or_default());
-
-        // Parse query (simplified - real implementation would use a proper parser)
-        let query = request.query.trim();
-
-        // Check for introspection
-        if query.contains("__schema") || query.contains("__type") {
-            if !self.config.introspection {
-                return GraphQLResponse::error(GraphQLError::new("Introspection is disabled"));
-            }
-            return self.handle_introspection(query);
+    /// Execute a GraphQL query: parse it, select the operation, enforce
+    /// `max_depth` / `max_complexity` / `introspection`, then resolve each
+    /// top-level field of the operation's root type.
+    ///
+    /// Returns the HTTP status with the response: 400 when the document is
+    /// rejected before execution, 200 otherwise.
+    pub fn execute(
+        &self,
+        request: &GraphQLRequest,
+        http_request: Arc<Request>,
+    ) -> (u16, GraphQLResponse) {
+        let variables: serde_json::Map<String, JsonValue> = request
+            .variables
+            .clone()
+            .unwrap_or_default()
+            .into_iter()
+            .collect();
+        let limits = super::graphql_plan::Limits {
+            max_depth: self.config.max_depth,
+            max_complexity: self.config.max_complexity,
+            introspection: self.config.introspection,
+        };
+        let plan = match super::graphql_plan::plan(
+            &request.query,
+            request.operation_name.as_deref(),
+            &variables,
+            limits,
+        ) {
+            Ok(plan) => plan,
+            Err(message) => return (400, GraphQLResponse::error(GraphQLError::new(&message))),
+        };
+        if plan.operation == "subscription" {
+            return (
+                400,
+                GraphQLResponse::error(GraphQLError::new(
+                    "Subscriptions are not supported over HTTP",
+                )),
+            );
+        }
+        if plan.introspection {
+            return (200, self.handle_introspection(&request.query));
         }
 
-        // Determine operation type
-        let is_mutation = query.starts_with("mutation");
-
-        // Execute resolvers (simplified)
-        let type_name = if is_mutation {
-            self.schema.read().mutation_type.clone().unwrap_or_default()
-        } else {
-            self.schema.read().query_type.clone()
-        };
-
-        // Extract field name from query (very simplified)
-        let field_name = self.extract_field_name(query);
-
-        if let Some(field_name) = field_name {
-            let key = format!("{type_name}.{field_name}");
-            let resolvers = self.resolvers.read();
-
-            if let Some(resolver) = resolvers.get(&key) {
-                match resolver(&ctx) {
-                    Ok(data) => {
-                        let result = json!({ field_name: data });
-                        GraphQLResponse::data(result)
+        let type_name = {
+            let schema = self.schema.read();
+            if plan.operation == "mutation" {
+                match &schema.mutation_type {
+                    Some(t) => t.clone(),
+                    None => {
+                        return (
+                            400,
+                            GraphQLResponse::error(GraphQLError::new(
+                                "The schema has no mutation type",
+                            )),
+                        )
                     }
-                    Err(error) => GraphQLResponse::error(error),
                 }
             } else {
-                GraphQLResponse::error(GraphQLError::new(&format!(
-                    "No resolver found for {type_name}.{field_name}"
-                )))
+                schema.query_type.clone()
             }
-        } else {
-            GraphQLResponse::error(GraphQLError::new("Could not parse query"))
-        }
-    }
+        };
 
-    /// Extract field name from query (simplified parser).
-    fn extract_field_name(&self, query: &str) -> Option<String> {
-        // Very simplified - just look for the first word after { that isn't a keyword
-        let query = query
-            .replace("query", "")
-            .replace("mutation", "")
-            .replace("subscription", "");
-
-        if let Some(start) = query.find('{') {
-            let rest = &query[start + 1..];
-            let field = rest
-                .split(|c: char| c.is_whitespace() || c == '{' || c == '(' || c == '}')
-                .find(|s| !s.is_empty())?;
-            return Some(field.to_string());
+        let base =
+            ResolverContext::new(http_request).with_variables(variables.into_iter().collect());
+        let resolvers = self.resolvers.read();
+        let mut data = serde_json::Map::new();
+        let mut errors = Vec::new();
+        for field in plan.fields {
+            if field.name == "__typename" {
+                data.insert(field.alias, JsonValue::String(type_name.clone()));
+                continue;
+            }
+            let key = format!("{type_name}.{}", field.name);
+            let value = match resolvers.get(&key) {
+                Some(resolver) => {
+                    let ctx = base
+                        .clone()
+                        .with_arguments(field.arguments.into_iter().collect());
+                    match resolver(&ctx) {
+                        Ok(v) => v,
+                        Err(e) => {
+                            errors.push(e.with_path(vec![JsonValue::String(field.alias.clone())]));
+                            JsonValue::Null
+                        }
+                    }
+                }
+                None => {
+                    errors.push(
+                        GraphQLError::new(&format!(
+                            "Cannot query field \"{}\" on type \"{type_name}\"",
+                            field.name
+                        ))
+                        .with_path(vec![JsonValue::String(field.alias.clone())]),
+                    );
+                    JsonValue::Null
+                }
+            };
+            data.insert(field.alias, value);
         }
-        None
+        (
+            200,
+            GraphQLResponse {
+                data: Some(JsonValue::Object(data)),
+                errors,
+            },
+        )
     }
 
     /// Handle introspection queries.
@@ -536,11 +577,11 @@ impl AsyncMiddleware for GraphQLMiddleware {
                         // Clone the request for use in resolver context
                         let request_arc = Arc::new(request.clone());
 
-                        let gql_response = self.execute(&gql_req, request_arc);
+                        let (status, gql_response) = self.execute(&gql_req, request_arc);
                         let body = serde_json::to_value(&gql_response).unwrap_or_else(
                             |_| json!({"errors": [{"message": "Serialization error"}]}),
                         );
-                        let response = Response::from_json_value(body, 200);
+                        let response = Response::from_json_value(body, status);
                         return Ok(MiddlewareAction::Stop(response));
                     }
                     Err(e) => {

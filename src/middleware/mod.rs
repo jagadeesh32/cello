@@ -34,6 +34,7 @@ pub mod static_files;
 // Enterprise modules
 pub mod database;
 pub mod graphql;
+pub mod graphql_plan;
 pub mod health;
 pub mod messaging;
 pub mod redis;
@@ -201,6 +202,10 @@ impl MiddlewareError {
     }
 }
 
+/// Request-context key set on responses produced before the handler ran (a
+/// middleware `Stop`/error, guard rejection, cache HIT, unrouted endpoint).
+pub const EARLY_RESPONSE_KEY: &str = "__cello_early_response";
+
 /// Check if a request path matches a skip pattern.
 ///
 /// Matches when:
@@ -267,7 +272,9 @@ pub trait Middleware: Send + Sync {
     /// Whether this middleware directly serves the given path even when no
     /// route matched (e.g. health checks, metrics). When `true`, the router's
     /// fast-404 path gives this middleware's `before` hook a chance to respond
-    /// instead of returning 404. See `MiddlewareChain::execute_before_unrouted`.
+    /// instead of returning 404. Such a request still runs the full chain first
+    /// (auth, rate limits), with path owners deferred to the end — see
+    /// `MiddlewareChain::execute_before_deferring_owners`.
     #[inline]
     fn serves_unrouted(&self, _method: &str, _path: &str) -> bool {
         false
@@ -314,7 +321,7 @@ pub trait AsyncMiddleware: Send + Sync {
     /// Whether this async middleware directly serves the given path even when
     /// no route matched (e.g. a GraphQL endpoint/playground). When `true`, the
     /// router's fast-404 path gives this middleware's `before_async` hook a
-    /// chance to respond. See `MiddlewareChain::execute_before_async_unrouted`.
+    /// chance to respond, after every other async middleware.
     #[inline]
     fn serves_unrouted(&self, _method: &str, _path: &str) -> bool {
         false
@@ -392,6 +399,73 @@ impl MiddlewareChain {
         Ok(MiddlewareAction::Continue)
     }
 
+    /// Execute all sync middleware before handlers, with path owners deferred.
+    ///
+    /// Middleware that claim the path via `serves_unrouted` run last instead of
+    /// in priority order: an unrouted endpoint such as `/health` must not answer
+    /// before authentication and rate limiting ran.
+    pub fn execute_before_deferring_owners(&self, request: &mut Request) -> MiddlewareResult {
+        let middlewares = self.sync_middlewares.read();
+        for owners_pass in [false, true] {
+            for entry in middlewares.iter() {
+                let owns = entry
+                    .middleware
+                    .serves_unrouted(&request.method, &request.path);
+                if owns != owners_pass || !entry.middleware.should_run(&request.path) {
+                    continue;
+                }
+                match entry.middleware.before(request)? {
+                    MiddlewareAction::Continue => continue,
+                    action @ MiddlewareAction::Stop(_) => return Ok(action),
+                }
+            }
+        }
+        Ok(MiddlewareAction::Continue)
+    }
+
+    /// Run every sync `after` hook (reverse order) on a response that was
+    /// decided early — a middleware `Stop` or error, a guard rejection, a cache
+    /// HIT, an unrouted endpoint — so a 401, 429 or static file still gets
+    /// security headers, CORS headers, compression and cookies. Hooks whose
+    /// `before` did not run see no state of their own and leave the response
+    /// alone. Errors are ignored; a `Stop` replaces the response.
+    pub fn execute_after_lenient(&self, request: &Request, response: &mut Response) {
+        let middlewares = self.sync_middlewares.read();
+        for entry in middlewares.iter().rev() {
+            if !entry.middleware.should_run(&request.path) {
+                continue;
+            }
+            if let Ok(MiddlewareAction::Stop(replacement)) =
+                entry.middleware.after(request, response)
+            {
+                *response = replacement;
+            }
+        }
+    }
+
+    /// Async counterpart of `execute_before_deferring_owners`:
+    /// path-owning async middleware (GraphQL) run after all the others.
+    pub async fn execute_before_async_deferring_owners(
+        &self,
+        request: &mut Request,
+    ) -> MiddlewareResult {
+        type Entries = Vec<Arc<dyn AsyncMiddleware>>;
+        let (others, owners): (Entries, Entries) = {
+            let middlewares = self.async_middlewares.read();
+            middlewares
+                .iter()
+                .map(|e| e.middleware.clone())
+                .partition(|m| !m.serves_unrouted(&request.method, &request.path))
+        };
+        for middleware in others.iter().chain(owners.iter()) {
+            match middleware.before_async(request).await? {
+                MiddlewareAction::Continue => continue,
+                action @ MiddlewareAction::Stop(_) => return Ok(action),
+            }
+        }
+        Ok(MiddlewareAction::Continue)
+    }
+
     /// Execute all sync middleware after handlers (in reverse order).
     #[inline]
     pub fn execute_after(&self, request: &Request, response: &mut Response) -> MiddlewareResult {
@@ -401,28 +475,6 @@ impl MiddlewareChain {
                 continue;
             }
             match entry.middleware.after(request, response)? {
-                MiddlewareAction::Continue => continue,
-                action @ MiddlewareAction::Stop(_) => return Ok(action),
-            }
-        }
-        Ok(MiddlewareAction::Continue)
-    }
-
-    /// Run only sync middleware that claim the (unrouted) path via
-    /// `serves_unrouted`. Used on a route miss so path-owning middleware such as
-    /// health checks can serve their endpoints before a 404 is returned.
-    /// Returns `Stop(response)` if a middleware served the request.
-    #[inline]
-    pub fn execute_before_unrouted(&self, request: &mut Request) -> MiddlewareResult {
-        let middlewares = self.sync_middlewares.read();
-        for entry in middlewares.iter() {
-            if !entry
-                .middleware
-                .serves_unrouted(&request.method, &request.path)
-            {
-                continue;
-            }
-            match entry.middleware.before(request)? {
                 MiddlewareAction::Continue => continue,
                 action @ MiddlewareAction::Stop(_) => return Ok(action),
             }
@@ -443,25 +495,6 @@ impl MiddlewareChain {
                 .read()
                 .iter()
                 .any(|e| e.middleware.serves_unrouted(method, path))
-    }
-
-    /// Async counterpart of `execute_before_unrouted` (e.g. a GraphQL endpoint).
-    pub async fn execute_before_async_unrouted(&self, request: &mut Request) -> MiddlewareResult {
-        let entries: Vec<Arc<dyn AsyncMiddleware>> = {
-            let middlewares = self.async_middlewares.read();
-            middlewares
-                .iter()
-                .filter(|e| e.middleware.serves_unrouted(&request.method, &request.path))
-                .map(|e| e.middleware.clone())
-                .collect()
-        };
-        for middleware in &entries {
-            match middleware.before_async(request).await? {
-                MiddlewareAction::Continue => continue,
-                action @ MiddlewareAction::Stop(_) => return Ok(action),
-            }
-        }
-        Ok(MiddlewareAction::Continue)
     }
 
     /// Execute all async middleware before handlers.
@@ -600,7 +633,20 @@ impl Middleware for LoggingMiddleware {
         println!("--> {} {}", request.method, request.path);
         if self.log_headers {
             for (key, value) in &request.headers {
-                println!("    {key}: {value}");
+                // Credentials must not end up in log files.
+                let sensitive = matches!(
+                    key.to_ascii_lowercase().as_str(),
+                    "authorization"
+                        | "proxy-authorization"
+                        | "cookie"
+                        | "x-api-key"
+                        | "x-csrf-token"
+                );
+                if sensitive {
+                    println!("    {key}: [redacted]");
+                } else {
+                    println!("    {key}: {value}");
+                }
             }
         }
         Ok(MiddlewareAction::Continue)
@@ -701,7 +747,8 @@ impl CompressionMiddleware {
     }
 
     fn should_compress(&self, response: &Response) -> bool {
-        if response.body_bytes().len() < self.min_size {
+        // A file streamed from disk is sent as stored.
+        if response.deferred_file().is_some() || response.body_bytes().len() < self.min_size {
             return false;
         }
 
@@ -725,17 +772,21 @@ impl Default for CompressionMiddleware {
 
 impl Middleware for CompressionMiddleware {
     fn after(&self, request: &Request, response: &mut Response) -> MiddlewareResult {
-        // Check if client accepts gzip
-        let accept_encoding = request.headers.get("accept-encoding").map(|s| s.as_str());
-        if let Some(encoding) = accept_encoding {
-            if encoding.contains("gzip") && self.should_compress(response) {
-                // Compress the response body
-                if let Ok(compressed) = compress_gzip(response.body_bytes(), self.compression_level)
-                {
-                    response.set_body(compressed);
-                    response.set_header("Content-Encoding", "gzip");
-                    response.set_header("Vary", "Accept-Encoding");
-                }
+        let accepts = request
+            .headers
+            .get("accept-encoding")
+            .is_some_and(|v| accepts_gzip(v));
+        // Never double-encode (a compressed cache HIT, a precompressed file).
+        if accepts
+            && response.header("Content-Encoding").is_none()
+            && self.should_compress(response)
+        {
+            if let Ok(compressed) = compress_gzip(response.body_bytes(), self.compression_level) {
+                response.set_body(compressed);
+                // The old length described the uncompressed body.
+                response.remove_header("Content-Length");
+                response.set_header("Content-Encoding", "gzip");
+                add_vary(response, "Accept-Encoding");
             }
         }
         Ok(MiddlewareAction::Continue)
@@ -748,6 +799,53 @@ impl Middleware for CompressionMiddleware {
     fn name(&self) -> &str {
         "compression"
     }
+}
+
+/// Whether an `Accept-Encoding` value allows gzip. Parses the q-values, so
+/// `gzip;q=0` (an explicit refusal) is honoured; `*` with a non-zero q counts.
+pub(crate) fn accepts_gzip(accept_encoding: &str) -> bool {
+    accepts_encoding(accept_encoding, "gzip")
+}
+
+/// Whether an `Accept-Encoding` value allows `coding` (q-value aware).
+pub(crate) fn accepts_encoding(accept_encoding: &str, coding: &str) -> bool {
+    let mut star = None;
+    for part in accept_encoding.split(',') {
+        let mut pieces = part.split(';');
+        let name = pieces.next().unwrap_or("").trim().to_ascii_lowercase();
+        let q = pieces
+            .find_map(|p| {
+                let p = p.trim();
+                p.strip_prefix("q=")
+                    .or_else(|| p.strip_prefix("Q="))
+                    .and_then(|v| v.trim().parse::<f32>().ok())
+            })
+            .unwrap_or(1.0);
+        if name == coding || (coding == "gzip" && name == "x-gzip") {
+            return q > 0.0;
+        }
+        if name == "*" {
+            star = Some(q > 0.0);
+        }
+    }
+    star.unwrap_or(false)
+}
+
+/// Add `token` to the response's `Vary` header without dropping existing values.
+pub(crate) fn add_vary(response: &mut Response, token: &str) {
+    let merged = match response.header("Vary") {
+        Some(existing)
+            if existing
+                .split(',')
+                .any(|v| v.trim().eq_ignore_ascii_case(token) || v.trim() == "*") =>
+        {
+            return
+        }
+        Some(existing) if !existing.trim().is_empty() => format!("{existing}, {token}"),
+        _ => token.to_string(),
+    };
+    response.remove_header("Vary");
+    response.set_header("Vary", &merged);
 }
 
 /// Compress bytes using gzip.
@@ -822,6 +920,38 @@ mod tests {
         let names = chain.middleware_names();
         assert!(names.contains(&"test1".to_string()));
         assert!(names.contains(&"test2".to_string()));
+    }
+
+    #[test]
+    fn test_accepts_gzip() {
+        assert!(accepts_gzip("gzip"));
+        assert!(accepts_gzip("br, gzip;q=0.5"));
+        assert!(!accepts_gzip("gzip;q=0"));
+        assert!(!accepts_gzip("gzip; q=0.0, br"));
+        assert!(!accepts_gzip("br, deflate"));
+        assert!(accepts_gzip("*"));
+        assert!(!accepts_gzip("*;q=0"));
+        assert!(!accepts_gzip("identity"));
+    }
+
+    #[test]
+    fn test_compression_drops_content_length() {
+        let mw = CompressionMiddleware::new().min_size(10);
+        let mut req = Request::new("GET", "/");
+        req.headers.insert("accept-encoding".into(), "gzip".into());
+        let mut resp = Response::new(200);
+        resp.set_header("Content-Type", "text/plain");
+        resp.set_header("Content-Length", "2000");
+        resp.set_header("Vary", "Origin");
+        resp.set_body(vec![b'a'; 2000]);
+        mw.after(&req, &mut resp).unwrap();
+        assert_eq!(resp.header("Content-Encoding"), Some("gzip"));
+        assert!(resp.header("Content-Length").is_none());
+        assert_eq!(resp.header("Vary"), Some("Origin, Accept-Encoding"));
+        // A second pass must not double-encode.
+        let len = resp.body_bytes().len();
+        mw.after(&req, &mut resp).unwrap();
+        assert_eq!(resp.body_bytes().len(), len);
     }
 
     #[test]

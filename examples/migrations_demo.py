@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Migrations walkthrough for Cello v1.4.0 (experimental).
+Migrations walkthrough for Cello v1.4.1 (experimental).
 
 Runs `python -m cello migrate --experimental {sql,make,apply,status}` end to
 end against a throw-away Postgres schema, using the models in

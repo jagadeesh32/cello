@@ -179,18 +179,29 @@ The strategy is selected automatically. Application code does not need to change
 ```python
 from cello import TimeoutConfig
 
-timeout = TimeoutConfig(
-    request_timeout=30,
-    response_timeout=30,
-    keep_alive_timeout=75,
-)
+app.set_timeouts(TimeoutConfig(
+    read_header=5,   # seconds to receive the request head (Slowloris guard)
+    read_body=30,    # seconds to receive the body -> 408
+    write=30,        # accepted, not enforced
+    idle=60,         # close keep-alive connections idle this long
+    handler=30,      # handler time limit -> 504
+))
 ```
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `request_timeout` | `int` | `30` | Maximum seconds to receive the full request |
-| `response_timeout` | `int` | `30` | Maximum seconds for the handler to produce a response |
-| `keep_alive_timeout` | `int` | `75` | Seconds to keep idle connections open |
+| Argument | Default | Description |
+|----------|---------|-------------|
+| `read_header` | `5` | Time to receive the request line and headers; also bounds the wait for the next request on a keep-alive connection |
+| `read_body` | `30` | Time to receive the full body (`408` when exceeded) |
+| `write` | `30` | Accepted for compatibility; not enforced |
+| `idle` | `60` | Keep-alive connections with no request in flight are closed after this long |
+| `handler` | `30` | Handler time limit (`504`; the pool thread is not reclaimed) |
+
+`0` disables a timeout. Without `set_timeouts()` the server uses: header read
+**30 s**, body read **30 s**, handler **30 s**, and no idle watchdog (the
+header-read timeout already closes a keep-alive connection that sends nothing
+for 30 s). A
+handler that legitimately runs longer (a report, a long poll) needs
+`set_timeouts(TimeoutConfig(handler=0))` or a larger value.
 
 ---
 
@@ -199,18 +210,49 @@ timeout = TimeoutConfig(
 ```python
 from cello import LimitsConfig
 
-limits = LimitsConfig(
+app.set_limits(LimitsConfig(
+    max_header_size=16 * 1024,
+    max_body_size=10 * 1024 * 1024,
     max_connections=10000,
-    max_request_size=10 * 1024 * 1024,
-    max_headers=100,
-)
+    max_requests_per_connection=1000,
+))
 ```
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `max_connections` | `int` | `10000` | Maximum concurrent connections |
-| `max_request_size` | `int` | `10485760` | Maximum request body size in bytes (10 MB) |
-| `max_headers` | `int` | `100` | Maximum number of request headers |
+| Argument | Default | Description |
+|----------|---------|-------------|
+| `max_header_size` | `16384` | Request head size in bytes (minimum 8 KiB); larger heads are rejected with `431` |
+| `max_body_size` | `10485760` | Body size in bytes; larger bodies get `413` before buffering |
+| `max_connections` | `10000` | Concurrent connections; excess connections are closed on accept |
+| `max_requests_per_connection` | `1000` | Responses per connection before `Connection: close` |
+
+`0` means unlimited. Without `set_limits()` the server uses exactly these
+defaults (since 1.4.1; before, the body cap was 100 MB and headers and
+requests per connection were unbounded).
+
+---
+
+## Trusted Proxies
+
+```python
+app.set_trusted_proxies(["10.0.0.0/8", "127.0.0.1"])
+```
+
+`X-Forwarded-For`, `X-Forwarded-Proto` and `X-Forwarded-Host` are honoured only
+when the TCP peer is in this list (IP addresses or CIDR networks). By default
+none is trusted, and `request.client_ip()`, `request.is_secure()`,
+`request.host()` and the rate limiter use the socket peer and the `Host` header.
+
+The list belongs to this `App`; another `App` in the same process keeps its
+own. A change made while the server runs applies to new connections.
+
+`X-Real-IP` carries a single address with no hop chain, so a proxy that passes
+the client's copy through would let the client choose its own address. It is
+ignored unless you opt in, which you should do only when every trusted proxy
+overwrites it:
+
+```python
+app.set_trusted_proxies(["10.0.0.0/8"], trust_x_real_ip=True)
+```
 
 ---
 

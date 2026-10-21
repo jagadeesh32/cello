@@ -9,6 +9,31 @@ All notable changes to the Cello Framework are documented here. Each version lin
 
 ---
 
+## v1.4.1 -- Review Fixes
+
+Security and correctness fixes from the 1.4.0 review. See [v1.4.1](v1.4.1.md) for details and the list of deliberate behavior changes.
+
+**Security:**
+- `/health`, `/metrics` and `/graphql` run behind the full middleware chain (auth, rate limits)
+- Client IP is the TCP peer; `X-Forwarded-*` honoured only from `App.set_trusted_proxies(...)`; `RateLimitConfig.key_by` honoured
+- Cache skips `Authorization`/`Cookie` requests, `Set-Cookie`/private responses; no `Cache-Control` added; store capped
+- Sessions: `request.session` API, changes persisted, id regenerated on login, multiple `Set-Cookie` headers
+- CSRF: form-body tokens, no query-string tokens, session binding, `TRACE` not safe
+- Error details hidden unless development is explicit or interactive; Windows workers inherit settings
+- CORS never grants credentials to a wildcard origin; constant-time Basic/API-key checks; JWT issuer/audience; generic JWT errors
+- GraphQL playground/introspection off by default
+
+**Bugs:**
+- Static files: per-segment hidden check, mount boundary, precompressed root re-check, escaped listings, async file reads
+- Early responses (401/429/cache HIT) get `after` hooks (security headers, CORS)
+- Compression no longer leaves a stale `Content-Length`; honours `q=0`
+- All `LimitsConfig` fields and `idle_timeout` applied; 30 s header-read timeout by default
+- `workers=N` = N serving processes; forked workers get fresh DB/Redis/I/O runtime
+- WebSocket routes are served (`msg.content` for payloads)
+- Release builds keep overflow checks on
+
+---
+
 ## v1.4.0 -- The Native Core
 
 One model declaration, compiled once in Rust, drives the ORM, request validation, response serialization and OpenAPI.

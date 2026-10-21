@@ -15,13 +15,7 @@ from cello.middleware import CsrfConfig
 
 app = App()
 
-config = CsrfConfig(
-    secret=b"csrf-secret-minimum-32-bytes-long",
-    cookie_name="_csrf",
-    header_name="X-CSRF-Token"
-)
-
-app.enable_csrf(config)
+app.use(CsrfConfig())  # cookie "__Host-csrf", header "X-CSRF-Token"
 ```
 
 ---
@@ -53,19 +47,18 @@ The double-submit cookie pattern works as follows:
 
 ```python
 config = CsrfConfig(
-    secret=b"csrf-secret-minimum-32-bytes-long",
-    cookie_name="_csrf",
+    cookie_name="__Host-csrf",
     header_name="X-CSRF-Token",
-    safe_methods=["GET", "HEAD", "OPTIONS"]
+    allowed_origins=None,
 )
+app.use(config)
 ```
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `secret` | `bytes` | required | Signing secret for token generation |
-| `cookie_name` | `str` | `"_csrf"` | Name of the CSRF cookie |
+| `cookie_name` | `str` | `"__Host-csrf"` | Name of the CSRF cookie. The `__Host-` prefix is dropped if the cookie cannot be `Secure` with `Path=/` |
 | `header_name` | `str` | `"X-CSRF-Token"` | Header name for token submission |
-| `safe_methods` | `list[str]` | `["GET", "HEAD", "OPTIONS"]` | Methods that skip CSRF validation |
+| `allowed_origins` | `list[str] \| None` | `None` | Full origins accepted by the origin check (default: same origin as `Host`) |
 
 ---
 
@@ -107,7 +100,7 @@ For single-page applications, send the CSRF token in a request header:
 ```javascript
 // Read the token from the cookie
 function getCsrfToken() {
-    const match = document.cookie.match(/(?:^|;\s*)_csrf=([^;]*)/);
+    const match = document.cookie.match(/(?:^|;\s*)__Host-csrf=([^;]*)/);
     return match ? decodeURIComponent(match[1]) : '';
 }
 
@@ -147,11 +140,14 @@ app.enable_csrf(config)
 
 ## Token Lifecycle
 
-1. **Generation**: A signed CSRF token is generated when the client first visits the site.
-2. **Cookie**: The token is stored in a cookie (default: `_csrf`).
-3. **Submission**: The client includes the token in the request header or body.
-4. **Validation**: The Rust middleware verifies the submitted token matches the cookie using constant-time comparison.
-5. **Rotation**: A new token can be generated after each successful validation for added security.
+1. **Generation**: A random token is generated on the first safe (`GET`/`HEAD`/`OPTIONS`) request and exposed to handlers as `request.get_context("csrf_token")`.
+2. **Cookie**: The token is stored in a cookie (default: `__Host-csrf`). Later page views reuse it, so forms open in other tabs stay valid; the cookie is only re-sent when it changes. The `__Host-` prefix makes the browser accept the cookie only from this exact host over HTTPS (`Secure`, `Path=/`, no `Domain`), so a sibling subdomain cannot plant a token of its choosing.
+3. **Submission**: The client sends the token in the `X-CSRF-Token` header, or in a `_csrf` field of a `application/x-www-form-urlencoded` or `multipart/form-data` body. A token in the query string is **not** accepted (it would leak into logs, `Referer` and history).
+4. **Validation**: The submitted token must equal the cookie (constant-time comparison). When sessions are enabled, the token is written into the session as soon as one exists, including on the request that creates it (for example the login POST, after it passed this check). From then on the submitted token must match the session's copy, so a planted cookie is useless. Anonymous visitors are not given a session just for CSRF.
+5. **Methods**: Every method except `GET`, `HEAD` and `OPTIONS` is validated — including `TRACE`.
+
+!!! note "Plain HTTP in development"
+    Browsers treat `http://localhost` as secure, so the `__Host-` cookie works there. On another plain-HTTP host the browser drops `Secure` cookies; serve over HTTPS.
 
 ---
 
@@ -194,9 +190,7 @@ app.enable_sessions(SessionConfig(
 ))
 
 # Enable CSRF protection
-app.enable_csrf(CsrfConfig(
-    secret=b"csrf-secret-minimum-32-bytes-long"
-))
+app.use(CsrfConfig())
 
 @app.get("/login")
 def login_form(request):

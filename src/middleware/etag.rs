@@ -231,6 +231,12 @@ impl EtagMiddleware {
             return false;
         }
 
+        // A file streamed from disk has no bytes here to hash (the static file
+        // middleware sets its own ETag).
+        if response.deferred_file().is_some() {
+            return false;
+        }
+
         // Check body size
         let body_len = response.body_bytes().len();
         if body_len < self.config.min_size {

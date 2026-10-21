@@ -50,15 +50,21 @@ The middleware stores responses in a Rust `DashMap` (lock-free concurrent HashMa
 app.enable_caching(
     ttl=300,                              # Default TTL in seconds
     methods=["GET", "HEAD"],              # HTTP methods to cache
-    exclude_paths=["/api/realtime", "/ws"] # Paths to skip
+    exclude_paths=["/api/realtime", "/ws"], # Paths to skip
+    compress=True,                        # gzip HITs for gzip clients
+    cache_authenticated=False,            # see "What Is Not Cached"
+    max_entries=10000,                    # store cap
 )
 ```
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `ttl` | `int` | `300` | Time-to-live in seconds |
+| `ttl` | `int` | `300` | Server-side time-to-live in seconds |
 | `methods` | `list[str]` | `["GET", "HEAD"]` | HTTP methods to cache |
-| `exclude_paths` | `list[str]` | `[]` | Paths excluded from caching |
+| `exclude_paths` | `list[str]` | `["/health", "/metrics"]` | Paths excluded from caching |
+| `compress` | `bool` | `True` | Gzip a HIT for clients that accept gzip |
+| `cache_authenticated` | `bool` | `False` | Also cache requests with `Authorization`/`Cookie`; those headers then join the key so users never share an entry |
+| `max_entries` | `int` | `10000` | Maximum stored responses (oldest evicted) |
 
 ---
 
@@ -162,10 +168,13 @@ Cached responses include diagnostic headers:
 
 | Header | Description |
 |--------|-------------|
-| `X-Cache` | `HIT` or `MISS` |
-| `X-Cache-TTL` | Remaining TTL in seconds |
+| `X-Cache` | `HIT`, `MISS` or `BYPASS` |
 | `ETag` | Entity tag for conditional requests |
-| `Cache-Control` | Standard HTTP cache directives |
+| `Last-Modified` | When the entry was stored |
+
+The cache is server-side only: it does **not** add `Cache-Control`. Browsers
+and shared caches follow whatever `Cache-Control` the handler sets. A HIT still
+passes through the `after` hooks, so security and CORS headers are applied.
 
 ---
 
@@ -175,8 +184,11 @@ The middleware skips caching for:
 
 - Non-GET/HEAD methods (POST, PUT, DELETE, PATCH)
 - Paths listed in `exclude_paths`
-- Responses with `Cache-Control: no-store` or `no-cache`
-- Responses with status codes outside the 2xx range
+- Requests carrying `Authorization` or `Cookie` (unless `cache_authenticated=True`)
+- Responses that set a cookie (`Set-Cookie`)
+- Responses with `Cache-Control: no-store`, `no-cache` or `private`, or `Vary: *`
+- Responses with a status other than 200, 203 or 204
+- Bodies larger than 1 MiB
 
 ---
 

@@ -37,7 +37,7 @@ hide:
 [:material-package-variant: PyPI](https://pypi.org/project/cello-framework/){ .md-button }
 
 <div class="hero-badges">
-  <code class="badge-version">v1.4.0</code>
+  <code class="badge-version">v1.4.1</code>
   <code class="badge-tests">464 tests passing</code>
   <code class="badge-license">MIT License</code>
   <code class="badge-python">Python 3.12+</code>
@@ -360,9 +360,15 @@ Everything below is built in and runs on the Rust hot path:
 
 <!-- ===== WHAT'S NEW ===== -->
 
-## :material-creation: What's New in v1.4.0
+## :material-creation: What's New in v1.4.1
 
 <div class="whats-new-box" markdown>
+
+!!! tip "v1.4.1 — Security hardening"
+
+    Every finding of the 1.4.0 architecture and security review is fixed: authentication and rate limits now cover `/health`, `/metrics`, `/graphql` and WebSocket upgrades; client IPs come from the socket unless you trust a proxy; sessions persist and rotate on login; the response cache never shares per-user data; production-safe error messages by default; WebSocket routes are served. Some defaults changed on purpose — read the list before upgrading.
+
+    [:material-tag: v1.4.1 Release Notes](releases/v1.4.1.md){ .md-button }
 
 !!! tip "v1.4.0 — The Native Core"
 

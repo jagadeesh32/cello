@@ -5,7 +5,7 @@ description: Generate, review and apply SQL migrations from your Cello ORM model
 
 # :material-database-sync: Migrations Walkthrough
 
-!!! warning "Experimental in 1.4.0"
+!!! warning "Experimental in 1.4.1"
 
     `cello migrate` generates DDL from your models and runs it against your database. Read every generated file before you apply it. See the [migrations guide](../../features/advanced/migrations.md).
 
@@ -77,7 +77,7 @@ if STAGE >= 2:
 ```python
 #!/usr/bin/env python3
 """
-Migrations walkthrough for Cello v1.4.0 (experimental).
+Migrations walkthrough for Cello v1.4.1 (experimental).
 
 Runs `python -m cello migrate --experimental {sql,make,apply,status}` end to
 end against a throw-away Postgres schema, using the models in

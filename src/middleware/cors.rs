@@ -37,7 +37,9 @@ impl AllowedOrigins {
             AllowedOrigins::Any => true,
             AllowedOrigins::List(list) => list.contains(origin),
             AllowedOrigins::Pattern(matcher) => matcher(origin),
-            AllowedOrigins::Mirror => true,
+            // `null` is what sandboxed iframes and `file:` pages send; it is
+            // shared by every such context, so it is never "the" caller.
+            AllowedOrigins::Mirror => origin != "null" && !origin.is_empty(),
         }
     }
 
@@ -59,7 +61,13 @@ impl AllowedOrigins {
                     None
                 }
             }
-            AllowedOrigins::Mirror => Some(origin.to_string()),
+            AllowedOrigins::Mirror => {
+                if origin != "null" && !origin.is_empty() {
+                    Some(origin.to_string())
+                } else {
+                    None
+                }
+            }
         }
     }
 }
@@ -103,7 +111,7 @@ impl CorsConfig {
             allowed_headers: HashSet::new(),
             exposed_headers: HashSet::new(),
             credentials: false,
-            max_age: Some(86400), // 24 hours
+            max_age: Some(600), // 10 minutes
             pass_preflight: false,
             preflight_status: 204,
         }
@@ -226,12 +234,14 @@ impl CorsConfig {
     }
 
     /// Allow credentials (cookies, authorization).
+    ///
+    /// Credentials are only granted to origins on an explicit list (or a
+    /// pattern / `Mirror` chosen deliberately). With "any origin" the response
+    /// keeps `Access-Control-Allow-Origin: *` and omits
+    /// `Access-Control-Allow-Credentials`: silently reflecting every origin with
+    /// credentials would let any website make authenticated calls.
     pub fn allow_credentials(mut self) -> Self {
         self.credentials = true;
-        // Can't use * with credentials
-        if let AllowedOrigins::Any = self.origins {
-            self.origins = AllowedOrigins::Mirror;
-        }
         self
     }
 
@@ -327,15 +337,9 @@ impl CorsMiddleware {
 
         // Access-Control-Allow-Origin
         // Per spec: when credentials is true, MUST NOT use wildcard "*"
-        if let Some(allowed_origin) = self.config.origins.header_value(&origin) {
-            if self.config.credentials && allowed_origin == "*" {
-                // Reflect the actual origin instead of wildcard when credentials are enabled
-                if !origin.is_empty() {
-                    response.set_header("Access-Control-Allow-Origin", &origin);
-                }
-            } else {
-                response.set_header("Access-Control-Allow-Origin", &allowed_origin);
-            }
+        let allowed_origin = self.config.origins.header_value(&origin);
+        if let Some(ref allowed_origin) = allowed_origin {
+            response.set_header("Access-Control-Allow-Origin", allowed_origin);
         }
 
         // Access-Control-Allow-Methods
@@ -367,8 +371,8 @@ impl CorsMiddleware {
             );
         }
 
-        // Access-Control-Allow-Credentials
-        if self.config.credentials {
+        // Access-Control-Allow-Credentials: never alongside a wildcard origin.
+        if self.config.credentials && allowed_origin.as_deref().is_some_and(|o| o != "*") {
             response.set_header("Access-Control-Allow-Credentials", "true");
         }
 
@@ -398,27 +402,19 @@ impl CorsMiddleware {
             return;
         }
 
-        // Access-Control-Allow-Origin
-        // Per spec: when credentials is true, MUST NOT use wildcard "*"
-        if let Some(allowed_origin) = self.config.origins.header_value(&origin) {
-            if self.config.credentials && allowed_origin == "*" {
-                // Reflect the actual origin instead of wildcard when credentials are enabled
-                response.set_header("Access-Control-Allow-Origin", &origin);
-                // The response now depends on the request Origin; advertise that to
-                // caches to prevent a response for one origin being served to another.
-                response.set_header("Vary", "Origin");
-            } else {
-                response.set_header("Access-Control-Allow-Origin", &allowed_origin);
-                // A non-wildcard allow-origin is also origin-dependent unless it is a
-                // literal "*"; mark it Vary: Origin so shared caches key on Origin.
-                if allowed_origin != "*" {
-                    response.set_header("Vary", "Origin");
-                }
-            }
+        // Access-Control-Allow-Origin. A reflected (non-`*`) value depends on
+        // the request Origin, so it must carry `Vary: Origin` for shared caches.
+        let Some(allowed_origin) = self.config.origins.header_value(&origin) else {
+            return;
+        };
+        response.set_header("Access-Control-Allow-Origin", &allowed_origin);
+        let wildcard = allowed_origin == "*";
+        if !wildcard {
+            super::add_vary(response, "Origin");
         }
 
-        // Access-Control-Allow-Credentials
-        if self.config.credentials {
+        // Access-Control-Allow-Credentials: never alongside a wildcard origin.
+        if self.config.credentials && !wildcard {
             response.set_header("Access-Control-Allow-Credentials", "true");
         }
 
@@ -434,14 +430,6 @@ impl CorsMiddleware {
                     .join(", "),
             );
         }
-
-        // Vary header
-        let vary = response
-            .headers
-            .get("Vary")
-            .map(|v| format!("{v}, Origin"))
-            .unwrap_or_else(|| "Origin".to_string());
-        response.set_header("Vary", &vary);
     }
 }
 
@@ -492,7 +480,11 @@ impl Middleware for CorsMiddleware {
 /// Check if domain matches pattern (e.g., *.example.com).
 pub fn domain_matches(pattern: &str, domain: &str) -> bool {
     if let Some(suffix) = pattern.strip_prefix("*.") {
-        domain.ends_with(suffix) || domain == &suffix[1..]
+        // Subdomains only, on a label boundary: `*.example.com` must not match
+        // `notexample.com` or `example.com.evil.net`.
+        domain
+            .strip_suffix(suffix)
+            .is_some_and(|head| head.len() > 1 && head.ends_with('.'))
     } else {
         pattern == domain
     }
@@ -552,6 +544,25 @@ mod tests {
         assert!(domain_matches("*.example.com", "deep.sub.example.com"));
         assert!(!domain_matches("*.example.com", "example.org"));
         assert!(domain_matches("example.com", "example.com"));
+        // Suffix collisions must not match.
+        assert!(!domain_matches("*.example.com", "notexample.com"));
+        assert!(!domain_matches("*.example.com", "example.com"));
+        assert!(!domain_matches("*.example.com", ".example.com"));
+    }
+
+    #[test]
+    fn test_credentials_never_with_any_origin() {
+        let mw = CorsMiddleware::with_config(CorsConfig::new().allow_credentials());
+        let mut req = Request::new("GET", "/");
+        req.headers
+            .insert("origin".into(), "https://evil.example".into());
+        let mut resp = Response::new(200);
+        mw.after(&req, &mut resp).unwrap();
+        assert_eq!(resp.header("Access-Control-Allow-Origin"), Some("*"));
+        assert!(resp.header("Access-Control-Allow-Credentials").is_none());
+
+        // Mirror never reflects `null`.
+        assert!(!AllowedOrigins::Mirror.is_allowed("null"));
     }
 
     #[test]

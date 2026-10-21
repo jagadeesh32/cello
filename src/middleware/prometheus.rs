@@ -350,6 +350,11 @@ impl PrometheusMiddleware {
     ///
     /// The metrics endpoint is not a registered route, so the server calls this
     /// on a routing miss (before returning 404) to serve `/metrics`.
+    pub fn serves(&self, path: &str) -> bool {
+        path == self.config.endpoint
+    }
+
+    /// Serve the metrics endpoint if `path` is it.
     pub fn try_serve(&self, path: &str) -> Option<Response> {
         if path == self.config.endpoint {
             Some(self.serve_metrics())

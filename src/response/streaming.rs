@@ -451,7 +451,13 @@ pub fn sse_retry(milliseconds: u64) -> String {
 
 /// Format a comment for SSE (used as keepalive).
 pub fn sse_comment(comment: &str) -> String {
-    format!(": {comment}\n\n")
+    // A CR or LF would end the comment line and let the rest be parsed as
+    // fields (`data:`, `event:`, …); strip them like `sse_event` does.
+    let clean: String = comment
+        .chars()
+        .filter(|c| *c != '\r' && *c != '\n')
+        .collect();
+    format!(": {clean}\n\n")
 }
 
 // ============================================================================

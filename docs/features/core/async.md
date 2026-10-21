@@ -210,7 +210,7 @@ async def list_users(request):
 # Sync -- returns static data
 @app.get("/version")
 def version(request):
-    return {"version": "1.3.0"}
+    return {"version": "1.4.1"}
 
 # Async -- calls external API
 @app.post("/webhooks")

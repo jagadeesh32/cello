@@ -4,15 +4,19 @@
 //! - High-performance async HTTP server
 //! - Graceful shutdown support
 //! - Cluster mode (multi-process)
-//! - HTTP/1.1, HTTP/2, and HTTP/3 support
-//! - TLS configuration
+//! - HTTP/1.1 (with WebSocket upgrades). `Http2Config` / `Http3Config` /
+//!   `TlsConfig` are configuration records only and are not used by the accept
+//!   loop; terminate TLS / HTTP/2 at a proxy.
 //! - Server metrics
 
+pub mod body;
 pub mod cluster;
 pub mod protocols;
+pub mod proxy;
 
+use body::{FileBody, ResBody};
 use bytes::Bytes;
-use http_body_util::{BodyExt, Full, Limited};
+use http_body_util::{BodyExt, Limited};
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
 use hyper::{body::Incoming, Request as HyperRequest, Response as HyperResponse, StatusCode};
@@ -22,7 +26,7 @@ use pyo3::prelude::*;
 use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::convert::Infallible;
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -72,6 +76,14 @@ pub struct ServerConfig {
     pub read_body_timeout: Option<Duration>,
     /// Timeout for a single handler to produce a response; None = disabled
     pub handler_timeout: Option<Duration>,
+    /// Close a keep-alive connection that has had no request in flight for this
+    /// long; None = disabled (the header-read timeout still bounds idle waits).
+    pub idle_timeout: Option<Duration>,
+    /// Maximum size of the request head (request line + headers) in bytes;
+    /// None = hyper's default. Larger heads get `431`.
+    pub max_header_size: Option<usize>,
+    /// Requests served on one connection before it is closed; 0 = unlimited.
+    pub max_requests_per_connection: usize,
     /// Graceful shutdown timeout
     pub shutdown_timeout: Duration,
     /// TLS configuration
@@ -82,6 +94,9 @@ pub struct ServerConfig {
     pub http3: Option<Http3Config>,
     /// Cluster configuration
     pub cluster: Option<ClusterConfig>,
+    /// Proxies whose forwarding headers this app trusts. Read once per
+    /// connection, so `App.set_trusted_proxies` applies to new connections.
+    pub trusted_proxies: Arc<RwLock<Arc<proxy::TrustedProxies>>>,
 }
 
 impl ServerConfig {
@@ -98,14 +113,20 @@ impl ServerConfig {
             read_timeout: Some(Duration::from_secs(30)),
             write_timeout: Some(Duration::from_secs(30)),
             max_body_size: 100 * 1024 * 1024,
-            read_header_timeout: None,
+            // On by default: without it a client can hold a connection open
+            // forever by trickling header bytes (Slowloris).
+            read_header_timeout: Some(Duration::from_secs(30)),
             read_body_timeout: None,
             handler_timeout: None,
+            idle_timeout: None,
+            max_header_size: None,
+            max_requests_per_connection: 0,
             shutdown_timeout: Duration::from_secs(30),
             tls: None,
             http2: None,
             http3: None,
             cluster: None,
+            trusted_proxies: Arc::new(RwLock::new(Arc::new(proxy::TrustedProxies::default()))),
         }
     }
 
@@ -319,8 +340,8 @@ pub struct MetricsSnapshot {
 /// Whether unhandled handler errors are described to the client (development) or
 /// replaced by a generic 500 (production). Error text can carry database messages,
 /// constraint names and row values, so production must never echo it. Default is
-/// on; `App.run()` turns it off when `debug` is false.
-static EXPOSE_ERROR_DETAILS: AtomicBool = AtomicBool::new(true);
+/// off (fail safe); `App.run()` turns it on only in debug mode.
+static EXPOSE_ERROR_DETAILS: AtomicBool = AtomicBool::new(false);
 
 /// Set whether unhandled handler errors are described in 500 responses.
 pub fn set_expose_error_details(expose: bool) {
@@ -537,7 +558,10 @@ impl Server {
         let router = Arc::new(self.router);
         let handlers = Arc::new(self.handlers);
         let middleware = Arc::new(self.middleware);
-        let _websocket_handlers = Arc::new(self.websocket_handlers);
+        // Only consulted when at least one WebSocket route exists, so plain HTTP
+        // servers pay nothing for it.
+        let websocket_handlers =
+            (!self.websocket_handlers.is_empty()).then(|| Arc::new(self.websocket_handlers));
         let metrics = Arc::new(self.metrics);
         let shutdown = Arc::new(self.shutdown);
         let dependency_container = self.dependency_container.clone();
@@ -547,9 +571,14 @@ impl Server {
         // Copy limit/timeout config out of self.config (all Copy) so each connection
         // task can capture them cheaply.
         let max_body_size = self.config.max_body_size;
+        let trusted_proxies = self.config.trusted_proxies.clone();
         let read_body_timeout = self.config.read_body_timeout;
         let read_header_timeout = self.config.read_header_timeout;
         let handler_timeout = self.config.handler_timeout;
+        let idle_timeout = self.config.idle_timeout;
+        let max_header_size = self.config.max_header_size;
+        let max_requests_per_connection = self.config.max_requests_per_connection;
+        let max_connections = self.config.max_connections as u64;
 
         let mut shutdown_rx = shutdown.subscribe();
 
@@ -601,18 +630,19 @@ impl Server {
 
                     match accept_result {
                         Ok((stream, peer_addr)) => {
-                            // Check connection limit
-                            if metrics.active_connections.load(Ordering::Relaxed)
-                                >= self.config.max_connections as u64
-                            {
+                            // Reserve the slot first, then check: a separate
+                            // load-then-increment let a burst of accepts all pass
+                            // the check before any of them was counted.
+                            let previous = metrics.active_connections.fetch_add(1, Ordering::Relaxed);
+                            if max_connections > 0 && previous >= max_connections {
+                                metrics.dec_connections();
                                 eprintln!("Connection limit reached, rejecting connection from {peer_addr}");
                                 continue;
                             }
 
                             // PERF: Apply TCP_NODELAY to reduce latency for small responses
                             let _ = stream.set_nodelay(true);
-
-                            metrics.inc_connections();
+                            let peer_ip = peer_addr.ip();
 
                             let io = TokioIo::new(stream);
                             let router = router.clone();
@@ -625,6 +655,8 @@ impl Server {
                             let dependency_container = dependency_container.clone();
                             let guards = guards.clone();
                             let prometheus = prometheus.clone();
+                            let websocket_handlers = websocket_handlers.clone();
+                            let trusted_proxies = trusted_proxies.read().clone();
 
                             tokio::task::spawn(async move {
                                 // PERF: Clone Arcs once per connection, not per request.
@@ -637,10 +669,19 @@ impl Server {
                                 let conn_deps = dependency_container;
                                 let conn_guards = guards;
                                 let conn_prometheus = prometheus;
+                                let conn_websockets = websocket_handlers;
+                                let conn_proxies = trusted_proxies;
                                 // Copy limit/timeout config (all Copy) into the connection scope.
                                 let conn_max_body_size = max_body_size;
                                 let conn_read_body_timeout = read_body_timeout;
                                 let conn_handler_timeout = handler_timeout;
+                                // Per-connection bookkeeping for the request cap and
+                                // the idle watchdog — only when one is configured,
+                                // so the default path pays nothing for it.
+                                let conn_track = (idle_timeout.is_some()
+                                    || max_requests_per_connection > 0)
+                                    .then(|| Arc::new(ConnTrack::new()));
+                                let svc_track = conn_track.clone();
 
                                 let service = service_fn(move |req| {
                                     let router = conn_router.clone();
@@ -651,16 +692,30 @@ impl Server {
                                     let dependency_container = conn_deps.clone();
                                     let guards = conn_guards.clone();
                                     let prometheus = conn_prometheus.clone();
+                                    let websockets = conn_websockets.clone();
+                                    let proxies = conn_proxies.clone();
                                     let req_max_body_size = conn_max_body_size;
                                     let req_read_body_timeout = conn_read_body_timeout;
                                     let req_handler_timeout = conn_handler_timeout;
+                                    let track = svc_track.clone();
 
                                     async move {
                                         shutdown.request_started();
+                                        // Decrements on drop too: a request future
+                                        // dropped mid-flight (client gone) must not
+                                        // leave the idle watchdog thinking it runs.
+                                        let watch_idle = idle_timeout.is_some();
+                                        let _in_flight = track
+                                            .as_ref()
+                                            .filter(|_| watch_idle)
+                                            .map(|t| InFlight::enter(t.clone()));
                                         let start = Instant::now();
 
                                         let result = handle_request(
                                             req,
+                                            peer_ip,
+                                            &proxies,
+                                            websockets.as_ref(),
                                             &router,
                                             &handlers,
                                             &middleware,
@@ -676,6 +731,27 @@ impl Server {
 
                                         metrics.record_latency(start.elapsed());
                                         shutdown.request_finished();
+                                        let Some(track) = track else {
+                                            return result;
+                                        };
+                                        if watch_idle {
+                                            track.touch();
+                                        }
+
+                                        // Ask hyper to close the connection once the
+                                        // per-connection request budget is spent.
+                                        let n = track.served.fetch_add(1, Ordering::Relaxed) + 1;
+                                        if max_requests_per_connection > 0
+                                            && n >= max_requests_per_connection as u64
+                                        {
+                                            return result.map(|mut resp| {
+                                                resp.headers_mut().insert(
+                                                    hyper::header::CONNECTION,
+                                                    hyper::header::HeaderValue::from_static("close"),
+                                                );
+                                                resp
+                                            });
+                                        }
 
                                         result
                                     }
@@ -692,8 +768,43 @@ impl Server {
                                     builder.timer(hyper_util::rt::TokioTimer::new());
                                     builder.header_read_timeout(t);
                                 }
-                                let serve_res: Result<(), hyper::Error> =
-                                    builder.serve_connection(io, service).await;
+                                if let Some(size) = max_header_size {
+                                    // hyper's floor for the read buffer is 8 KiB.
+                                    builder.max_buf_size(size.max(8192));
+                                }
+                                let conn = builder.serve_connection(io, service).with_upgrades();
+                                tokio::pin!(conn);
+                                let serve_res: Result<(), hyper::Error> = match idle_timeout {
+                                    None => conn.as_mut().await,
+                                    Some(idle) => {
+                                        let track = conn_track.expect("tracked when idle_timeout is set");
+                                        // Watchdog on its own task, so the
+                                        // connection future is not re-polled
+                                        // alongside a timer on every wake-up.
+                                        // Once no request is in flight and
+                                        // none has finished for `idle`, it
+                                        // asks for a graceful close.
+                                        let idle_signal = Arc::new(tokio::sync::Notify::new());
+                                        let watchdog = tokio::task::spawn(idle_watchdog(
+                                            Arc::downgrade(&track),
+                                            idle,
+                                            idle_signal.clone(),
+                                        ));
+                                        drop(track);
+                                        let idle_notified = idle_signal.notified();
+                                        tokio::pin!(idle_notified);
+                                        let res = tokio::select! {
+                                            biased;
+                                            res = conn.as_mut() => res,
+                                            _ = &mut idle_notified => {
+                                                conn.as_mut().graceful_shutdown();
+                                                conn.as_mut().await
+                                            }
+                                        };
+                                        watchdog.abort();
+                                        res
+                                    }
+                                };
 
                                 if let Err(err) = serve_res {
                                     // Only log if not a normal connection close
@@ -722,118 +833,322 @@ impl Server {
     }
 }
 
-/// Serve a request whose path did not match any route but is claimed by a
-/// path-owning middleware (health checks, GraphQL, …). Builds a `Request`
-/// (including body for POST-style endpoints) and runs only the middleware that
-/// reported `serves_unrouted() == true`. Returns `Some(response)` if one of
-/// them served the request, `None` to fall through to a 404.
-#[allow(clippy::too_many_arguments)]
-async fn serve_unrouted(
-    req: HyperRequest<Incoming>,
-    method_str: &str,
-    uri: &hyper::Uri,
-    path: &str,
-    middleware: &Arc<MiddlewareChain>,
-    metrics: &Arc<ServerMetrics>,
-    max_body_size: usize,
-    read_body_timeout: Option<Duration>,
-) -> Option<Response> {
-    // Copy headers before the body is consumed.
-    let mut headers: HashMap<String, String> = HashMap::with_capacity(req.headers().len());
-    for (k, v) in req.headers().iter() {
-        headers.insert(k.as_str().to_owned(), v.to_str().unwrap_or("").to_owned());
+/// Per-connection state for `max_requests_per_connection` and `idle_timeout`.
+struct ConnTrack {
+    served: AtomicU64,
+    in_flight: AtomicU64,
+    /// When the connection was accepted; `last_active` counts from here.
+    opened: Instant,
+    /// Milliseconds after `opened` at which the last request finished.
+    last_active: AtomicU64,
+}
+
+impl ConnTrack {
+    fn new() -> Self {
+        ConnTrack {
+            served: AtomicU64::new(0),
+            in_flight: AtomicU64::new(0),
+            opened: Instant::now(),
+            last_active: AtomicU64::new(0),
+        }
     }
 
-    // Parse query string (same rules as the routed path).
-    let query_string = uri.query().unwrap_or("");
-    let query: HashMap<String, String> = if query_string.is_empty() {
-        HashMap::new()
-    } else {
-        let decode = |raw: &str| -> String {
-            urlencoding::decode(&raw.replace('+', " "))
-                .unwrap_or_default()
-                .into_owned()
+    /// Record that a request just finished.
+    fn touch(&self) {
+        let ms = self.opened.elapsed().as_millis() as u64;
+        self.last_active.store(ms, Ordering::Relaxed);
+    }
+
+    /// Time since the last request finished (or since the accept).
+    fn idle_for(&self) -> Duration {
+        let last = Duration::from_millis(self.last_active.load(Ordering::Relaxed));
+        self.opened.elapsed().saturating_sub(last)
+    }
+}
+
+/// Signal `close` once the connection has had no request in flight and none
+/// finished for `idle`. Ends when the connection is gone.
+async fn idle_watchdog(
+    track: std::sync::Weak<ConnTrack>,
+    idle: Duration,
+    close: Arc<tokio::sync::Notify>,
+) {
+    let tick = (idle / 4).max(Duration::from_millis(50));
+    loop {
+        tokio::time::sleep(tick).await;
+        let Some(track) = track.upgrade() else {
+            return;
         };
-        query_string
-            .split('&')
-            .filter(|s| !s.is_empty())
-            .filter_map(|pair| {
-                let mut parts = pair.splitn(2, '=');
-                match (parts.next(), parts.next()) {
-                    (Some(key), Some(value)) => Some((decode(key), decode(value))),
-                    (Some(key), None) => Some((decode(key), String::new())),
-                    _ => None,
-                }
-            })
-            .collect()
-    };
-
-    // Read the body for methods that carry one (GraphQL queries POST a body).
-    let body_bytes: Vec<u8> = match method_str {
-        "GET" | "HEAD" => {
-            drop(req);
-            Vec::new()
-        }
-        _ => {
-            let limit = if max_body_size == 0 {
-                usize::MAX
-            } else {
-                max_body_size
-            };
-            let collect_fut = Limited::new(req.into_body(), limit).collect();
-            let collected = match read_body_timeout {
-                Some(t) => match tokio::time::timeout(t, collect_fut).await {
-                    Ok(inner) => inner,
-                    Err(_) => {
-                        return Some(Response::error(408, "Request Timeout: body read timed out"))
-                    }
-                },
-                None => collect_fut.await,
-            };
-            match collected {
-                Ok(collected) => collected.to_bytes().to_vec(),
-                Err(_) => {
-                    return Some(Response::error(
-                        413,
-                        "Payload Too Large: request body exceeds limit",
-                    ))
-                }
-            }
-        }
-    };
-
-    let mut request = Request::from_http(
-        method_str.to_owned(),
-        path.to_owned(),
-        HashMap::new(),
-        query,
-        headers,
-        body_bytes,
-    );
-
-    // Sync path-owning middleware (e.g. health checks).
-    match middleware.execute_before_unrouted(&mut request) {
-        Ok(MiddlewareAction::Stop(response)) => return Some(response),
-        Ok(MiddlewareAction::Continue) => {}
-        Err(e) => {
-            metrics.inc_errors();
-            return Some(Response::error(e.status, &e.message));
-        }
-    }
-
-    // Async path-owning middleware (e.g. GraphQL).
-    match middleware.execute_before_async_unrouted(&mut request).await {
-        Ok(MiddlewareAction::Stop(response)) => Some(response),
-        Ok(MiddlewareAction::Continue) => None,
-        Err(e) => {
-            metrics.inc_errors();
-            Some(Response::error(e.status, &e.message))
+        if track.in_flight.load(Ordering::Relaxed) == 0 && track.idle_for() >= idle {
+            close.notify_one();
+            return;
         }
     }
 }
 
+/// In-flight request guard (decrements on drop, including a dropped future).
+struct InFlight(Arc<ConnTrack>);
+
+impl InFlight {
+    fn enter(track: Arc<ConnTrack>) -> Self {
+        track.in_flight.fetch_add(1, Ordering::Relaxed);
+        InFlight(track)
+    }
+}
+
+impl Drop for InFlight {
+    fn drop(&mut self) {
+        self.0.in_flight.fetch_sub(1, Ordering::Relaxed);
+    }
+}
+
+/// Parse an `application/x-www-form-urlencoded` query string. '+' denotes a
+/// space (for BOTH keys and values) and the rest is percent-encoded.
+fn parse_query(query_string: &str) -> HashMap<String, String> {
+    if query_string.is_empty() {
+        return HashMap::new();
+    }
+    let decode = |raw: &str| -> String {
+        urlencoding::decode(&raw.replace('+', " "))
+            .unwrap_or_default()
+            .into_owned()
+    };
+    query_string
+        .split('&')
+        .filter(|s| !s.is_empty())
+        .filter_map(|pair| {
+            let mut parts = pair.splitn(2, '=');
+            match (parts.next(), parts.next()) {
+                (Some(key), Some(value)) => Some((decode(key), decode(value))),
+                (Some(key), None) => Some((decode(key), String::new())),
+                _ => None,
+            }
+        })
+        .collect()
+}
+
+/// Copy request headers into a map. A repeated header is joined into one value
+/// (`; ` for `Cookie`, `, ` otherwise, per RFC 9110 §5.3) instead of the last
+/// occurrence silently replacing the earlier ones.
+fn collect_headers(headers: &hyper::HeaderMap) -> HashMap<String, String> {
+    let mut out: HashMap<String, String> = HashMap::with_capacity(headers.len());
+    for (k, v) in headers.iter() {
+        let value = v.to_str().unwrap_or("");
+        match out.get_mut(k.as_str()) {
+            Some(existing) => {
+                existing.push_str(if k == hyper::header::COOKIE {
+                    "; "
+                } else {
+                    ", "
+                });
+                existing.push_str(value);
+            }
+            None => {
+                out.insert(k.as_str().to_owned(), value.to_owned());
+            }
+        }
+    }
+    out
+}
+
+/// Finish a response that was decided before the handler ran (a middleware
+/// `Stop`, a middleware error, a guard rejection, an unrouted endpoint). The
+/// sync `after` hooks still apply, so these responses get security headers,
+/// CORS headers, compression and cookies.
+async fn finish_early(
+    middleware: &Arc<MiddlewareChain>,
+    request: &mut Request,
+    mut response: Response,
+    metrics: &Arc<ServerMetrics>,
+) -> Result<HyperResponse<ResBody>, Infallible> {
+    let file = open_deferred_body(&mut response).await;
+    if !middleware.is_empty() {
+        // Lets accounting middleware (circuit breaker) tell a handler outcome
+        // from a response the pipeline produced itself.
+        request.context.insert(
+            crate::middleware::EARLY_RESPONSE_KEY.to_string(),
+            serde_json::Value::Bool(true),
+        );
+        middleware.execute_after_lenient(request, &mut response);
+    }
+    build_hyper_response_with(&response, metrics, file)
+}
+
+/// Resolve a deferred file body (static files, `sendfile`, `file_range`) with
+/// `tokio::fs`, which runs the blocking calls on the blocking pool instead of
+/// the thread that accepts and parses connections. Honours the internal
+/// `X-Sendfile-Offset` / `X-Sendfile-Length` range headers and strips them.
+///
+/// A file up to [`body::STREAM_THRESHOLD`] is read into the response, so the
+/// `after` hooks (compression, ETag, cache) see its bytes. A larger one is
+/// returned as a [`FileBody`] to stream; the response keeps its deferred-file
+/// marker and the hooks leave its body alone.
+async fn open_deferred_body(response: &mut Response) -> Option<FileBody> {
+    use tokio::io::{AsyncReadExt, AsyncSeekExt};
+
+    let path = response.deferred_file()?.to_owned();
+    let offset = response
+        .header("X-Sendfile-Offset")
+        .and_then(|v| v.parse::<u64>().ok());
+    let length = response
+        .header("X-Sendfile-Length")
+        .and_then(|v| v.parse::<u64>().ok());
+    for internal in ["X-Sendfile-Path", "X-Sendfile-Offset", "X-Sendfile-Length"] {
+        response.remove_header(internal);
+    }
+
+    let open = async {
+        let mut file = tokio::fs::File::open(&path).await?;
+        let size = file.metadata().await?.len();
+        let (start, len) = match (offset, length) {
+            (Some(off), Some(len)) => (off, len.min(size.saturating_sub(off))),
+            _ => (0, size),
+        };
+        if start > 0 {
+            file.seek(std::io::SeekFrom::Start(start)).await?;
+        }
+        if len <= body::STREAM_THRESHOLD {
+            let mut buf = Vec::with_capacity(len as usize);
+            file.take(len).read_to_end(&mut buf).await?;
+            Ok::<_, std::io::Error>(Err(buf))
+        } else {
+            Ok(Ok(FileBody::new(file, len)))
+        }
+    };
+    match open.await {
+        Ok(Ok(stream)) => Some(stream),
+        Ok(Err(bytes)) => {
+            response.set_body(bytes);
+            None
+        }
+        Err(e) => {
+            eprintln!("[cello] failed to read {path}: {e}");
+            *response = Response::not_found("Not Found");
+            None
+        }
+    }
+}
+
+/// Complete a WebSocket handshake for a registered WebSocket path. The sync
+/// middleware chain runs first, so authentication, rate limits and CORS apply
+/// to the upgrade exactly as to an HTTP route.
+async fn websocket_upgrade(
+    mut req: HyperRequest<Incoming>,
+    route: crate::websocket::WebSocketRoute,
+    peer_ip: IpAddr,
+    proxies: &proxy::TrustedProxies,
+    middleware: &Arc<MiddlewareChain>,
+    guards: &Arc<crate::middleware::guards::GuardsMiddleware>,
+    metrics: &Arc<ServerMetrics>,
+) -> Result<HyperResponse<ResBody>, Infallible> {
+    let headers = collect_headers(req.headers());
+    let version_ok = headers
+        .get("sec-websocket-version")
+        .is_some_and(|v| v.trim() == "13");
+    let Some(key) = headers
+        .get("sec-websocket-key")
+        .filter(|_| version_ok)
+        .map(|k| k.trim().to_owned())
+    else {
+        let response = Response::error(400, "Bad Request: invalid WebSocket handshake");
+        return build_hyper_response(&response, metrics);
+    };
+
+    let uri = req.uri().clone();
+    let mut request = Request::from_http(
+        "GET".to_owned(),
+        uri.path().to_owned(),
+        HashMap::new(),
+        parse_query(uri.query().unwrap_or("")),
+        headers,
+        Vec::new(),
+    );
+    let (client_addr, from_trusted_proxy) = proxies.resolve_client(peer_ip, &request.headers);
+    request.remote_addr = Some(peer_ip);
+    request.client_addr = Some(client_addr);
+    request.from_trusted_proxy = from_trusted_proxy;
+
+    // Cross-site WebSocket hijacking: a browser handshake must come from this
+    // site (or an allowed origin) before cookies on it are trusted.
+    let host = if from_trusted_proxy {
+        request
+            .headers
+            .get("x-forwarded-host")
+            .or_else(|| request.headers.get("host"))
+    } else {
+        request.headers.get("host")
+    };
+    if !crate::websocket::origin_allowed(
+        request.headers.get("origin").map(String::as_str),
+        host.map(String::as_str),
+        &route.allowed_origins,
+    ) {
+        let response = Response::error(403, "Forbidden: WebSocket origin not allowed");
+        return finish_early(middleware, &mut request, response, metrics).await;
+    }
+
+    if !middleware.is_empty() {
+        match middleware.execute_before(&mut request) {
+            Ok(MiddlewareAction::Continue) => {}
+            Ok(MiddlewareAction::Stop(response)) => {
+                return finish_early(middleware, &mut request, response, metrics).await;
+            }
+            Err(e) => {
+                metrics.inc_errors();
+                let response = Response::error(e.status, &e.message);
+                return finish_early(middleware, &mut request, response, metrics).await;
+            }
+        }
+    }
+
+    // App-level guards (`app.add_guard`) protect WebSocket routes too.
+    if guards.has_guards() {
+        use crate::middleware::Middleware;
+        let outcome = Middleware::before(&**guards, &mut request);
+        match outcome {
+            Ok(MiddlewareAction::Continue) => {}
+            Ok(MiddlewareAction::Stop(response)) => {
+                return finish_early(middleware, &mut request, response, metrics).await;
+            }
+            Err(e) => {
+                metrics.inc_errors();
+                let response = Response::error(e.status, &e.message);
+                return finish_early(middleware, &mut request, response, metrics).await;
+            }
+        }
+    }
+
+    let on_upgrade = hyper::upgrade::on(&mut req);
+    let ws_metrics = metrics.clone();
+    tokio::task::spawn(async move {
+        match on_upgrade.await {
+            Ok(upgraded) => {
+                // The HTTP connection task ends at the upgrade; count the live
+                // socket separately so it still counts toward max_connections.
+                ws_metrics.inc_connections();
+                crate::websocket::serve_socket(upgraded, route.handler, request).await;
+                ws_metrics.dec_connections();
+            }
+            Err(e) => eprintln!("[cello] WebSocket upgrade failed: {e}"),
+        }
+    });
+
+    let accept = tokio_tungstenite::tungstenite::handshake::derive_accept_key(key.as_bytes());
+    Ok(HyperResponse::builder()
+        .status(StatusCode::SWITCHING_PROTOCOLS)
+        .header(hyper::header::UPGRADE, "websocket")
+        .header(hyper::header::CONNECTION, "Upgrade")
+        .header("Sec-WebSocket-Accept", accept)
+        .body(body::full(Bytes::new()))
+        .unwrap_or_else(|_| HyperResponse::new(body::full(Bytes::new()))))
+}
+
+#[allow(clippy::too_many_arguments)]
 async fn handle_request(
     req: HyperRequest<Incoming>,
+    peer_ip: IpAddr,
+    proxies: &proxy::TrustedProxies,
+    websockets: Option<&Arc<WebSocketRegistry>>,
     router: &Arc<Router>,
     handlers: &Arc<HandlerRegistry>,
     middleware: &Arc<MiddlewareChain>,
@@ -846,7 +1161,7 @@ async fn handle_request(
     max_body_size: usize,
     read_body_timeout: Option<Duration>,
     handler_timeout: Option<Duration>,
-) -> Result<HyperResponse<Full<Bytes>>, Infallible> {
+) -> Result<HyperResponse<ResBody>, Infallible> {
     metrics.inc_requests();
 
     // PERF: Extract method and path WITHOUT owning - use references as long as possible
@@ -855,81 +1170,44 @@ async fn handle_request(
     let uri = req.uri().clone();
     let path = uri.path();
 
+    // WebSocket upgrade for a registered WebSocket path.
+    if let Some(ws) = websockets {
+        if method == hyper::Method::GET && crate::websocket::is_upgrade_request(req.headers()) {
+            if let Some(route) = ws.get(path) {
+                return websocket_upgrade(
+                    req, route, peer_ip, proxies, middleware, guards, metrics,
+                )
+                .await;
+            }
+        }
+    }
+
     // PERF: Route match FIRST - fail fast on 404 before any allocation
     let route_match = router.match_route(method_str, path);
 
-    // PERF: Fast-return 404 before allocating Request object
-    let route_match = match route_match {
-        Some(m) => m,
-        None => {
-            // `/metrics` is not a registered route, so serve it here before 404.
-            {
-                let prom_guard = prometheus.read();
-                if let Some(ref p) = *prom_guard {
-                    if let Some(response) = p.try_serve(path) {
-                        return build_hyper_response(&response, metrics);
-                    }
-                }
-            }
-            // Path-owning middleware (health checks, GraphQL, …) live in the
-            // chain and normally run only after a route match. Give any that
-            // claim this unrouted path a chance to serve it before we 404.
-            if middleware.has_unrouted(method_str, path) {
-                if let Some(response) = serve_unrouted(
-                    req,
-                    method_str,
-                    &uri,
-                    path,
-                    middleware,
-                    metrics,
-                    max_body_size,
-                    read_body_timeout,
-                )
-                .await
-                {
-                    return build_hyper_response(&response, metrics);
-                }
-            }
+    // An unrouted path is served only when something owns it: the Prometheus
+    // endpoint or a path-owning middleware (health checks, GraphQL). Those
+    // requests go through the normal middleware chain below, so authentication,
+    // rate limiting and security headers apply to them as to any route. A
+    // genuine miss still fast-404s before auth (no 404→401 route-existence leak).
+    let unrouted = route_match.is_none();
+    if unrouted {
+        let prometheus_owns = prometheus.read().as_ref().is_some_and(|p| p.serves(path));
+        if !prometheus_owns && !middleware.has_unrouted(method_str, path) {
             let response = Response::not_found(&format!("Not Found: {method_str} {path}"));
             return build_hyper_response(&response, metrics);
         }
-    };
+    }
 
-    let params = route_match.params.clone();
+    let (handler_id, params) = match route_match {
+        Some(m) => (m.handler_id, m.params),
+        None => (0, HashMap::new()),
+    };
 
     // PERF: Only parse query string when present
-    let query_string = uri.query().unwrap_or("");
-    let query: HashMap<String, String> = if query_string.is_empty() {
-        HashMap::new()
-    } else {
-        // application/x-www-form-urlencoded: '+' denotes a space (for BOTH keys and
-        // values) and the rest is percent-encoded. Previously only values had '+'
-        // decoded, so a key like `a+b` was left as `a+b` instead of `a b`.
-        let decode = |raw: &str| -> String {
-            urlencoding::decode(&raw.replace('+', " "))
-                .unwrap_or_default()
-                .into_owned()
-        };
-        query_string
-            .split('&')
-            .filter(|s| !s.is_empty())
-            .filter_map(|pair| {
-                let mut parts = pair.splitn(2, '=');
-                match (parts.next(), parts.next()) {
-                    (Some(key), Some(value)) => Some((decode(key), decode(value))),
-                    (Some(key), None) => Some((decode(key), String::new())),
-                    _ => None,
-                }
-            })
-            .collect()
-    };
+    let query = parse_query(uri.query().unwrap_or(""));
 
-    // PERF: Only copy headers for matched routes (skip for 404s)
-    let header_count = req.headers().len();
-    let mut headers: HashMap<String, String> = HashMap::with_capacity(header_count);
-    for (k, v) in req.headers().iter() {
-        headers.insert(k.as_str().to_owned(), v.to_str().unwrap_or("").to_owned());
-    }
+    let headers = collect_headers(req.headers());
 
     // Reject oversized bodies up-front using the declared Content-Length. This avoids
     // buffering anything for an attacker who advertises a huge payload.
@@ -984,7 +1262,7 @@ async fn handle_request(
                         Vec::new()
                     } else {
                         metrics.add_bytes_received(bytes.len() as u64);
-                        bytes.to_vec()
+                        Vec::from(bytes)
                     }
                 }
                 Err(_) => {
@@ -1004,53 +1282,80 @@ async fn handle_request(
     let path_owned = path.to_owned();
     let mut request =
         Request::from_http(method_owned, path_owned, params, query, headers, body_bytes);
+    let (client_addr, from_trusted_proxy) = proxies.resolve_client(peer_ip, &request.headers);
+    request.remote_addr = Some(peer_ip);
+    request.client_addr = Some(client_addr);
+    request.from_trusted_proxy = from_trusted_proxy;
 
     // PERF: Skip middleware execution if no middleware registered
     if !middleware.is_empty() {
-        match middleware.execute_before(&mut request) {
+        let result = if unrouted {
+            middleware.execute_before_deferring_owners(&mut request)
+        } else {
+            middleware.execute_before(&mut request)
+        };
+        match result {
             Ok(MiddlewareAction::Continue) => {}
             Ok(MiddlewareAction::Stop(response)) => {
-                return build_hyper_response(&response, metrics);
+                return finish_early(middleware, &mut request, response, metrics).await;
             }
             Err(e) => {
                 metrics.inc_errors();
                 let response = Response::error(e.status, &e.message);
-                return build_hyper_response(&response, metrics);
+                return finish_early(middleware, &mut request, response, metrics).await;
             }
         }
     }
 
     // PERF: Skip async middleware if none registered
     if !middleware.is_async_empty() {
-        match middleware.execute_before_async(&mut request).await {
+        let result = if unrouted {
+            middleware
+                .execute_before_async_deferring_owners(&mut request)
+                .await
+        } else {
+            middleware.execute_before_async(&mut request).await
+        };
+        match result {
             Ok(MiddlewareAction::Continue) => {}
             Ok(MiddlewareAction::Stop(response)) => {
-                return build_hyper_response(&response, metrics);
+                // A cache HIT lands here: it still gets the sync `after` hooks.
+                return finish_early(middleware, &mut request, response, metrics).await;
             }
             Err(e) => {
                 metrics.inc_errors();
                 let response = Response::error(e.status, &e.message);
-                return build_hyper_response(&response, metrics);
+                return finish_early(middleware, &mut request, response, metrics).await;
             }
         }
     }
 
+    if unrouted {
+        // Authentication and rate limiting passed and no path-owning middleware
+        // answered: this is the Prometheus endpoint, or nothing.
+        let served = prometheus.read().as_ref().and_then(|p| p.try_serve(path));
+        let response = served
+            .unwrap_or_else(|| Response::not_found(&format!("Not Found: {method_str} {path}")));
+        return finish_early(middleware, &mut request, response, metrics).await;
+    }
+
     // PERF: Only check Prometheus when it's actually configured (avoid lock when None)
-    {
+    let prom_result = {
         let prom_guard = prometheus.read();
-        if let Some(ref p) = *prom_guard {
-            use crate::middleware::{Middleware, MiddlewareAction};
-            match p.before(&mut request) {
-                Ok(MiddlewareAction::Continue) => {}
-                Ok(MiddlewareAction::Stop(response)) => {
-                    return build_hyper_response(&response, metrics);
-                }
-                Err(e) => {
-                    metrics.inc_errors();
-                    let response = Response::error(e.status, &e.message);
-                    return build_hyper_response(&response, metrics);
-                }
-            }
+        prom_guard.as_ref().map(|p| {
+            use crate::middleware::Middleware;
+            p.before(&mut request)
+        })
+    };
+    match prom_result {
+        None | Some(Ok(MiddlewareAction::Continue)) => {}
+        Some(Ok(MiddlewareAction::Stop(response))) => {
+            return finish_early(middleware, &mut request, response, metrics).await;
+        }
+        Some(Err(e)) => {
+            metrics.inc_errors();
+            let response = Response::error(e.status, &e.message);
+            return finish_early(middleware, &mut request, response, metrics).await;
         }
     }
 
@@ -1060,12 +1365,12 @@ async fn handle_request(
         match Middleware::before(&**guards, &mut request) {
             Ok(MiddlewareAction::Continue) => {}
             Ok(MiddlewareAction::Stop(response)) => {
-                return build_hyper_response(&response, metrics);
+                return finish_early(middleware, &mut request, response, metrics).await;
             }
             Err(e) => {
                 metrics.inc_errors();
                 let response = Response::error(e.status, &e.message);
-                return build_hyper_response(&response, metrics);
+                return finish_early(middleware, &mut request, response, metrics).await;
             }
         }
     }
@@ -1081,7 +1386,6 @@ async fn handle_request(
     };
 
     // Pass the full request (with body) to the handler by value - no clone needed
-    let handler_id = route_match.handler_id;
     let invoke_fut = handlers.invoke_async(handler_id, request, dependency_container.clone());
     let result = match handler_timeout {
         Some(t) => match tokio::time::timeout(t, invoke_fut).await {
@@ -1110,9 +1414,9 @@ async fn handle_request(
                     let hyper_resp = HyperResponse::builder()
                         .status(StatusCode::OK)
                         .header("Content-Type", "application/json")
-                        .body(Full::new(Bytes::from(bytes)))
+                        .body(body::full(bytes))
                         .unwrap_or_else(|_| {
-                            HyperResponse::new(Full::new(Bytes::from_static(
+                            HyperResponse::new(body::full(Bytes::from_static(
                                 b"Internal Server Error",
                             )))
                         });
@@ -1130,6 +1434,7 @@ async fn handle_request(
         Ok(handler_result) => match handler_result {
             // PERF: Fast path - pre-serialized JSON bytes, no serde_json::Value involved
             HandlerResult::JsonBytes(bytes) => Response::from_json_bytes(bytes, 200),
+            HandlerResult::Response(response) => *response,
             // Slow path - Response objects that need special handling via serde_json::Value
             HandlerResult::JsonValue(json_value) => {
                 if let Some(obj) = json_value.as_object() {
@@ -1175,6 +1480,12 @@ async fn handle_request(
         }
     };
 
+    let file = if response.deferred_file().is_some() {
+        open_deferred_body(&mut response).await
+    } else {
+        None
+    };
+
     // PERF: Skip after middleware if none registered
     if !middleware.is_async_empty() {
         match middleware
@@ -1216,7 +1527,7 @@ async fn handle_request(
         }
     }
 
-    build_hyper_response(&response, metrics)
+    build_hyper_response_with(&response, metrics, file)
 }
 
 /// Build a Hyper response from our Response type.
@@ -1225,22 +1536,57 @@ async fn handle_request(
 fn build_hyper_response(
     response: &Response,
     metrics: &Arc<ServerMetrics>,
-) -> Result<HyperResponse<Full<Bytes>>, Infallible> {
+) -> Result<HyperResponse<ResBody>, Infallible> {
+    build_hyper_response_with(response, metrics, None)
+}
+
+/// [`build_hyper_response`], streaming `file` as the body when the response
+/// still describes that file (an `after` hook may have replaced it).
+#[inline]
+fn build_hyper_response_with(
+    response: &Response,
+    metrics: &Arc<ServerMetrics>,
+    file: Option<FileBody>,
+) -> Result<HyperResponse<ResBody>, Infallible> {
+    let file = file.filter(|_| response.deferred_file().is_some());
     let status = StatusCode::from_u16(response.status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
 
     let mut builder = HyperResponse::builder().status(status);
 
     for (key, value) in &response.headers {
+        // The body is always sent as one `Full` buffer and hyper derives the
+        // framing from it. A stale `Content-Length` (left by compression or a
+        // file helper) or a `Transfer-Encoding` would contradict the bytes sent.
+        // An empty body keeps its declared length: that is a HEAD response
+        // describing the representation it omits.
+        if key.eq_ignore_ascii_case("transfer-encoding")
+            || (key.eq_ignore_ascii_case("content-length")
+                && (file.is_some() || !response.body_bytes().is_empty()))
+        {
+            continue;
+        }
+        builder = builder.header(key.as_str(), value.as_str());
+    }
+    for (key, value) in response.extra_headers() {
         builder = builder.header(key.as_str(), value.as_str());
     }
 
-    // PERF: Create Bytes directly from slice - avoids intermediate Vec allocation
-    let body_slice = response.body_bytes();
-    metrics.add_bytes_sent(body_slice.len() as u64);
-    let body = Full::new(Bytes::copy_from_slice(body_slice));
+    let body = match file {
+        // hyper takes the length from the body's exact size hint.
+        Some(file) => {
+            metrics.add_bytes_sent(file.remaining());
+            http_body_util::Either::Right(file)
+        }
+        None => {
+            // PERF: Create Bytes directly from slice - avoids intermediate Vec allocation
+            let body_slice = response.body_bytes();
+            metrics.add_bytes_sent(body_slice.len() as u64);
+            body::full(Bytes::copy_from_slice(body_slice))
+        }
+    };
 
     Ok(builder.body(body).unwrap_or_else(|_| {
-        HyperResponse::new(Full::new(Bytes::from_static(b"Internal Server Error")))
+        HyperResponse::new(body::full(Bytes::from_static(b"Internal Server Error")))
     }))
 }
 

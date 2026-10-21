@@ -360,7 +360,8 @@ impl SagaExecution {
 
     /// Get the duration in seconds (if completed).
     pub fn duration_secs(&self) -> Option<u64> {
-        self.completed_at.map(|end| end - self.started_at)
+        self.completed_at
+            .map(|end| end.saturating_sub(self.started_at))
     }
 
     /// Get a summary of step statuses.

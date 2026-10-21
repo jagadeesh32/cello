@@ -165,9 +165,18 @@ def test_api_key_auth_flow():
 def test_session_sets_cookie():
     app = _ping_app()
     app.enable_session(SessionConfig())
+
+    @app.get("/login")
+    def login(request):
+        request.session["user_id"] = 1
+        return {"ok": True}
+
     url = _serve(app)
-    cookie = requests.get(f"{url}/__ping__").headers.get("set-cookie", "").lower()
+    cookie = requests.get(f"{url}/login").headers.get("set-cookie", "").lower()
     assert "session" in cookie or "cello" in cookie
+    # 1.4.1 deliberate change: a session nothing wrote to is neither stored nor
+    # sent, so cookieless clients cannot fill the session store.
+    assert "set-cookie" not in {k.lower() for k in requests.get(f"{url}/__ping__").headers}
 
 
 # ── Security headers ────────────────────────────────────────────────────────
@@ -215,7 +224,7 @@ def test_csrf_blocks_and_issues_cookie():
 
     url = _serve(app)
     assert requests.post(f"{url}/submit", json={}).status_code == 403
-    assert "_csrf" in requests.get(f"{url}/form").headers.get("set-cookie", "")
+    assert "__Host-csrf=" in requests.get(f"{url}/form").headers.get("set-cookie", "")
 
 
 # ── Health checks ───────────────────────────────────────────────────────────
@@ -235,7 +244,7 @@ def test_health_checks_endpoints():
 def test_graphql_playground_and_query():
     """Regression: /graphql is not a route; must be served before the fast-404."""
     app = _ping_app()
-    app.enable_graphql(GraphQLConfig())
+    app.enable_graphql(GraphQLConfig(playground=True, introspection=True))
     url = _serve(app)
     assert requests.get(f"{url}/graphql", headers={"Accept": "text/html"}).status_code == 200
     q = requests.post(f"{url}/graphql", json={"query": "{ __typename }"})

@@ -138,7 +138,7 @@ app.run(
 
 ## `cello migrate`
 
-!!! warning "Experimental in 1.4.0"
+!!! warning "Experimental in 1.4.1"
     `migrate` generates DDL from your `cello.orm` models and runs it against
     your database. Every command exits with code `2` unless `--experimental` is
     given. Review each generated file before applying it. See
@@ -190,7 +190,7 @@ At least one of `--app` or `--models` is required; otherwise the command prints
 `error: pass --app module:attr or --models module to find your models` and exits
 `1`. `--help` works without `--experimental`.
 
-`make --help`, as printed by 1.4.0:
+`make --help`, as printed by 1.4.1:
 
 ```text
 usage: cello migrate make [-h] [--experimental] [--app APP] [--models MODELS]
@@ -267,7 +267,7 @@ $ python -m cello migrate --experimental apply --models nonexist; echo $?
 error: ModuleNotFoundError: No module named 'nonexist'
 1
 $ python -m cello migrate status; echo $?
-cello migrate is EXPERIMENTAL in 1.4.0: it generates and runs DDL against your database and can lose data if a migration is applied without review.
+cello migrate is EXPERIMENTAL in 1.4.1: it generates and runs DDL against your database and can lose data if a migration is applied without review.
 Re-run with --experimental to acknowledge, e.g.
     python -m cello migrate --experimental status --app main:app
 2

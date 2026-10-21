@@ -456,10 +456,32 @@ impl Guard for PythonGuard {
     fn check(&self, request: &Request) -> GuardResult {
         Python::with_gil(|py| {
             // Call the Python guard with the request
-            let result = self
-                .handler
-                .call1(py, (request.clone(),))
-                .map_err(|e| GuardError::Custom(format!("Python guard error: {e}"), 500))?;
+            let result = self.handler.call1(py, (request.clone(),)).map_err(|e| {
+                // A `GuardError` (ForbiddenError / UnauthorizedError) is a
+                // deliberate rejection: answer with its status and message.
+                // Anything else is a bug in the guard: generic 500, details
+                // to the log only.
+                let value = e.value(py);
+                let status = value
+                    .getattr("status_code")
+                    .ok()
+                    .and_then(|s| s.extract::<u16>().ok())
+                    .filter(|s| (400..500).contains(s));
+                match status {
+                    Some(status) => {
+                        let message = value
+                            .getattr("message")
+                            .ok()
+                            .and_then(|m| m.extract::<String>().ok())
+                            .unwrap_or_else(|| "Forbidden".to_string());
+                        GuardError::Custom(message, status)
+                    }
+                    None => {
+                        eprintln!("[cello] guard raised: {e}");
+                        GuardError::Custom("Internal Server Error".to_string(), 500)
+                    }
+                }
+            })?;
 
             // Check if result is None (pass) or raises error (fail) or returns False (fail)
             if result.is_none(py) {

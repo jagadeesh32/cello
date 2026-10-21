@@ -112,5 +112,5 @@ The `examples/` directory in the repository contains 20+ example applications co
 |----------|-----|
 | GitHub Repository | [github.com/jagadeesh32/cello](https://github.com/jagadeesh32/cello) |
 | Issue Tracker | [github.com/jagadeesh32/cello/issues](https://github.com/jagadeesh32/cello/issues) |
-| Release Notes | [Releases](../releases/v1.3.0.md) |
+| Release Notes | [Releases](../releases/v1.4.1.md) |
 | License | MIT |

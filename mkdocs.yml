@@ -375,6 +375,7 @@ nav:
 
   - Release Notes:
     - releases/index.md
+    - v1.4.1: releases/v1.4.1.md
     - v1.4.0: releases/v1.4.0.md
     - v1.4.0 (design plan): releases/v1.4.0-plan.md
     - v1.3.0: releases/v1.3.0.md
